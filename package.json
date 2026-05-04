@@ -1,0 +1,23 @@
+{
+  "name": "database-visualization-design-tool",
+  "version": "1.0.0",
+  "description": "专业的工业级数据库设计工具，支持可视化设计、关系管理和DDL导出",
+  "scripts": {
+    "install:all": "cd client && npm install && cd ../server && npm install",
+    "dev": "concurrently \"cd client && npm run dev\" \"cd server && npm run dev\"",
+    "build": "cd client && npm run build && cd ../server && npm run build",
+    "start": "cd server && npm start"
+  },
+  "keywords": [
+    "database",
+    "visualization",
+    "design",
+    "mysql",
+    "ddl"
+  ],
+  "author": "Assistant",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  }
+}
