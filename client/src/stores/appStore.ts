@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { Project, Table, Column, Relationship, Index, Version } from '../types'
 import { projectApi, tableApi, columnApi, relationshipApi, indexApi, versionApi } from '../services/api'
 import { localStorageService, LocalProject, LocalTable, LocalColumn, LocalRelationship, LocalIndex, LocalVersion } from '../services/localStorageService'
+import { ThemeMode } from '../theme/types'
 
 interface AppState {
   projects: Project[]
@@ -19,12 +20,16 @@ interface AppState {
   isLocalMode: boolean
   fontSize: number
   themeColor: string
+  themeMode: ThemeMode
   compactMode: boolean
   canvasZoom: number
   showMiniMap: boolean
   autoSaveInterval: number
   edgeStyle: 'straight' | 'step' | 'smooth'
   showEdgeLabels: boolean
+  tablePrefix: string
+  tablePrefixPresets: string[]
+  autoAddIdColumn: boolean
 }
 
 interface AppStore extends AppState {
@@ -61,6 +66,7 @@ interface AppStore extends AppState {
   createVersion: (projectId: string, data: Partial<Version>) => Promise<void>
   updateVersion: (id: string, data: Partial<Version>) => Promise<void>
   deleteVersion: (id: string) => Promise<void>
+  restoreVersion: (versionId: string) => Promise<boolean>
 
   undo: () => void
   redo: () => void
@@ -72,12 +78,17 @@ interface AppStore extends AppState {
   setLocalMode: (localMode: boolean) => void
   setFontSize: (size: number) => void
   setThemeColor: (color: string) => void
+  setThemeMode: (mode: ThemeMode) => void
   setCompactMode: (compact: boolean) => void
   setCanvasZoom: (zoom: number) => void
   setShowMiniMap: (show: boolean) => void
   setAutoSaveInterval: (interval: number) => void
   setEdgeStyle: (style: 'straight' | 'step' | 'smooth') => void
   setShowEdgeLabels: (show: boolean) => void
+  setTablePrefix: (prefix: string) => void
+  addTablePrefixPreset: (prefix: string) => void
+  removeTablePrefixPreset: (prefix: string) => void
+  setAutoAddIdColumn: (autoAdd: boolean) => void
   loadSettings: () => Promise<void>
   syncToLocal: () => Promise<void>
   loadFromLocal: (projectId: string) => Promise<void>
@@ -119,12 +130,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
     lastSaved: null,
     fontSize: 14,
     themeColor: '#1890ff',
+    themeMode: 'light',
     compactMode: false,
     canvasZoom: 1,
     showMiniMap: true,
     autoSaveInterval: 30000,
     edgeStyle: 'smooth',
-    showEdgeLabels: true
+    showEdgeLabels: true,
+    tablePrefix: '',
+    tablePrefixPresets: ['', 'tbl_', 't_', 'sys_', 'app_', 'wp_', 'xmy_'],
+    autoAddIdColumn: true
   }],
   future: [],
   isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
@@ -133,12 +148,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
   isLocalMode: false,
   fontSize: 14,
   themeColor: '#1890ff',
+  themeMode: 'light',
   compactMode: false,
   canvasZoom: 1,
   showMiniMap: true,
   autoSaveInterval: 30000,
   edgeStyle: 'smooth',
   showEdgeLabels: true,
+  tablePrefix: '',
+  tablePrefixPresets: ['', 'tbl_', 't_', 'sys_', 'app_', 'wp_', 'xmy_'],
+  autoAddIdColumn: true,
 
   setOnline: (online: boolean) => set({ isOnline: online }),
   setLocalMode: (localMode: boolean) => {
@@ -156,6 +175,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setThemeColor: (color: string) => {
     set({ themeColor: color })
     localStorageService.setMeta('themeColor', color)
+  },
+  setThemeMode: (mode: ThemeMode) => {
+    set({ themeMode: mode })
+    localStorageService.setMeta('themeMode', mode)
   },
   setCompactMode: (compact: boolean) => {
     set({ compactMode: compact })
@@ -181,6 +204,31 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({ showEdgeLabels: show })
     localStorageService.setMeta('showEdgeLabels', show)
   },
+  setTablePrefix: (prefix: string) => {
+    set({ tablePrefix: prefix })
+    localStorageService.setMeta('tablePrefix', prefix)
+  },
+  addTablePrefixPreset: (prefix: string) => {
+    set((state) => {
+      if (prefix.trim() && !state.tablePrefixPresets.includes(prefix.trim())) {
+        const newPresets = [...state.tablePrefixPresets, prefix.trim()]
+        localStorageService.setMeta('tablePrefixPresets', newPresets)
+        return { tablePrefixPresets: newPresets }
+      }
+      return state
+    })
+  },
+  removeTablePrefixPreset: (prefix: string) => {
+    set((state) => {
+      const newPresets = state.tablePrefixPresets.filter((p) => p !== prefix)
+      localStorageService.setMeta('tablePrefixPresets', newPresets)
+      return { tablePrefixPresets: newPresets }
+    })
+  },
+  setAutoAddIdColumn: (autoAdd: boolean) => {
+    set({ autoAddIdColumn: autoAdd })
+    localStorageService.setMeta('autoAddIdColumn', autoAdd)
+  },
   loadSettings: async () => {
     const savedLocalMode = await localStorageService.getMeta<boolean>('localMode')
     if (savedLocalMode !== undefined) {
@@ -195,6 +243,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const savedThemeColor = await localStorageService.getMeta<string>('themeColor')
     if (savedThemeColor !== undefined) {
       set({ themeColor: savedThemeColor })
+    }
+
+    const savedThemeMode = await localStorageService.getMeta<ThemeMode>('themeMode')
+    if (savedThemeMode !== undefined) {
+      set({ themeMode: savedThemeMode })
     }
 
     const savedCompactMode = await localStorageService.getMeta<boolean>('compactMode')
@@ -225,6 +278,21 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const savedShowEdgeLabels = await localStorageService.getMeta<boolean>('showEdgeLabels')
     if (savedShowEdgeLabels !== undefined) {
       set({ showEdgeLabels: savedShowEdgeLabels })
+    }
+
+    const savedTablePrefix = await localStorageService.getMeta<string>('tablePrefix')
+    if (savedTablePrefix !== undefined) {
+      set({ tablePrefix: savedTablePrefix })
+    }
+
+    const savedTablePrefixPresets = await localStorageService.getMeta<string[]>('tablePrefixPresets')
+    if (savedTablePrefixPresets && savedTablePrefixPresets.length > 0) {
+      set({ tablePrefixPresets: savedTablePrefixPresets })
+    }
+
+    const savedAutoAddIdColumn = await localStorageService.getMeta<boolean>('autoAddIdColumn')
+    if (savedAutoAddIdColumn !== undefined) {
+      set({ autoAddIdColumn: savedAutoAddIdColumn })
     }
   },
 
@@ -447,12 +515,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
       isLocalMode: get().isLocalMode,
       fontSize: get().fontSize,
       themeColor: get().themeColor,
+      themeMode: get().themeMode,
       compactMode: get().compactMode,
       canvasZoom: get().canvasZoom,
       showMiniMap: get().showMiniMap,
       autoSaveInterval: get().autoSaveInterval,
       edgeStyle: get().edgeStyle,
-      showEdgeLabels: get().showEdgeLabels
+      showEdgeLabels: get().showEdgeLabels,
+      tablePrefix: get().tablePrefix,
+      tablePrefixPresets: get().tablePrefixPresets,
+      autoAddIdColumn: get().autoAddIdColumn
     }
 
     set({
@@ -498,12 +570,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
       isLocalMode: get().isLocalMode,
       fontSize: get().fontSize,
       themeColor: get().themeColor,
+      themeMode: get().themeMode,
       compactMode: get().compactMode,
       canvasZoom: get().canvasZoom,
       showMiniMap: get().showMiniMap,
       autoSaveInterval: get().autoSaveInterval,
       edgeStyle: get().edgeStyle,
-      showEdgeLabels: get().showEdgeLabels
+      showEdgeLabels: get().showEdgeLabels,
+      tablePrefix: get().tablePrefix,
+      tablePrefixPresets: get().tablePrefixPresets,
+      autoAddIdColumn: get().autoAddIdColumn
     }
     set(state => ({
       past: [...state.past.slice(-19), currentState],
@@ -722,16 +798,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
   createTable: async (projectId: string, data: Partial<Table>) => {
     set({ loading: true })
     try {
-      if (get().isOnline) {
+      const store = get()
+      
+      // 创建表
+      let newTable: Table
+      if (store.isOnline) {
         const response = await tableApi.create(projectId, data)
-        if (response.success && response.data) {
-          get().pushHistory()
-          const newTable = { ...response.data!, columns: [], indexes: [] }
-          set(state => ({ tables: [...state.tables, newTable] }))
-          await localStorageService.saveTable(newTable as LocalTable)
-        }
+        if (!response.success || !response.data) return
+        newTable = { ...response.data!, columns: [], indexes: [] }
       } else {
-        const localTable: LocalTable = {
+        newTable = {
           id: `local_${Date.now()}`,
           projectId,
           name: data.name || '新表',
@@ -743,15 +819,50 @@ export const useAppStore = create<AppStore>((set, get) => ({
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           lastModified: Date.now()
+        } as Table
+      }
+
+      // 自动创建id列（如果开启该功能）
+      if (store.autoAddIdColumn) {
+        const idColumnData = {
+          name: 'id',
+          dataType: 'BIGINT',
+          nullable: false,
+          primaryKey: true,
+          autoIncrement: true,
+          unique: true,
+          order: 0
         }
-        await localStorageService.saveTable(localTable)
-        get().pushHistory()
-        set(state => ({ tables: [...state.tables, localTable as Table] }))
+        
+        if (store.isOnline) {
+          const columnResponse = await columnApi.create(newTable.id, idColumnData)
+          if (columnResponse.success && columnResponse.data) {
+            newTable.columns = [columnResponse.data]
+            await localStorageService.saveColumn(columnResponse.data as LocalColumn)
+          }
+        } else {
+          const localColumn: LocalColumn = {
+            id: `local_col_${Date.now()}`,
+            tableId: newTable.id,
+            ...idColumnData,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          }
+          newTable.columns = [localColumn]
+          await localStorageService.saveColumn(localColumn)
+        }
+      }
+
+      get().pushHistory()
+      set(state => ({ tables: [...state.tables, newTable] }))
+      await localStorageService.saveTable(newTable as LocalTable)
+      
+      if (!store.isOnline) {
         await localStorageService.addToSyncQueue({
           type: 'create',
           entity: 'table',
-          entityId: localTable.id,
-          data: localTable
+          entityId: newTable.id,
+          data: newTable
         })
       }
     } finally {
@@ -1161,7 +1272,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
           id: `local_${Date.now()}`,
           tableId,
           name: data.name || '新索引',
-          columns: data.columns || '',
+          columns: data.columns || [],
           unique: data.unique || false,
           type: data.type || 'BTREE',
           lastModified: Date.now()
@@ -1350,6 +1461,160 @@ export const useAppStore = create<AppStore>((set, get) => ({
       set(state => ({
         versions: state.versions.filter(v => v.id !== id)
       }))
+    } finally {
+      set({ loading: false })
+    }
+  },
+
+  restoreVersion: async (versionId: string) => {
+    set({ loading: true })
+    try {
+      const version = get().versions.find(v => v.id === versionId)
+      if (!version) {
+        throw new Error('版本不存在')
+      }
+
+      let snapshot: any
+      try {
+        snapshot = JSON.parse(version.data)
+      } catch (parseError) {
+        console.error('JSON 解析失败:', version.data)
+        throw new Error('版本数据格式不正确，请检查是否是有效的 JSON')
+      }
+
+      // 支持两种数据格式：旧格式（只有 project）和新格式（有 tables 和 relationships）
+      let projectId: string
+      let tablesToRestore: any[] = []
+      let relationshipsToRestore: any[] = []
+
+      if (snapshot.id && snapshot.tables) {
+        // 新格式
+        projectId = snapshot.id
+        tablesToRestore = snapshot.tables || []
+        relationshipsToRestore = snapshot.relationships || []
+      } else if (snapshot.project) {
+        // 旧格式
+        projectId = snapshot.project.id
+        tablesToRestore = []
+        relationshipsToRestore = []
+      } else {
+        throw new Error('无效的版本数据格式')
+      }
+
+      if (!projectId) {
+        throw new Error('无法从版本中获取项目 ID')
+      }
+
+      // 清空现有数据
+      try {
+        await tableApi.deleteAll(projectId)
+      } catch (e) {
+        console.warn('删除表失败，可能 API 不存在:', e)
+        // 如果批量删除 API 不存在，尝试逐个删除
+        const existingTables = get().tables.filter(t => t.projectId === projectId)
+        for (const table of existingTables) {
+          try {
+            await tableApi.delete(table.id)
+          } catch (de) {
+            console.warn(`删除表 ${table.name} 失败:`, de)
+          }
+        }
+      }
+
+      try {
+        await relationshipApi.deleteAll(projectId)
+      } catch (e) {
+        console.warn('删除关系失败，可能 API 不存在:', e)
+        // 如果批量删除 API 不存在，尝试逐个删除
+        const existingRelationships = get().relationships.filter(r => r.projectId === projectId)
+        for (const rel of existingRelationships) {
+          try {
+            await relationshipApi.delete(rel.id)
+          } catch (de) {
+            console.warn(`删除关系失败:`, de)
+          }
+        }
+      }
+
+      // 创建表
+      for (const table of tablesToRestore) {
+        const tableResponse = await tableApi.create(projectId, {
+          name: table.name,
+          comment: table.comment,
+          positionX: table.positionX,
+          positionY: table.positionY
+        })
+
+        if (tableResponse.success && tableResponse.data) {
+          const newTableId = tableResponse.data.id
+          
+          if (table.columns && Array.isArray(table.columns)) {
+            for (let i = 0; i < table.columns.length; i++) {
+              const col = table.columns[i]
+              try {
+                await columnApi.create(newTableId, {
+                  name: col.name,
+                  dataType: col.dataType,
+                  length: col.length,
+                  precision: col.precision,
+                  scale: col.scale,
+                  nullable: col.nullable,
+                  primaryKey: col.primaryKey,
+                  unique: col.unique,
+                  autoIncrement: col.autoIncrement,
+                  defaultValue: col.defaultValue,
+                  comment: col.comment,
+                  order: i
+                })
+              } catch (ce) {
+                console.warn(`创建列 ${col.name} 失败:`, ce)
+              }
+            }
+          }
+
+          if (table.indexes && Array.isArray(table.indexes)) {
+            for (const idx of table.indexes) {
+              try {
+                await indexApi.create(newTableId, {
+                  tableId: newTableId,
+                  name: idx.name,
+                  columns: idx.columns,
+                  unique: idx.unique,
+                  type: idx.type
+                })
+              } catch (ie) {
+                console.warn(`创建索引 ${idx.name} 失败:`, ie)
+              }
+            }
+          }
+        }
+      }
+
+      // 创建关系
+      for (const rel of relationshipsToRestore) {
+        try {
+          await relationshipApi.create(projectId, {
+            sourceTableId: rel.sourceTableId,
+            sourceColumnId: rel.sourceColumnId,
+            targetTableId: rel.targetTableId,
+            targetColumnId: rel.targetColumnId,
+            relationshipType: rel.relationshipType,
+            onUpdate: rel.onUpdate,
+            onDelete: rel.onDelete
+          })
+        } catch (re) {
+          console.warn('创建关系失败:', re)
+        }
+      }
+
+      // 重新加载
+      await get().loadTables(projectId)
+      await get().loadRelationships(projectId)
+
+      return true
+    } catch (error) {
+      console.error('版本回滚失败:', error)
+      throw error
     } finally {
       set({ loading: false })
     }

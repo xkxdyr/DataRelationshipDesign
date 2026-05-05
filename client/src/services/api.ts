@@ -21,6 +21,10 @@ async function request<T>(url: string, options?: RequestInit): Promise<ApiRespon
   return await response.json()
 }
 
+export const ddlApi = {
+  getDatabaseTypes: () => request<Array<{ value: string; label: string }>>('/ddl/databases')
+}
+
 export const projectApi = {
   getAll: () => request<Project[]>('/projects'),
   getById: (id: string) => request<Project>(`/projects/${id}`),
@@ -34,7 +38,7 @@ export const projectApi = {
   }),
   delete: (id: string) => request<void>(`/projects/${id}`, { method: 'DELETE' }),
   duplicate: (id: string) => request<Project>(`/projects/${id}/duplicate`, { method: 'POST' }),
-  generateDDL: (id: string) => request<{ ddl: string; databaseType: string; tableCount: number; relationshipCount: number }>(`/projects/${id}/ddl`)
+  generateDDL: (id: string, dbType?: string) => request<{ ddl: string; databaseType: string; tableCount: number; relationshipCount: number }>(`/projects/${id}/ddl${dbType ? `?type=${dbType}` : ''}`)
 }
 
 export const tableApi = {
@@ -53,7 +57,8 @@ export const tableApi = {
     body: JSON.stringify({ positionX, positionY })
   }),
   delete: (id: string) => request<void>(`/tables/${id}`, { method: 'DELETE' }),
-  generateDDL: (id: string) => request<{ ddl: string; tableName: string }>(`/tables/${id}/ddl`)
+  deleteAll: (projectId: string) => request<void>(`/projects/${projectId}/tables`, { method: 'DELETE' }),
+  generateDDL: (id: string, dbType?: string) => request<{ ddl: string; tableName: string; databaseType?: string }>(`/tables/${id}/ddl${dbType ? `?type=${dbType}` : ''}`)
 }
 
 export const columnApi = {
@@ -89,7 +94,8 @@ export const relationshipApi = {
     method: 'PUT',
     body: JSON.stringify(data)
   }),
-  delete: (id: string) => request<void>(`/relationships/${id}`, { method: 'DELETE' })
+  delete: (id: string) => request<void>(`/relationships/${id}`, { method: 'DELETE' }),
+  deleteAll: (projectId: string) => request<void>(`/projects/${projectId}/relationships`, { method: 'DELETE' })
 }
 
 export const indexApi = {

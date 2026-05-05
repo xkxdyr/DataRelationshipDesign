@@ -56,7 +56,7 @@ const TableNode: React.FC<NodeProps<TableNodeData>> = ({ data, selected }) => {
       </div>
 
       <div style={{ maxHeight: maxHeight, overflowY: 'auto' }}>
-        {table.columns.map(column => (
+        {(table.columns || []).map(column => (
           <div key={column.id} style={{
             display: 'flex',
             alignItems: 'center',
@@ -99,7 +99,7 @@ const TableNode: React.FC<NodeProps<TableNodeData>> = ({ data, selected }) => {
             )}
           </div>
         ))}
-        {table.columns.length === 0 && (
+        {(table.columns || []).length === 0 && (
           <div style={{
             padding: '12px',
             textAlign: 'center',

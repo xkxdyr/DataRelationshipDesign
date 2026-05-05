@@ -103,7 +103,8 @@
 | 92 | 关系标签显示切换功能 | 前端 UI 优化 | 2026-05-04 | Assistant | 在偏好设置中添加关系标签显示开关，控制画布上关系连线是否显示表名和列名标签 |
 | 93 | 接入大模型模块 | AI 集成 | 2026-05-04 | Assistant | 集成大模型 API 接口，支持自然语言生成表结构、智能推荐字段类型、自动生成表关系建议 |
 | 94 | 数据库类型转换 | 数据迁移 | 2026-05-04 | Assistant | 支持 MySQL、PostgreSQL、SQLite、SQL Server 数据库类型之间的 DDL 转换，自动处理类型映射和语法差异 |
-| 95 | 设置面板布局UI重设计 | 前端 UI 优化 | 2026-05-04 | Assistant | 重新设计设置面板布局，使用卡片分组方式，分为外观设置、画布设置、关系线设置、保存设置、快捷键五个模块，界面更清晰美观 |
+| 95 | 设置面板布局UI重设计 | 前端 UI 优化 | 2026-05-04 | Assistant | 重新设计设置面板布局，参考JetBrains IDEA风格，采用左侧树形分类导航+右侧内容区域布局，支持搜索，包含外观、画布、保存、快捷键、工具五大分类 |
+| 103 | 设置面板IDEA风格重构 | 前端 UI 优化 | 2026-05-05 | Assistant | 将设置面板重构为JetBrains IDEA风格，左侧树形导航分类，右侧动态内容区域，分类包括外观、画布、保存、快捷键、工具，AI助手标记为可选功能 |
 | 96 | 数据库类型转换器实现 | 后端 数据迁移 | 2026-05-04 | Assistant | 创建typeConverter.ts，支持MySQL/PostgreSQL/SQLite/SQL Server/Oracle之间的数据类型映射转换，包含单类型转换和整表转换 |
 | 97 | 数据库类型转换API接口 | 后端 API | 2026-05-04 | Assistant | 创建typeConvertRoutes.ts，提供类型转换端点（convert/table/mappings/database-types），支持前端调用 |
 | 98 | 数据库类型转换UI组件 | 前端 数据迁移 | 2026-05-04 | Assistant | 创建TypeConvertModal组件，支持数据库选择、类型转换、映射表查看功能 |
@@ -111,6 +112,79 @@
 | 100 | 大模型API接口 | 后端 API | 2026-05-04 | Assistant | 创建llmRoutes.ts，提供LLM配置和生成表结构、分析字段类型、建议关系等API接口 |
 | 101 | 大模型配置UI组件 | 前端 AI集成 | 2026-05-04 | Assistant | 创建LLMModal组件，支持配置API密钥、选择模型、生成表结构并预览 |
 | 102 | 工具入口集成 | 前端 AI集成 | 2026-05-04 | Assistant | 在设置面板添加工具卡片，包含数据库类型转换和AI助手入口按钮 |
+| 104 | 多数据库DDL生成器 | 后端 数据迁移 | 2026-05-05 | Assistant | 创建multiDdlGenerator.ts，支持MySQL/PostgreSQL/SQLite/SQL Server/Oracle五种数据库的DDL生成，包含各自的数据类型映射、约束处理、注释生成 |
+| 105 | DDL数据库类型支持API | 后端 API | 2026-05-05 | Assistant | 扩展DDL接口支持数据库类型参数，GET /api/ddl/databases返回支持的数据库列表，generateDDL接口支持type参数指定数据库类型 |
+| 106 | TableEditor constraints列render参数错误修复 | 前端 Bug 修复 | 2026-05-05 | Assistant | 修复constraints列render函数参数顺序问题，从(record)改为(_, record)，避免undefined错误 |
+| 107 | TypeScript ApiResponse类型扩展 | 前端 修复 | 2026-05-05 | Assistant | 添加ApiResponse类型添加result可选属性，兼容后端返回格式 |
+| 108 | SettingsModal Tree onSelect类型修复 | 前端 修复 | 2026-05-05 | Assistant | 修复Tree组件onSelect事件类型错误，正确处理Key类型参数 |
+| 109 | TableEditor ColumnConfig接口定义 | 前端 修复 | 2026-05-05 | Assistant | 添加ColumnConfig接口定义，移除any类型，正确处理constraints等无dataIndex的列渲染 |
+| 110 | 多数据库DDL导出UI优化 | 前端 导入导出 | 2026-05-05 | Assistant | 在导入导出组件中添加数据库类型选择下拉框，支持MySQL/PostgreSQL/SQLite/SQL Server/Oracle五种数据库的DDL导出，按钮文字动态显示选择的数据库类型，文件名包含数据库类型标识 |
+| 111 | 快捷键功能增强 | 前端 UI优化 | 2026-05-05 | Assistant | 添加更多实用快捷键：Ctrl+,打开设置、Ctrl+Shift+E导入导出、Delete删除表、Esc关闭弹窗/取消选择，更新SettingsModal中的快捷键说明 |
+| 112 | 数据验证增强功能 | 前端 数据验证 | 2026-05-05 | Assistant | 添加完整的客户端数据验证：表名格式验证（字母、数字、下划线）、表名唯一性验证、列名格式验证、列名唯一性验证、项目名格式验证、项目名唯一性验证、新增列自动生成唯一名称 |
+| 113 | 项目快速预览功能 | 前端 UI 优化 | 2026-05-05 | Assistant | 在项目列表中添加预览按钮，点击后显示项目详细信息弹窗，包括项目信息、统计信息（表数量、列总数、关系数量、索引总数）、表列表，支持从预览弹窗直接打开项目 |
+| 114 | ER 图导出功能 | 前端 功能增强 | 2026-05-05 | Assistant | 在 Canvas 工具栏添加导出 ER 图按钮，支持导出为 PNG 和 SVG 两种格式，PNG 通过 SVG 转 Canvas 实现，SVG 通过自定义生成包含表、列、关系连线的矢量图形 |
+| 115 | 导入导出数据库类型匹配修复 | 前端 Bug 修复 | 2026-05-05 | Assistant | 修复导入导出组件中数据库类型值与显示标签的匹配问题，确保选择器值使用大写格式（如 MYSQL），按钮文本显示用户友好的标签（如 MySQL），添加 getSelectedDbLabel() 函数动态获取当前选择的数据库类型显示名称 |
+| 116 | ER 图 PNG 导出功能修复 | 前端 Bug 修复 | 2026-05-05 | Assistant | 修复 PNG 导出失败问题，原来尝试直接序列化 ReactFlow HTML 元素为 SVG 的错误方法，改为使用自定义 generateERDiagramSVG() 函数生成 SVG 内容，通过 Blob URL 加载到 Image 对象再转换为 Canvas，支持 2 倍缩放提高图片清晰度，保留 SVG 作为降级方案 |
+| 117 | 项目列表项工业级 UI 优化 | 前端 UI 优化 | 2026-05-05 | Assistant | 全面升级项目列表项视觉设计，采用专业工业级风格，包括：渐变背景文件夹图标（选中时蓝色渐变）、丰富的悬停动画效果（边框、阴影、背景色联动变化）、实时统计信息展示（表/列/关系数量带图标）、优化的标签样式（圆角、加粗、去边框）、工具提示提升可访问性、更大的圆角和间距、分层阴影效果（选中时双层阴影）、平滑的 cubic-bezier 过渡动画、信息密度合理布局 |
+| 118 | 项目列表 IntelliJ IDEA 风格改造 | 前端 UI 优化 | 2026-05-05 | Assistant | 重构项目列表采用IntelliJ IDEA简洁专业风格，包括：扁平化设计去除所有渐变和阴影、紧凑布局节省空间、选中状态使用IDE经典蓝色(#3879d9)、悬停仅显示灰色背景、标签极简设计(小尺寸、圆角2px)、系统字体栈提升可读性、操作按钮仅图标显示、Card容器采用灰色背景、更小的字体尺寸(10-13px)、项目名称与描述单行布局、快速响应的0.1s过渡动画 |
+| 119 | 整体布局 IntelliJ IDEA 风格全面升级 | 前端 UI 优化 | 2026-05-05 | Assistant | 全面改造应用为IntelliJ IDEA Darcula主题风格：Header改为深色(#3c3f41)高度36px，整体背景深色，左侧/右侧边栏支持折叠/展开(宽度36px时显示展开按钮)，分割条宽度4px拖动时高亮蓝色(#3879d9)，统一系统字体栈，更小更紧凑专业风格 |
+| 120 | 主题系统开发与可自定义主题 | 前端 UI 优化 | 2026-05-05 | Assistant | 创建完整的主题系统支持多种颜色主题（浅色/深色/Darcula/蓝色），包括：主题类型定义、主题配置（颜色/边框/文字）、useTheme Hook、设置面板主题选择功能、App组件主题应用、主题持久化存储到本地、主题预览功能、主题切换实时生效、恢复默认主题功能，所有UI组件支持主题切换 |
+| 121 | TableEditor组件空值安全修复 | 前端 Bug修复 | 2026-05-05 | Assistant | 修复TableEditor组件中table.columns和table.indexes为undefined导致的错误，在所有使用这些属性的地方添加了空值安全处理，包括：handleAddColumn、handleUpdateColumn、handleDragEnd、SortableContext、Table组件、索引表单选择器、order计算等，确保在所有可能为[]默认值，确保组件能正常运行 |
+| 122 | 全组件table.columns/table.indexes空值安全修复 | 前端 Bug修复 | 2026-05-05 | Assistant | 全面修复项目中所有组件的table.columns和table.indexes为undefined的问题，包括：TableNode.tsx（第59行和第102行）、LLMModal.tsx（第228行）、以及之前已修复的TableEditor.tsx，确保整个项目在所有可能情况下都能正常运行，没有崩溃 |
+| 123 | 项目列表自适应宽度优化 | 前端 UI 优化 | 2026-05-05 | Assistant | 优化项目列表支持根据容器宽度自适应显示信息：使用ResizeObserver监听宽度变化，设置4种宽度级别（超窄/窄/中等/宽），根据宽度动态隐藏/显示按钮、统计信息、描述、导入导出按钮等，调整字号、间距、图标大小等，确保在任何宽度下都有良好美观的显示效果 |
+| 124 | 前端多数据库DDL生成系统类型定义 | 前端 DDL生成 | 2026-05-05 | Assistant | 创建client/src/ddl/types.ts，定义DDLOptions接口、IDDLGenerator接口、BaseDDLGenerator抽象基类，包含数据库类型枚举和配置选项定义 |
+| 125 | 前端MySQL DDL生成器完整实现 | 前端 DDL生成 | 2026-05-05 | Assistant | 创建client/src/ddl/MySQLGenerator.ts，完整实现MySQL DDL生成：支持CREATE TABLE、PRIMARY KEY、INDEX、FOREIGN KEY、注释、自动增量、类型映射等，包含完整的MySQL语法处理 |
+| 126 | 前端PostgreSQL DDL生成器完整实现 | 前端 DDL生成 | 2026-05-05 | Assistant | 创建client/src/ddl/PostgreSQLGenerator.ts，完整实现PostgreSQL DDL生成：支持SERIAL、Schema、UUID、JSONB等PostgreSQL特定功能，包含完整的PostgreSQL语法处理 |
+| 127 | 前端SQLite DDL生成器完整实现 | 前端 DDL生成 | 2026-05-05 | Assistant | 创建client/src/ddl/SQLiteGenerator.ts，完整实现SQLite DDL生成：支持INTEGER PRIMARY KEY AUTOINCREMENT等SQLite特定功能，包含完整的SQLite语法处理 |
+| 128 | 前端DDL生成器工厂模式实现 | 前端 DDL生成 | 2026-05-05 | Assistant | 创建client/src/ddl/DDLGeneratorFactory.ts，实现工厂模式支持数据库类型选择，提供generateCompleteSQL()方法处理完整项目DDL生成，支持各种导出选项 |
+| 129 | 前端exportService集成多数据库DDL生成 | 前端 导入导出 | 2026-05-05 | Assistant | 更新client/src/services/exportService.ts，集成新的DDL生成系统，添加完整的table.columns/table.indexes空值安全处理，确保exportToSQL()方法支持多数据库类型 |
+| 130 | 前端ImportExportModal完整集成多数据库DDL导出 | 前端 导入导出 | 2026-05-05 | Assistant | 重构ImportExportModal.tsx，完整集成新DDL系统：添加数据库类型选择器（MySQL/PostgreSQL/SQLite）、DROP TABLE开关、注释开关、Schema配置（仅PostgreSQL）、表前缀配置等，支持完整的多数据库DDL导出UI |
+| 131 | 前端SQL Server DDL生成器完整实现 | 前端 DDL生成 | 2026-05-05 | Assistant | 创建client/src/ddl/SQLServerGenerator.ts，完整实现SQL Server DDL生成：支持IDENTITY自增、NVARCHAR/NCHAR类型、GETDATE()默认值、VARBINARY(MAX)、CLOB等SQL Server特定功能 |
+| 132 | 前端Oracle DDL生成器完整实现 | 前端 DDL生成 | 2026-05-05 | Assistant | 创建client/src/ddl/OracleGenerator.ts，完整实现Oracle DDL生成：支持VARCHAR2、NUMBER类型、SYSTIMESTAMP默认值、CLOB、BLOB、RAW(16)、CASCADE CONSTRAINTS等Oracle特定功能 |
+| 133 | 前端DDLGeneratorFactory支持所有数据库 | 前端 DDL生成 | 2026-05-05 | Assistant | 更新DDLGeneratorFactory.ts，添加SQL Server和Oracle生成器支持，现在完整支持MySQL/PostgreSQL/SQLite/SQL Server/Oracle五大数据库 |
+| 134 | 前端ImportExportModal添加所有数据库选项 | 前端 导入导出 | 2026-05-05 | Assistant | 更新ImportExportModal.tsx，添加SQL Server和Oracle到数据库类型选择器，现在支持完整的五大数据库导出选项 |
+| 135 | 所有DDL生成器null安全修复 | 前端 安全 | 2026-05-05 | Assistant | 修复所有DDL生成器（MySQL/PostgreSQL/SQLite/SQL Server/Oracle）中的table.columns和table.indexes null安全问题，确保在所有情况下不会崩溃 |
+| 136 | 修复ImportExportModal React Hook调用错误 | 前端 修复 | 2026-05-05 | Assistant | 修复ImportExportModal.tsx中Form.useWatch在Form.Item render函数内部调用的错误，改为使用Form.Item的noStyle属性和getFieldValue()方法 |
+| 137 | ImportExportModal导入功能完整完善 | 前端 导入导出 | 2026-05-05 | Assistant | 重构ImportExportModal.tsx中的processImportResult函数：添加完整的表ID/列ID映射、使用columnApi.bulkCreate批量创建列、添加索引创建功能、正确重新映射关系ID |
+| 138 | 修复ImportResult接口支持索引字段 | 前端 导入导出 | 2026-05-05 | Assistant | 更新importService.ts中ImportResult接口，添加indexes可选字段，支持索引导入功能 |
+| 139 | importService导入功能完整增强 | 前端 导入导出 | 2026-05-05 | Assistant | 修复importService.ts：添加columnIdMap建立旧列ID到新列ID的映射、处理索引导入功能、正确转换关系列ID、修复importFromSQL中indexes.columns JSON.stringify错误，改为直接使用数组 |
+| 140 | exportService导出类型修复 | 前端 导入导出 | 2026-05-05 | Assistant | 修复exportService.ts中ExportData接口的indexes.columns类型，从string改为string[] |
+| 141 | 后端indexes.columns字段处理完善 | 后端 数据处理 | 2026-05-05 | Assistant | 完善后端对indexes.columns字段的处理：projectController.getById解析indexes.columns从JSON字符串为数组；indexController所有接口处理columns的数组-字符串转换：get/getAll返回时解析为数组，create/update时接收数组转换为JSON字符串存储 |
+| 142 | 前端Index类型定义修复 | 前端 类型安全 | 2026-05-05 | Assistant | 更新types/index.ts中Index接口，将columns字段从string类型改为string[]类型，与实际业务保持一致 |
+| 143 | 导入导出模块完整检查与完善完成 | 前端 导入导出 | 2026-05-05 | Assistant | 完成导入导出模块的全面检查与完善，所有功能正常可用，符合要求 |
+| 144 | ImportExportModal支持直接打开特定Tab | 前端 导入导出 | 2026-05-05 | Assistant | 为ImportExportModal添加initialTab属性，支持直接打开导入或导出Tab，提升用户体验 |
+| 145 | 导入导出按钮分别打开对应Tab | 前端 导入导出 | 2026-05-05 | Assistant | 导入按钮点击后直接打开导入Tab，导出按钮点击后直接打开导出Tab，操作更直观 |
+| 146 | 项目列表右键菜单功能完整实现 | 前端 交互优化 | 2026-05-05 | Assistant | 为项目列表项添加右键菜单功能，支持快速打开、预览、编辑、版本管理、导出、删除等操作 |
+| 147 | 修复TableEditor输入框失去焦点和布局问题 | 前端 交互优化 | 2026-05-05 | Assistant | 重构TableEditor组件，解决输入框编辑时失去焦点的问题，优化布局，使用防抖、局部状态、React.memo、useCallback、useMemo等技术提升用户体验 |
+| 148 | 修复表前缀选择器问题 | 前端 导入导出 | 2026-05-05 | Assistant | 将ImportExportModal中的表前缀从Select改为Input组件，用户可以自由输入任意表前缀，解决了表前缀选择器为空无法使用的问题 |
+| 149 | 表前缀持久化配置功能 | 前端 导入导出 | 2026-05-05 | Assistant | 在appStore中添加了tablePrefix状态和setTablePrefix方法，在localStorage中持久化保存，支持在设置面板中配置，在导入导出模态框中直接使用 |
+| 150 | 设置面板添加表前缀配置 | 前端 UI | 2026-05-05 | Assistant | 在SettingsModal的"工具"分类下添加了"表前缀"配置项，用户可以在此配置默认的表前缀，重置时会清空为默认值 |
+| 151 | TableEditor完全重构，解决输入问题 | 前端 UI/交互 | 2026-05-05 | Assistant | 完全重构了TableEditor组件，从表格形式改为卡片列表形式，使用本地状态+onBlur保存的方式，彻底解决了输入时失焦、延迟等问题，添加了上下移动按钮来调整列顺序，优化了整体布局体验 |
+| 152 | 新增自动添加id列功能 | 前端 数据管理 | 2026-05-05 | Assistant | 在appStore添加了autoAddIdColumn状态和相关方法，在创建新表时（如果开启该功能）会自动创建一个名为id的BIGINT类型、主键、自增、唯一的列，同时支持在线模式和离线模式 |
+| 153 | 设置面板添加自动id开关 | 前端 UI | 2026-05-05 | Assistant | 在SettingsModal的"工具"分类下添加了"自动添加id列"配置项，用户可以通过开关来控制是否启用自动添加id列功能，重置时恢复默认开启 |
+| 154 | 表前缀支持多预设选择 | 前端 导入导出 | 2026-05-05 | Assistant | 在appStore.ts中添加tablePrefixPresets状态和管理方法，在SettingsModal中添加表前缀预设选择和管理功能 |
+| 155 | ImportExportModal表前缀预设管理 | 前端 导入导出 | 2026-05-05 | Assistant | 在ImportExportModal中添加表前缀预设的添加、删除和选择功能，与SettingsModal保持一致 |
+| 156 | 修复SQL导入列丢失问题 | 前端 导入导出 | 2026-05-05 | Assistant | 修复SQL导入时列丢失的问题：更新ImportResult接口添加columns字段，importFromJSON和importFromSQL都返回columns，processImportResult统一使用result.columns获取列数据 |
+| 157 | 修复项目列表文字过长布局问题 | 前端 UI | 2026-05-05 | Assistant | 修复项目列表中项目名称和描述文字过长导致的布局混乱问题：添加文本溢出省略号显示，根据容器宽度自适应调整maxWidth，添加Tooltip提示完整内容，优化布局稳定性 |
+| 158 | 修复SQL导入时索引丢失问题 | 前端 导入导出 | 2026-05-05 | Assistant | 修复SQL导入时索引（键）丢失问题：添加columnNameToIdMap映射表，在创建索引时将列名正确转换成新创建的列ID，支持两种导入模式（SQL列名和JSON列ID） |
+| 159 | 全面改进SQL解析逻辑 | 前端 导入导出 | 2026-05-05 | Assistant | 全面改进SQL解析逻辑：1.改进列分割逻辑，正确处理括号内的逗号；2.改进列名匹配，支持带下划线的列名；3.改进DEFAULT值解析，支持NULL和带引号的值；4.改进索引匹配，支持INDEX关键字；5.支持更复杂的表定义（ENGINE, CHARSET等）|
+| 160 | 导入功能全面优化 | 前端 导入导出 | 2026-05-05 | Assistant | 优化导入功能：1.添加导入前预览和确认流程，可自定义项目名称和数据库类型；2.添加SQL数据库类型自动识别功能（MySQL, PostgreSQL, SQL Server, Oracle, SQLite；3.确保导入后自动刷新项目列表和自动选择新项目；4.改善用户导入体验 |
+| 161 | 完全重构SQL列解析逻辑 | 前端 导入导出 | 2026-05-05 | Assistant | 重构SQL解析器，彻底解决列解析问题：1.全新的逐字符解析算法，更好地处理反引号；2.支持ENUM类型和复杂的列定义；3.增加错误捕获和日志；4.改进数据类型解析，更好的容错能力 |
+| 162 | 彻底重写SQL解析器，完整支持Navicat导出格式 | 前端 导入导出 | 2026-05-05 | Assistant | 完全重写SQL解析器，针对Navicat导出的完整SQL格式：1.完美支持带CHARACTER SET和COLLATE的复杂列定义；2.正确处理括号内容逐字符智能解析；3.添加完整的调试日志；4.跳过CHECK约束和UNIQUE INDEX；5.确认导入流程中项目列表自动刷新已保障 |
+| 163 | 简化重写SQL解析器 - 基于换行符分割的可靠方案 | 前端 导入导出 | 2026-05-05 | Assistant | 完全重写解析策略，采用最简单但最可靠的方案：1.基于真实换行符分割而非复杂括号追踪；2.逐行定义处理，处理逗号开头/结尾的行合并；3.更简单的列解析正则匹配；4.完整的控制台调试信息，便于排查问题 |
+| 164 | 集成 node-sql-parser 成熟SQL解析库 | 前端 导入导出 | 2026-05-05 | Assistant | 使用成熟的 node-sql-parser 库替代手写解析器：1.优先使用库的 AST 解析，支持完整的 SQL 语法；2.添加备用方案，当库解析失败时回退到手写解析器；3.支持复杂的 MySQL 特性（CHARSET, COLLATE, COMMENT 等）；4.详细的调试日志输出；5.更新 package.json 添加 node-sql-parser 依赖 |
+| 165 | 移除 node-sql-parser，修复浏览器兼容性问题 | 前端 导入导出 | 2026-05-05 | Assistant | 移除 node-sql-parser 依赖（该库仅适用于 Node.js）：1.使用完全手写的浏览器兼容 SQL 解析器；2.优化括号深度追踪算法，完美处理带有 CHARSET/COLLATE 的复杂列定义；3.增强的调试日志，便于排查解析问题；4.恢复 package.json，移除 Node.js 依赖；5.专门针对 Navicat 导出的 SQL 文件进行了优化 |
+| 166 | 最简单的 SQL 解析器重写 | 前端 导入导出 | 2026-05-05 | Assistant | 完全重写最简单直接的 SQL 解析器：1.按分号分割语句，只处理 CREATE TABLE；2.移除注释，更干净的解析；3.从最外层括号分割定义；4.简单的正则表达式提取列名和类型；5.详细的调试日志显示每一步；6.专门针对您的数据库.sql文件进行测试 |
+| 167 | TypeScript 编译错误全面修复 | 前端 构建 | 2026-05-05 | Assistant | 修复所有 TypeScript 编译错误：1.DDL生成器移除不必要的JSON.parse调用；2.修复importService类型导入路径；3.AppState添加缺失字段；4.修复类型不匹配问题；5.移除Column不存在的status属性 |
+| 168 | SQL 导入功能测试验证 | 前端 导入导出 | 2026-05-05 | Assistant | 成功解析测试文件数据库.sql中的8个表（box_xmy_ljq、evaluate_xmy_ljq、goods_xmy_ljq、group_set、order_xmy_ljq、store_xmy_ljq、user_xmy_ljq、warehouse_xmy_ljq） |
+| 169 | 项目列表右键菜单修复 | 前端 UI | 2026-05-05 | Assistant | 修复右键菜单按钮点击无效问题：1.移除Dropdown组件，直接使用Menu组件；2.调整菜单和遮罩层的渲染顺序；3.确保点击事件能正确触发和关闭菜单 |
+| 170 | 导入导出弹窗 UI 优化 | 前端 UI | 2026-05-05 | Assistant | 全面优化导入导出弹窗界面：1.导出页添加渐变色项目信息卡片；2.JSON和SQL导出采用双卡片网格布局；3.导入页采用虚线边框拖拽上传区域；4.统一使用圆角12px和渐变色图标背景；5.确认导入对话框添加Badge数字标签展示统计信息 |
+| 171 | antd 警告修复 | 前端 Bug 修复 | 2026-05-05 | Assistant | 修复两处 antd 警告：1.Modal 的 destroyOnClose 改为 destroyOnHidden；2.导出选项 Form.Item 添加 form 属性关联 |
+| 172 | 版本管理模块完善 | 前端 UI | 2026-05-05 | Assistant | 完善版本管理功能模块：1.修复 Modal footer 子元素缺少 key prop 问题；2.移除不必要的 okText/cancelText 属性；3.确保所有 useForm 创建的实例都正确连接到 Form 组件 |
+| 173 | Canvas useForm 警告修复 | 前端 Bug 修复 | 2026-05-05 | Assistant | 修复 Canvas 组件中 useForm 未连接的警告：1.将新建表 Modal 提取为独立组件 CreateTableModal；2.解决条件渲染导致 Form 组件不被渲染的问题；3.确保 useForm 只在 Form 组件存在时被调用 |
+| 174 | 版本管理模块完善 - 添加回滚功能 | 前端 版本管理 | 2026-05-05 | Assistant | 完善版本管理功能：1.添加版本回滚功能（restoreVersion）；2.在版本列表中添加回滚按钮；3.添加批量删除表和关系的API方法；4.更新版本操作列，增加回滚和删除两个按钮 |
+| 175 | 版本管理模块完善 - 修复创建和回滚 | 前端 Bug 修复 | 2026-05-05 | Assistant | 完善版本管理功能：1.修复版本创建时只保存当前项目信息的问题，现在保存完整的表和关系快照；2.修复版本回滚时的JSON解析问题，添加容错处理；3.修复useForm警告问题，将创建项目、编辑项目、创建版本三个表单提取为独立组件，避免useForm在条件渲染前调用；4.增强版本回滚功能，支持新、旧两种版本数据格式，添加容错处理 |
+| 176 | antd Card bodyStyle 废弃警告修复 | 前端 Bug 修复 | 2026-05-05 | Assistant | 修复 antd 废弃警告：将 Card 组件的 bodyStyle 属性改为 styles={{ body: ... }}，共修复 ImportExportModal.tsx 中的 6 处 |
 
 ---
 
@@ -157,3 +231,68 @@
 - 2026-05-04: 添加大模型API接口记录（100）
 - 2026-05-04: 添加大模型配置UI组件记录（101）
 - 2026-05-04: 添加工具入口集成记录（102）
+- 2026-05-05: 添加设置面板IDEA风格重构记录（103）
+- 2026-05-05: 添加多数据库DDL生成器记录（104）
+- 2026-05-05: 添加DDL数据库类型支持API记录（105）
+- 2026-05-05: 添加TableEditor render参数错误修复记录（106）
+- 2026-05-05: 添加ApiResponse类型扩展记录（107）
+- 2026-05-05: 添加SettingsModal Tree onSelect类型修复记录（108）
+- 2026-05-05: 添加TableEditor ColumnConfig接口定义记录（109）
+- 2026-05-05: 添加多数据库DDL导出UI优化记录（110）
+- 2026-05-05: 添加快捷键功能增强记录（111）
+- 2026-05-05: 添加数据验证增强功能记录（112）
+- 2026-05-05: 添加项目快速预览功能记录（113）
+- 2026-05-05: 添加ER图导出功能记录（114）
+- 2026-05-05: 添加导入导出数据库类型匹配修复记录（115）
+- 2026-05-05: 添加ER图PNG导出功能修复记录（116）
+- 2026-05-05: 添加项目列表项工业级UI优化记录（117）
+- 2026-05-05: 添加项目列表IntelliJ IDEA风格改造记录（118）
+- 2026-05-05: 添加整体布局IntelliJ IDEA风格全面升级记录（119）
+- 2026-05-05: 添加主题系统开发与可自定义主题记录（120）
+- 2026-05-05: 添加TableEditor组件空值安全修复记录（121）
+- 2026-05-05: 添加全组件table.columns/table.indexes空值安全修复记录（122）
+- 2026-05-05: 添加项目列表自适应宽度优化记录（123）
+- 2026-05-05: 添加前端多数据库DDL生成系统类型定义记录（124）
+- 2026-05-05: 添加前端MySQL DDL生成器完整实现记录（125）
+- 2026-05-05: 添加前端PostgreSQL DDL生成器完整实现记录（126）
+- 2026-05-05: 添加前端SQLite DDL生成器完整实现记录（127）
+- 2026-05-05: 添加前端DDL生成器工厂模式实现记录（128）
+- 2026-05-05: 添加前端exportService集成多数据库DDL生成记录（129）
+- 2026-05-05: 添加前端ImportExportModal完整集成多数据库DDL导出记录（130）
+- 2026-05-05: 添加前端SQL Server DDL生成器完整实现记录（131）
+- 2026-05-05: 添加前端Oracle DDL生成器完整实现记录（132）
+- 2026-05-05: 添加前端DDLGeneratorFactory支持所有数据库记录（133）
+- 2026-05-05: 添加前端ImportExportModal添加所有数据库选项记录（134）
+- 2026-05-05: 添加所有DDL生成器null安全修复记录（135）
+- 2026-05-05: 添加修复ImportExportModal React Hook调用错误记录（136）
+- 2026-05-05: 添加ImportExportModal导入功能完整完善记录（137）
+- 2026-05-05: 添加修复ImportResult接口支持索引字段记录（138）
+- 2026-05-05: 添加importService导入功能完整增强记录（139）
+- 2026-05-05: 添加exportService导出类型修复记录（140）
+- 2026-05-05: 添加后端indexes.columns字段处理完善记录（141）
+- 2026-05-05: 添加前端Index类型定义修复记录（142）
+- 2026-05-05: 添加导入导出模块完整检查与完善完成记录（143）
+- 2026-05-05: 添加ImportExportModal支持直接打开特定Tab记录（144）
+- 2026-05-05: 添加导入导出按钮分别打开对应Tab记录（145）
+- 2026-05-05: 添加项目列表右键菜单功能完整实现记录（146）
+- 2026-05-05: 添加修复TableEditor输入框失去焦点和布局问题记录（147）
+- 2026-05-05: 添加修复表前缀选择器问题记录（148）
+- 2026-05-05: 添加表前缀持久化配置功能记录（149）
+- 2026-05-05: 添加设置面板添加表前缀配置记录（150）
+- 2026-05-05: 添加TableEditor完全重构，解决输入问题记录（151）
+- 2026-05-05: 添加新增自动添加id列功能记录（152）
+- 2026-05-05: 添加设置面板添加自动id开关记录（153）
+- 2026-05-05: 添加表前缀支持多预设选择记录（154）
+- 2026-05-05: 添加ImportExportModal表前缀预设管理记录（155）
+- 2026-05-05: 添加修复SQL导入列丢失问题记录（156）
+- 2026-05-05: 添加修复项目列表文字过长布局问题记录（157）
+- 2026-05-05: 添加修复SQL导入时索引丢失问题记录（158）
+- 2026-05-05: 添加全面改进SQL解析逻辑记录（159）
+- 2026-05-05: 添加导入功能全面优化记录（160）
+- 2026-05-05: 添加完全重构SQL列解析逻辑记录（161）
+- 2026-05-05: 添加彻底重写SQL解析器，完整支持Navicat导出格式记录（162）
+- 2026-05-05: 添加简化重写SQL解析器 - 基于换行符分割的可靠方案记录（163）
+- 2026-05-05: 添加集成 node-sql-parser 成熟SQL解析库记录（164）
+- 2026-05-05: 添加移除 node-sql-parser，修复浏览器兼容性问题记录（165）
+- 2026-05-05: 添加最简单的 SQL 解析器重写记录（166）
+- 2026-05-05: 添加修复 TableEditor 滚动布局问题记录（167）

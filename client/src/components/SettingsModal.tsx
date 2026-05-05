@@ -1,7 +1,9 @@
 import React, { useState } from 'react'
-import { Modal, Slider, Button, Space, Typography, Tag, Switch, Card, Row, Col, Input, Tree, TreeDataNode } from 'antd'
-import { SettingOutlined, FontSizeOutlined, BgColorsOutlined, CompressOutlined, AimOutlined, ThunderboltOutlined, LinkOutlined, SaveOutlined, SwapOutlined, RobotOutlined, PaletteOutlined, EyeOutlined, DatabaseOutlined, KeyboardOutlined, SparklesOutlined } from '@ant-design/icons'
+import { Modal, Slider, Button, Space, Typography, Tag, Switch, Card, Row, Col, Input, Tree, TreeDataNode, Select } from 'antd'
+import type { Key } from 'react'
+import { SettingOutlined, FontSizeOutlined, BgColorsOutlined, CompressOutlined, AimOutlined, ThunderboltOutlined, LinkOutlined, SaveOutlined, SwapOutlined, RobotOutlined, AppstoreOutlined, EyeOutlined, DatabaseOutlined, KeyOutlined, StarOutlined, PlusOutlined } from '@ant-design/icons'
 import { useAppStore } from '../stores/appStore'
+import { useTheme } from '../theme/useTheme'
 
 const { Title, Text } = Typography
 
@@ -41,8 +43,9 @@ const treeData: TreeDataNode[] = [
   {
     title: '外观',
     key: 'appearance',
-    icon: <PaletteOutlined style={{ fontSize: 14 }} />,
+    icon: <AppstoreOutlined style={{ fontSize: 14 }} />,
     children: [
+      { title: '主题', key: 'theme', icon: <AppstoreOutlined style={{ fontSize: 12 }} /> },
       { title: '字体大小', key: 'font-size', icon: <FontSizeOutlined style={{ fontSize: 12 }} /> },
       { title: '主题颜色', key: 'theme-color', icon: <BgColorsOutlined style={{ fontSize: 12 }} /> },
       { title: '紧凑模式', key: 'compact-mode', icon: <CompressOutlined style={{ fontSize: 12 }} /> },
@@ -54,7 +57,7 @@ const treeData: TreeDataNode[] = [
     icon: <EyeOutlined style={{ fontSize: 14 }} />,
     children: [
       { title: '缩放级别', key: 'zoom-level', icon: <AimOutlined style={{ fontSize: 12 }} /> },
-      { title: '小地图', key: 'minimap', icon: <SparklesOutlined style={{ fontSize: 12 }} /> },
+      { title: '小地图', key: 'minimap', icon: <StarOutlined style={{ fontSize: 12 }} /> },
       { title: '关系线', key: 'edges', icon: <LinkOutlined style={{ fontSize: 12 }} /> },
     ],
   },
@@ -69,7 +72,7 @@ const treeData: TreeDataNode[] = [
   {
     title: '快捷键',
     key: 'shortcuts',
-    icon: <KeyboardOutlined style={{ fontSize: 14 }} />,
+    icon: <KeyOutlined style={{ fontSize: 14 }} />,
   },
   {
     title: '工具',
@@ -78,6 +81,8 @@ const treeData: TreeDataNode[] = [
     children: [
       { title: '数据库转换', key: 'type-convert', icon: <SwapOutlined style={{ fontSize: 12 }} /> },
       { title: 'AI 助手', key: 'ai-assistant', icon: <RobotOutlined style={{ fontSize: 12 }} /> },
+      { title: '表前缀', key: 'table-prefix', icon: <DatabaseOutlined style={{ fontSize: 12 }} /> },
+      { title: '自动添加id列', key: 'auto-add-id', icon: <DatabaseOutlined style={{ fontSize: 12 }} /> },
     ],
   },
 ]
@@ -86,10 +91,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onClose, 
   const [selectedKey, setSelectedKey] = useState('appearance')
   const [searchValue, setSearchValue] = useState('')
 
+  const { theme, themeOptions, setTheme } = useTheme()
   const fontSize = useAppStore(state => state.fontSize)
   const setFontSize = useAppStore(state => state.setFontSize)
   const themeColor = useAppStore(state => state.themeColor)
   const setThemeColor = useAppStore(state => state.setThemeColor)
+  const setThemeMode = useAppStore(state => state.setThemeMode)
   const compactMode = useAppStore(state => state.compactMode)
   const setCompactMode = useAppStore(state => state.setCompactMode)
   const canvasZoom = useAppStore(state => state.canvasZoom)
@@ -102,16 +109,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onClose, 
   const setEdgeStyle = useAppStore(state => state.setEdgeStyle)
   const showEdgeLabels = useAppStore(state => state.showEdgeLabels)
   const setShowEdgeLabels = useAppStore(state => state.setShowEdgeLabels)
+  const tablePrefix = useAppStore(state => state.tablePrefix)
+  const tablePrefixPresets = useAppStore(state => state.tablePrefixPresets)
+  const setTablePrefix = useAppStore(state => state.setTablePrefix)
+  const addTablePrefixPreset = useAppStore(state => state.addTablePrefixPreset)
+  const removeTablePrefixPreset = useAppStore(state => state.removeTablePrefixPreset)
+  const autoAddIdColumn = useAppStore(state => state.autoAddIdColumn)
+  const setAutoAddIdColumn = useAppStore(state => state.setAutoAddIdColumn)
 
   const handleReset = () => {
     setFontSize(14)
     setThemeColor('#1890ff')
+    setThemeMode('light')
     setCompactMode(false)
     setCanvasZoom(1)
     setShowMiniMap(true)
     setAutoSaveInterval(30000)
     setEdgeStyle('smooth')
     setShowEdgeLabels(true)
+    setTablePrefix('')
+    setAutoAddIdColumn(true)
   }
 
   const formatInterval = (ms: number) => {
@@ -122,6 +139,36 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onClose, 
 
   const renderContent = () => {
     switch (selectedKey) {
+      case 'theme':
+        return (
+          <div style={{ padding: '16px' }}>
+            <Title level={4} style={{ marginBottom: 16 }}>主题</Title>
+            <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>选择界面的颜色主题</Text>
+            <Select
+              style={{ width: '100%', marginBottom: 16 }}
+              value={theme.id}
+              onChange={(value) => setTheme(value)}
+              options={themeOptions}
+              size="large"
+            />
+            <div style={{ 
+              padding: '16px', 
+              background: theme.colors.backgroundSecondary, 
+              border: `1px solid ${theme.colors.border}`,
+              borderRadius: 8,
+              marginTop: 16
+            }}>
+              <Text strong style={{ color: theme.colors.text }}>主题预览</Text>
+              <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                <Tag style={{ background: theme.colors.primary, color: '#fff', border: 'none' }}>主色</Tag>
+                <Tag style={{ background: theme.colors.success, color: '#fff', border: 'none' }}>成功</Tag>
+                <Tag style={{ background: theme.colors.warning, color: '#fff', border: 'none' }}>警告</Tag>
+                <Tag style={{ background: theme.colors.error, color: '#fff', border: 'none' }}>错误</Tag>
+              </div>
+            </div>
+          </div>
+        )
+        
       case 'font-size':
         return (
           <div style={{ padding: '16px' }}>
@@ -341,6 +388,44 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onClose, 
                   <Text type="secondary">新建表</Text>
                 </div>
               </Col>
+              <Col span={12}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f5f5f5', borderRadius: 8 }}>
+                  <Space>
+                    <Tag color="blue">Ctrl</Tag>
+                    <span>+</span>
+                    <Tag color="blue">,</Tag>
+                  </Space>
+                  <Text type="secondary">打开设置</Text>
+                </div>
+              </Col>
+              <Col span={12}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f5f5f5', borderRadius: 8 }}>
+                  <Space>
+                    <Tag color="blue">Ctrl</Tag>
+                    <span>+</span>
+                    <Tag color="blue">Shift</Tag>
+                    <span>+</span>
+                    <Tag color="blue">E</Tag>
+                  </Space>
+                  <Text type="secondary">导入导出</Text>
+                </div>
+              </Col>
+              <Col span={12}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f5f5f5', borderRadius: 8 }}>
+                  <Space>
+                    <Tag color="blue">Delete</Tag>
+                  </Space>
+                  <Text type="secondary">删除选中表</Text>
+                </div>
+              </Col>
+              <Col span={12}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f5f5f5', borderRadius: 8 }}>
+                  <Space>
+                    <Tag color="blue">Esc</Tag>
+                  </Space>
+                  <Text type="secondary">关闭弹窗/取消选择</Text>
+                </div>
+              </Col>
             </Row>
           </div>
         )
@@ -382,6 +467,78 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onClose, 
           </div>
         )
 
+      case 'table-prefix':
+        return (
+          <div style={{ padding: '16px' }}>
+            <Title level={4} style={{ marginBottom: 16 }}>表前缀</Title>
+            <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>配置默认的表前缀，导出 SQL 时会自动添加</Text>
+            <Space direction="vertical" style={{ width: '100%' }}>
+              <div>
+                <Text strong style={{ display: 'block', marginBottom: 8, fontSize: 13 }}>快速选择预设</Text>
+                <Space wrap>
+                  {tablePrefixPresets.map((prefix) => (
+                    <Tag
+                      key={prefix || 'empty'}
+                      color={tablePrefix === prefix ? 'blue' : 'default'}
+                      closable={prefix !== ''}
+                      onClose={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        removeTablePrefixPreset(prefix)
+                      }}
+                      style={{ cursor: 'pointer', padding: '4px 12px' }}
+                      onClick={() => setTablePrefix(prefix)}
+                    >
+                      {prefix || '无'}
+                    </Tag>
+                  ))}
+                  <Tag
+                    color="success"
+                    style={{ cursor: 'pointer', padding: '4px 12px' }}
+                    onClick={() => {
+                      const newPrefix = prompt('请输入新的表前缀（例如: my_）', '')
+                      if (newPrefix !== null) {
+                        addTablePrefixPreset(newPrefix)
+                      }
+                    }}
+                  >
+                    <PlusOutlined /> 添加
+                  </Tag>
+                </Space>
+              </div>
+              <div>
+                <Text strong style={{ display: 'block', marginBottom: 8, fontSize: 13 }}>自定义输入</Text>
+                <Input
+                  value={tablePrefix}
+                  onChange={(e) => setTablePrefix(e.target.value)}
+                  placeholder="输入自定义的表前缀，留空则无前缀"
+                  size="large"
+                />
+              </div>
+              {tablePrefix && (
+                <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
+                  当前配置的表前缀：<strong>{tablePrefix}</strong>
+                </Text>
+              )}
+            </Space>
+          </div>
+        )
+
+      case 'auto-add-id':
+        return (
+          <div style={{ padding: '16px' }}>
+            <Title level={4} style={{ marginBottom: 16 }}>自动添加id列</Title>
+            <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>创建新表时是否自动添加id列作为主键</Text>
+            <Switch
+              checked={autoAddIdColumn}
+              onChange={setAutoAddIdColumn}
+            />
+            <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
+              当前状态：<strong>{autoAddIdColumn ? '已开启' : '已关闭'}</strong>
+            </Text>
+          </div>
+        )
+
       default:
         return (
           <div style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
@@ -391,9 +548,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onClose, 
     }
   }
 
-  const onTreeSelect = (selectedKeys: string[]) => {
+  const onTreeSelect = (selectedKeys: Key[]) => {
     if (selectedKeys.length > 0) {
-      setSelectedKey(selectedKeys[0])
+      setSelectedKey(selectedKeys[0] as string)
     }
   }
 
@@ -416,7 +573,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onClose, 
         </Space>
       }
       width={800}
-      bodyStyle={{ padding: 0 }}
+      styles={{ body: { padding: 0 } }}
     >
       <div style={{ display: 'flex', height: 500 }}>
         <div style={{ width: 220, borderRight: '1px solid #e8e8e8', display: 'flex', flexDirection: 'column' }}>

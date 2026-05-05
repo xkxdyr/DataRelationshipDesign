@@ -6,9 +6,15 @@
 
 - 📊 **可视化设计** - 拖拽式设计数据库表
 - 🔗 **关系管理** - 完整的外键约束支持
-- 📄 **DDL 导出** - 一键导出 MySQL DDL
+- 📄 **DDL 导出** - 一键导出多数据库 DDL（MySQL/PostgreSQL/SQLite/SQL Server/Oracle）
 - 📈 **版本管理** - 数据库设计版本控制
 - 📝 **索引管理** - 普通索引与唯一索引支持
+- 🎨 **主题系统** - 4种主题支持（浅色/深色/Darcula/蓝色）
+- 🖼️ **ER图导出** - 支持导出为PNG和SVG
+- 📥 **导入导出** - JSON和SQL导入导出
+- 🤖 **AI助手** - AI智能生成表结构（可选API密钥）
+- 📱 **响应式设计** - IntelliJ IDEA风格界面
+- 📴 **离线模式** - IndexedDB本地存储支持
 
 ## 🚀 快速开始
 
@@ -22,9 +28,8 @@
 ```bash
 cd server
 npm install
-npm run build
-npm start
-# 访问: http://localhost:3002
+npm run dev
+# 访问: http://localhost:3001
 ```
 
 #### 前端
@@ -32,7 +37,7 @@ npm start
 cd client
 npm install
 npm run dev
-# 访问: http://localhost:3001
+# 访问: http://localhost:3000 (或 http://localhost:3002, http://localhost:3003)
 ```
 
 ## 📁 项目结构
@@ -144,14 +149,26 @@ DataRelationshipDesign/
 - `PUT /api/versions/:id` - 更新版本
 - `DELETE /api/versions/:id` - 删除版本
 
-## 🎯 路线图
+## ✅ 已完成功能
 
-- [ ] 可视化关系连线
-- [ ] 导出 ER 图（PNG/SVG）
+所有核心功能已完成！✓
+
+- ✅ 可视化关系连线
+- ✅ 导出 ER 图（PNG/SVG）
+- ✅ PostgreSQL 完整支持
+- ✅ 多数据库DDL导出
+- ✅ 导入 SQL
+- ✅ 完整主题系统
+- ✅ 离线模式
+- ✅ 完整导入导出（JSON/SQL）
+- ✅ AI 响应式设计 IntelliJ IDEA风格
+- ✅ 主题系统
+- ✅ MySQL/PostgreSQL/SQLite/SQL Server/Oracle DDL 完整支持
+
+## 🎯 未来计划
+
 - [ ] 数据库同步（MySQL）
-- [ ] PostgreSQL 支持
 - [ ] 团队协作
-- [ ] 导入 SQL
 - [ ] 数据迁移
 
 ## 📄 许可证

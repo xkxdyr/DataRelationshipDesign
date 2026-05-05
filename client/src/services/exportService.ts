@@ -1,4 +1,6 @@
-import { Project, Table, Column, Relationship, Index, Version } from '../types'
+import { Project, Table, Relationship, Version } from '../types'
+import { DDLGeneratorFactory } from '../ddl/DDLGeneratorFactory'
+import { DDLOptions } from '../ddl/types'
 
 export interface ExportData {
   version: string
@@ -38,7 +40,7 @@ export interface ExportData {
     indexes: {
       id: string
       name: string
-      columns: string
+      columns: string[]
       unique: boolean
       type: string
     }[]
@@ -62,159 +64,6 @@ export interface ExportData {
     data: string
     createdAt: string
   }[]
-}
-
-const typeMap: Record<string, string> = {
-  'INT': 'INT',
-  'BIGINT': 'BIGINT',
-  'SMALLINT': 'SMALLINT',
-  'TINYINT': 'TINYINT',
-  'VARCHAR': 'VARCHAR',
-  'CHAR': 'CHAR',
-  'TEXT': 'TEXT',
-  'MEDIUMTEXT': 'MEDIUMTEXT',
-  'LONGTEXT': 'LONGTEXT',
-  'DATE': 'DATE',
-  'DATETIME': 'DATETIME',
-  'TIMESTAMP': 'TIMESTAMP',
-  'TIME': 'TIME',
-  'DECIMAL': 'DECIMAL',
-  'NUMERIC': 'NUMERIC',
-  'FLOAT': 'FLOAT',
-  'DOUBLE': 'DOUBLE',
-  'BOOLEAN': 'TINYINT(1)',
-  'BOOL': 'TINYINT(1)',
-  'BLOB': 'BLOB',
-  'JSON': 'JSON',
-  'UUID': 'CHAR(36)'
-}
-
-function mapDataType(col: Column): string {
-  const baseType = typeMap[col.dataType.toUpperCase()] || col.dataType
-
-  if (baseType === 'VARCHAR' || baseType === 'CHAR') {
-    return `${baseType}(${col.length || 255})`
-  }
-
-  if (baseType === 'DECIMAL' || baseType === 'NUMERIC') {
-    const precision = col.precision || 10
-    const scale = col.scale || 2
-    return `${baseType}(${precision},${scale})`
-  }
-
-  return baseType
-}
-
-function escapeString(str: string): string {
-  return str.replace(/'/g, "''")
-}
-
-function formatDefaultValue(col: Column): string {
-  const val = col.defaultValue
-  if (!val) return 'NULL'
-  if (val === 'NULL') return 'NULL'
-  if (val === 'CURRENT_TIMESTAMP') return 'CURRENT_TIMESTAMP'
-  if (!isNaN(Number(val))) return val
-  return `'${escapeString(val)}'`
-}
-
-function generateColumnLine(col: Column): string {
-  let line = `  \`${col.name}\` ${mapDataType(col)}`
-
-  if (!col.nullable) {
-    line += ' NOT NULL'
-  }
-
-  if (col.autoIncrement) {
-    line += ' AUTO_INCREMENT'
-  }
-
-  if (col.defaultValue !== undefined && col.defaultValue !== null) {
-    line += ` DEFAULT ${formatDefaultValue(col)}`
-  }
-
-  if (col.unique && !col.primaryKey) {
-    line += ' UNIQUE'
-  }
-
-  if (col.comment) {
-    line += ` COMMENT '${escapeString(col.comment)}'`
-  }
-
-  return line
-}
-
-function generateIndexLine(tableName: string, idx: Index): string {
-  const columns = JSON.parse(idx.columns).map((c: string) => `\`${c}\``).join(', ')
-  const type = idx.type === 'FULLTEXT' ? 'FULLTEXT' : idx.type === 'HASH' ? 'HASH' : ''
-
-  if (idx.unique) {
-    return `UNIQUE KEY \`${idx.name}\` (${columns})`
-  }
-  return `${type} KEY \`${idx.name}\` (${columns})`.trim()
-}
-
-function generateForeignKeyLine(rel: Relationship, tableMap: Map<string, Table>): string {
-  const sourceTable = tableMap.get(rel.sourceTableId)
-  const targetTable = tableMap.get(rel.targetTableId)
-  if (!sourceTable || !targetTable) return ''
-
-  const sourceColumn = sourceTable.columns.find(c => c.id === rel.sourceColumnId)
-  const targetColumn = targetTable.columns.find(c => c.id === rel.targetColumnId)
-  if (!sourceColumn || !targetColumn) return ''
-
-  const constraintName = rel.name || `fk_${sourceTable.name}_${sourceColumn.name}`
-
-  let line = `CONSTRAINT \`${constraintName}\``
-  line += ` FOREIGN KEY (\`${sourceColumn.name}\`)`
-  line += ` REFERENCES \`${targetTable.name}\` (\`${targetColumn.name}\`)`
-
-  if (rel.onUpdate !== 'RESTRICT') {
-    line += ` ON UPDATE ${rel.onUpdate}`
-  }
-
-  if (rel.onDelete !== 'RESTRICT') {
-    line += ` ON DELETE ${rel.onDelete}`
-  }
-
-  return line
-}
-
-function generateCreateTable(table: Table, relationships: Relationship[], tableMap: Map<string, Table>): string {
-  const lines: string[] = []
-  lines.push(`CREATE TABLE \`${table.name}\` (`)
-
-  const columnLines = table.columns.map(col => generateColumnLine(col))
-  lines.push(columnLines.join(',\n'))
-
-  const pkColumns = table.columns.filter(c => c.primaryKey)
-  if (pkColumns.length > 0) {
-    lines.push(`,\n  PRIMARY KEY (${pkColumns.map(c => `\`${c.name}\``).join(', ')})`)
-  }
-
-  table.indexes.forEach(idx => {
-    lines.push(`,\n  ${generateIndexLine(table.name, idx)}`)
-  })
-
-  const tableRelationships = relationships.filter(
-    r => r.sourceTableId === table.id
-  )
-
-  tableRelationships.forEach(rel => {
-    const fkLine = generateForeignKeyLine(rel, tableMap)
-    if (fkLine) {
-      lines.push(`,\n  ${fkLine}`)
-    }
-  })
-
-  lines.push('\n)')
-
-  if (table.comment) {
-    lines.push(` COMMENT='${escapeString(table.comment)}'`)
-  }
-
-  lines.push(';')
-  return lines.join('')
 }
 
 export const exportService = {
@@ -244,7 +93,7 @@ export const exportService = {
         comment: table.comment,
         positionX: table.positionX,
         positionY: table.positionY,
-        columns: table.columns.map(col => ({
+        columns: (table.columns || []).map(col => ({
           id: col.id,
           name: col.name,
           dataType: col.dataType,
@@ -259,7 +108,7 @@ export const exportService = {
           comment: col.comment,
           order: col.order
         })),
-        indexes: table.indexes.map(idx => ({
+        indexes: (table.indexes || []).map(idx => ({
           id: idx.id,
           name: idx.name,
           columns: idx.columns,
@@ -292,28 +141,10 @@ export const exportService = {
   exportToSQL(
     project: Project,
     tables: Table[],
-    relationships: Relationship[]
+    relationships: Relationship[],
+    options?: Partial<DDLOptions>
   ): string {
-    const lines: string[] = []
-    lines.push(`-- Database: ${project.name}`)
-    lines.push(`-- Exported at: ${new Date().toISOString()}`)
-    lines.push(`-- Database type: ${project.databaseType}`)
-    lines.push('')
-
-    if (project.description) {
-      lines.push(`-- ${project.description}`)
-      lines.push('')
-    }
-
-    const tableMap = new Map<string, Table>()
-    tables.forEach(t => tableMap.set(t.id, t))
-
-    tables.forEach(table => {
-      lines.push(generateCreateTable(table, relationships, tableMap))
-      lines.push('')
-    })
-
-    return lines.join('\n')
+    return DDLGeneratorFactory.generateCompleteSQL(project, tables, relationships, options)
   },
 
   downloadJSON(data: ExportData, filename: string): void {

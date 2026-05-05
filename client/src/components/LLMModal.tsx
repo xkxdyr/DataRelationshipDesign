@@ -225,7 +225,7 @@ export const LLMModal: React.FC<LLMModalProps> = ({ visible, onClose, onApplyTab
                           {table.tableComment && <Tag style={{ marginLeft: 8 }}>{table.tableComment}</Tag>}
                         </Title>
                         <div style={{ marginTop: 8 }}>
-                          {table.columns.map((col, idx) => (
+                          {(table.columns || []).map((col, idx) => (
                             <Tag key={idx} style={{ marginBottom: 4 }}>
                               {col.name}: {col.dataType}
                               {col.primaryKey && <Tag color="gold" style={{ marginLeft: 4 }}>PK</Tag>}

@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useEffect, useState } from 'react'
+import React, { useCallback, useMemo, useEffect, useState, useRef } from 'react'
 import ReactFlow, {
   Background,
   Controls,
@@ -15,8 +15,9 @@ import { Table, Relationship } from '../types'
 import TableNode from './TableNode'
 import RelationshipEditor from './RelationshipEditor'
 import { useAppStore } from '../stores/appStore'
-import { Button, Space, Modal, Form, Input } from 'antd'
-import { PlusOutlined, CodeOutlined, LinkOutlined } from '@ant-design/icons'
+import { Button, Space, Dropdown, message } from 'antd'
+import { PlusOutlined, CodeOutlined, LinkOutlined, ExportOutlined, PictureOutlined, FileImageOutlined } from '@ant-design/icons'
+import CreateTableModal from './CreateTableModal'
 import { projectApi } from '../services/api'
 
 const nodeTypes = {
@@ -26,9 +27,9 @@ const nodeTypes = {
 const CanvasContent: React.FC = () => {
   const { tables, currentProject, updateTablePosition, selectTable, selectedTableId, deleteTable, createTable, loadTables, relationships, loadRelationships, canvasZoom, setCanvasZoom, showMiniMap, setShowMiniMap, edgeStyle, showEdgeLabels } = useAppStore()
   const reactFlow = useReactFlow()
+  const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isRelationshipEditorOpen, setIsRelationshipEditorOpen] = useState(false)
-  const [form] = Form.useForm()
 
   useEffect(() => {
     if (currentProject) {
@@ -127,24 +128,7 @@ const CanvasContent: React.FC = () => {
   }, [canvasZoom, setCanvasZoom])
 
   const handleOpenModal = () => {
-    form.resetFields()
     setIsModalOpen(true)
-  }
-
-  const handleCloseModal = () => {
-    setIsModalOpen(false)
-  }
-
-  const handleCreateTable = async (values: any) => {
-    if (currentProject) {
-      await createTable(currentProject.id, { 
-        name: values.name,
-        comment: values.comment || '',
-        positionX: 100,
-        positionY: 100
-      })
-      setIsModalOpen(false)
-    }
   }
 
   const handleGenerateDDL = async () => {
@@ -163,9 +147,180 @@ const CanvasContent: React.FC = () => {
     }
   }
 
+  const exportToPNG = async () => {
+    if (!currentProject) {
+      message.error('请先选择一个项目')
+      return
+    }
+
+    try {
+      const svgContent = generateERDiagramSVG()
+      const svgBlob = new Blob([svgContent], { type: 'image/svg+xml' })
+      const url = URL.createObjectURL(svgBlob)
+      
+      const img = new Image()
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        message.error('无法创建画布上下文')
+        return
+      }
+
+      img.onload = () => {
+        canvas.width = img.width * 2
+        canvas.height = img.height * 2
+        ctx.scale(2, 2)
+        ctx.fillStyle = '#fafafa'
+        ctx.fillRect(0, 0, img.width, img.height)
+        ctx.drawImage(img, 0, 0)
+        
+        const link = document.createElement('a')
+        link.download = `${currentProject.name || 'er-diagram'}.png`
+        link.href = canvas.toDataURL('image/png')
+        link.click()
+        URL.revokeObjectURL(url)
+        message.success('ER 图已导出为 PNG')
+      }
+      
+      img.onerror = () => {
+        URL.revokeObjectURL(url)
+        message.error('PNG 导出失败，正在尝试 SVG 导出')
+        exportToSVG()
+      }
+
+      img.src = url
+    } catch (error) {
+      console.error('导出 PNG 失败:', error)
+      message.error('导出 PNG 失败，正在尝试 SVG 导出')
+      exportToSVG()
+    }
+  }
+
+  const exportToSVG = () => {
+    if (!currentProject) {
+      message.error('没有选中的项目')
+      return
+    }
+
+    try {
+      const svgContent = generateERDiagramSVG()
+      const blob = new Blob([svgContent], { type: 'image/svg+xml' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${currentProject.name}.svg`
+      a.click()
+      URL.revokeObjectURL(url)
+      message.success('ER 图已导出为 SVG')
+    } catch (error) {
+      console.error('导出 SVG 失败:', error)
+      message.error('导出 SVG 失败')
+    }
+  }
+
+  const generateERDiagramSVG = (): string => {
+    if (!currentProject) return ''
+
+    const padding = 50
+    const nodeWidth = 220
+    const nodeMinHeight = 150
+    const columnHeight = 28
+    const headerHeight = 50
+    const gapX = 80
+    const gapY = 80
+
+    const positions: { [key: string]: { x: number; y: number; width: number; height: number } } = {}
+    let currentX = padding
+    let currentY = padding
+    let maxYInRow = 0
+
+    tables.forEach((table, index) => {
+      const colCount = (table.columns?.length || 0) + 1
+      const height = Math.max(nodeMinHeight, headerHeight + colCount * columnHeight)
+      const width = nodeWidth
+
+      if (currentX + width > 1200) {
+        currentX = padding
+        currentY = maxYInRow + gapY
+      }
+
+      positions[table.id] = { x: currentX, y: currentY, width, height }
+
+      currentX += width + gapX
+      maxYInRow = Math.max(maxYInRow, currentY + height)
+    })
+
+    let svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="${maxYInRow + padding * 2}" style="background:#fafafa">
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#1890ff"/>
+    </marker>
+    <style>
+      .table-header { fill: #1890ff; }
+      .table-title { fill: white; font-size: 14px; font-weight: bold; }
+      .column-text { fill: #333; font-size: 12px; }
+      .primary-key { fill: #faad14; }
+    </style>
+  </defs>
+`
+
+    tables.forEach(table => {
+      const pos = positions[table.id]
+      if (!pos) return
+
+      svg += `  <g>
+    <rect x="${pos.x}" y="${pos.y}" width="${pos.width}" height="${pos.height}" fill="white" stroke="#1890ff" stroke-width="2" rx="4"/>
+    <rect x="${pos.x}" y="${pos.y}" width="${pos.width}" height="${headerHeight}" fill="#1890ff" rx="4" ry="4"/>
+    <text x="${pos.x + 10}" y="${pos.y + 30}" class="table-title">${table.name}</text>
+`
+
+      table.columns?.forEach((col, idx) => {
+        const y = pos.y + headerHeight + 20 + idx * columnHeight
+        svg += `    <text x="${pos.x + 10}" y="${y}" class="column-text">${col.name} (${col.dataType})</text>
+`
+      })
+
+      svg += `  </g>
+`
+    })
+
+    relationships.forEach(rel => {
+      const sourcePos = positions[rel.sourceTableId]
+      const targetPos = positions[rel.targetTableId]
+      if (!sourcePos || !targetPos) return
+
+      const sourceX = sourcePos.x + sourcePos.width / 2
+      const sourceY = sourcePos.y + sourcePos.height
+      const targetX = targetPos.x + targetPos.width / 2
+      const targetY = targetPos.y
+
+      svg += `  <line x1="${sourceX}" y1="${sourceY}" x2="${targetX}" y2="${targetY}" stroke="#1890ff" stroke-width="2" marker-end="url(#arrowhead)"/>
+`
+    })
+
+    svg += `</svg>`
+    return svg
+  }
+
+  const exportMenuItems = [
+    {
+      key: 'png',
+      icon: <FileImageOutlined />,
+      label: '导出为 PNG',
+      onClick: exportToPNG
+    },
+    {
+      key: 'svg',
+      icon: <PictureOutlined />,
+      label: '导出为 SVG',
+      onClick: exportToSVG
+    }
+  ]
+
   return (
     <>
-      <div style={{ height: '100%', width: '100%', position: 'relative' }}>
+      <div style={{ height: '100%', width: '100%', position: 'relative' }} ref={reactFlowWrapper}>
         <div style={{ position: 'absolute', top: 16, left: 16, zIndex: 10 }}>
           <Space>
             <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenModal}>
@@ -174,6 +329,11 @@ const CanvasContent: React.FC = () => {
             <Button icon={<LinkOutlined />} onClick={() => setIsRelationshipEditorOpen(true)}>
               关系管理
             </Button>
+            <Dropdown menu={{ items: exportMenuItems }} placement="bottomLeft">
+              <Button icon={<ExportOutlined />}>
+                导出 ER 图
+              </Button>
+            </Dropdown>
             <Button icon={<CodeOutlined />} onClick={handleGenerateDDL}>
               导出DDL
             </Button>
@@ -213,35 +373,10 @@ const CanvasContent: React.FC = () => {
         </ReactFlow>
       </div>
 
-      <Modal
-        title="新建表"
+      <CreateTableModal
         open={isModalOpen}
-        onOk={() => form.submit()}
-        onCancel={handleCloseModal}
-        okText="创建"
-        cancelText="取消"
-      >
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={handleCreateTable}
-        >
-          <Form.Item
-            name="name"
-            label="表名称"
-            rules={[{ required: true, message: '请输入表名称' }]}
-          >
-            <Input placeholder="请输入表名称" />
-          </Form.Item>
-          
-          <Form.Item
-            name="comment"
-            label="表注释"
-          >
-            <Input.TextArea placeholder="请输入表注释" rows={3} />
-          </Form.Item>
-        </Form>
-      </Modal>
+        onClose={() => setIsModalOpen(false)}
+      />
 
       <RelationshipEditor
         visible={isRelationshipEditorOpen}

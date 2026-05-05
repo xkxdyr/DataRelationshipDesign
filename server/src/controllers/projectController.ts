@@ -19,7 +19,18 @@ export const projectController = {
         res.status(404).json({ success: false, error: 'Project not found' })
         return
       }
-      res.json({ success: true, data: project })
+      // 解析indexes的columns字段为数组
+      const parsedProject = {
+        ...project,
+        tables: (project.tables || []).map((table: any) => ({
+          ...table,
+          indexes: (table.indexes || []).map((idx: any) => ({
+            ...idx,
+            columns: idx.columns ? JSON.parse(idx.columns) : []
+          }))
+        }))
+      }
+      res.json({ success: true, data: parsedProject })
     } catch (error) {
       res.status(500).json({ success: false, error: (error as Error).message })
     }

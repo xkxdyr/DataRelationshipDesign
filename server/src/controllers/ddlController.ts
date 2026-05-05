@@ -1,14 +1,17 @@
 import { Request, Response } from 'express'
 import { PrismaClient } from '@prisma/client'
-import { MysqlDDLGenerator, Table, Relationship } from '../generators/ddlGenerator'
+import { Table, Relationship } from '../generators/ddlGenerator'
+import { MultiDDLGenerator, DatabaseType, databaseTypeLabels } from '../generators/multiDdlGenerator'
 
 const prisma = new PrismaClient()
+const multiDDLGenerator = new MultiDDLGenerator()
 
 export const ddlController = {
   async generateForProject(req: Request, res: Response) {
     try {
       const { projectId } = req.params
-      
+      const dbType = (req.query.type as DatabaseType) || 'MYSQL'
+
       const project = await prisma.project.findUnique({
         where: { id: projectId },
         include: {
@@ -26,6 +29,8 @@ export const ddlController = {
         res.status(404).json({ success: false, error: 'Project not found' })
         return
       }
+
+      multiDDLGenerator.setDatabaseType(dbType)
 
       const tables: Table[] = project.tables.map(t => ({
         name: t.name,
@@ -49,9 +54,9 @@ export const ddlController = {
       const tableMap = new Map(
         project.tables.map(t => [t.id, t.name])
       )
-      
+
       const columnMap = new Map(
-        project.tables.flatMap(t => 
+        project.tables.flatMap(t =>
           t.columns.map(c => [c.id, c.name])
         )
       )
@@ -67,13 +72,13 @@ export const ddlController = {
         name: rel.name || undefined
       }))
 
-      const ddl = MysqlDDLGenerator.generateAllTables(tables, relationships)
-      
+      const ddl = multiDDLGenerator.generateAllTables(tables, relationships)
+
       res.json({
         success: true,
         data: {
           ddl,
-          databaseType: project.databaseType,
+          databaseType: databaseTypeLabels[dbType],
           tableCount: tables.length,
           relationshipCount: relationships.length
         }
@@ -86,7 +91,8 @@ export const ddlController = {
   async generateForTable(req: Request, res: Response) {
     try {
       const { tableId } = req.params
-      
+      const dbType = (req.query.type as DatabaseType) || 'MYSQL'
+
       const table = await prisma.table.findUnique({
         where: { id: tableId },
         include: {
@@ -110,6 +116,8 @@ export const ddlController = {
         return
       }
 
+      multiDDLGenerator.setDatabaseType(dbType)
+
       const dbTable: Table = {
         name: table.name,
         comment: table.comment || undefined,
@@ -132,9 +140,9 @@ export const ddlController = {
       const tableMap = new Map(
         table.project.tables.map(t => [t.id, t.name])
       )
-      
+
       const columnMap = new Map(
-        table.project.tables.flatMap(t => 
+        table.project.tables.flatMap(t =>
           t.columns.map(c => [c.id, c.name])
         )
       )
@@ -152,17 +160,30 @@ export const ddlController = {
           name: rel.name || undefined
         }))
 
-      const ddl = MysqlDDLGenerator.generateCreateTable(dbTable, relationships)
-      
+      const ddl = multiDDLGenerator.generateCreateTable(dbTable, relationships)
+
       res.json({
         success: true,
         data: {
           ddl,
-          tableName: table.name
+          tableName: table.name,
+          databaseType: databaseTypeLabels[dbType]
         }
       })
     } catch (error) {
       res.status(500).json({ success: false, error: (error as Error).message })
     }
+  },
+
+  async getSupportedDatabases(req: Request, res: Response) {
+    const databases = Object.entries(databaseTypeLabels).map(([value, label]) => ({
+      value,
+      label
+    }))
+
+    res.json({
+      success: true,
+      data: databases
+    })
   }
 }

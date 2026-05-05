@@ -21,7 +21,7 @@ export interface Index {
   id: string
   tableId: string
   name: string
-  columns: string
+  columns: string[]
   unique: boolean
   type: string
 }
@@ -77,6 +77,7 @@ export interface Project {
 
 export interface ApiResponse<T> {
   success: boolean
+  result?: T
   data?: T
   error?: string
   message?: string
