@@ -40,7 +40,7 @@ interface AppStore extends AppState {
   deleteProject: (id: string) => Promise<void>
 
   loadTables: (projectId: string) => Promise<void>
-  createTable: (projectId: string, data: Partial<Table>) => Promise<void>
+  createTable: (projectId: string, data: Partial<Table>, skipAutoIdColumn?: boolean) => Promise<void>
   updateTable: (id: string, data: Partial<Table>) => Promise<void>
   updateTablePosition: (id: string, x: number, y: number) => Promise<void>
   deleteTable: (id: string) => Promise<void>
@@ -649,7 +649,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       
       if (isLocalMode) {
         const localProject: LocalProject = {
-          id: `local_${Date.now()}`,
+          id: data.id || `local_${Date.now()}`,
           name: data.name || '新项目',
           description: data.description,
           databaseType: data.databaseType || 'MySQL',
@@ -670,7 +670,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         }
       } else {
         const localProject: LocalProject = {
-          id: `local_${Date.now()}`,
+          id: data.id || `local_${Date.now()}`,
           name: data.name || '新项目',
           description: data.description,
           databaseType: data.databaseType || 'MySQL',
@@ -795,7 +795,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
   },
 
-  createTable: async (projectId: string, data: Partial<Table>) => {
+  createTable: async (projectId: string, data: Partial<Table>, skipAutoIdColumn?: boolean) => {
     set({ loading: true })
     try {
       const store = get()
@@ -822,8 +822,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
         } as Table
       }
 
-      // 自动创建id列（如果开启该功能）
-      if (store.autoAddIdColumn) {
+      // 自动创建id列（如果开启该功能且未指定跳过）
+      if (store.autoAddIdColumn && !skipAutoIdColumn) {
         const idColumnData = {
           name: 'id',
           dataType: 'BIGINT',

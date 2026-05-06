@@ -12,6 +12,7 @@ interface SettingsModalProps {
   onClose: () => void
   onOpenTypeConvert?: () => void
   onOpenLLM?: () => void
+  onOpenConnections?: () => void
 }
 
 const themeColors = [
@@ -79,6 +80,7 @@ const treeData: TreeDataNode[] = [
     key: 'tools',
     icon: <DatabaseOutlined style={{ fontSize: 14 }} />,
     children: [
+      { title: '数据库连接', key: 'connections', icon: <DatabaseOutlined style={{ fontSize: 12 }} /> },
       { title: '数据库转换', key: 'type-convert', icon: <SwapOutlined style={{ fontSize: 12 }} /> },
       { title: 'AI 助手', key: 'ai-assistant', icon: <RobotOutlined style={{ fontSize: 12 }} /> },
       { title: '表前缀', key: 'table-prefix', icon: <DatabaseOutlined style={{ fontSize: 12 }} /> },
@@ -87,7 +89,7 @@ const treeData: TreeDataNode[] = [
   },
 ]
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onClose, onOpenTypeConvert, onOpenLLM }) => {
+export const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onClose, onOpenTypeConvert, onOpenLLM, onOpenConnections }) => {
   const [selectedKey, setSelectedKey] = useState('appearance')
   const [searchValue, setSearchValue] = useState('')
 
@@ -383,7 +385,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onClose, 
                   <Space>
                     <Tag color="blue">Ctrl</Tag>
                     <span>+</span>
-                    <Tag color="blue">N</Tag>
+                    <Tag color="blue">T</Tag>
                   </Space>
                   <Text type="secondary">新建表</Text>
                 </div>
@@ -426,7 +428,94 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onClose, 
                   <Text type="secondary">关闭弹窗/取消选择</Text>
                 </div>
               </Col>
+              <Col span={12}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f5f5f5', borderRadius: 8 }}>
+                  <Space>
+                    <Tag color="blue">Ctrl</Tag>
+                    <span>+</span>
+                    <Tag color="blue">0</Tag>
+                  </Space>
+                  <Text type="secondary">重置缩放</Text>
+                </div>
+              </Col>
+              <Col span={12}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f5f5f5', borderRadius: 8 }}>
+                  <Space>
+                    <Tag color="blue">Ctrl</Tag>
+                    <span>+</span>
+                    <Tag color="blue">+</Tag>
+                  </Space>
+                  <Text type="secondary">放大</Text>
+                </div>
+              </Col>
+              <Col span={12}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f5f5f5', borderRadius: 8 }}>
+                  <Space>
+                    <Tag color="blue">Ctrl</Tag>
+                    <span>+</span>
+                    <Tag color="blue">-</Tag>
+                  </Space>
+                  <Text type="secondary">缩小</Text>
+                </div>
+              </Col>
+              <Col span={12}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f5f5f5', borderRadius: 8 }}>
+                  <Space>
+                    <Tag color="blue">Ctrl</Tag>
+                    <span>+</span>
+                    <Tag color="blue">A</Tag>
+                  </Space>
+                  <Text type="secondary">全选</Text>
+                </div>
+              </Col>
+              <Col span={12}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f5f5f5', borderRadius: 8 }}>
+                  <Space>
+                    <Tag color="blue">Ctrl</Tag>
+                    <span>+</span>
+                    <Tag color="blue">C</Tag>
+                  </Space>
+                  <Text type="secondary">复制</Text>
+                </div>
+              </Col>
+              <Col span={12}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f5f5f5', borderRadius: 8 }}>
+                  <Space>
+                    <Tag color="blue">Ctrl</Tag>
+                    <span>+</span>
+                    <Tag color="blue">V</Tag>
+                  </Space>
+                  <Text type="secondary">粘贴</Text>
+                </div>
+              </Col>
+              <Col span={12}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f5f5f5', borderRadius: 8 }}>
+                  <Space>
+                    <Tag color="blue">Ctrl</Tag>
+                    <span>+</span>
+                    <Tag color="blue">F</Tag>
+                  </Space>
+                  <Text type="secondary">查找</Text>
+                </div>
+              </Col>
             </Row>
+          </div>
+        )
+
+      case 'connections':
+        return (
+          <div style={{ padding: '16px' }}>
+            <Title level={4} style={{ marginBottom: 16 }}>数据库连接</Title>
+            <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>配置和管理数据库连接，支持连接测试</Text>
+            <Button
+              type="primary"
+              icon={<DatabaseOutlined />}
+              onClick={() => {
+                onOpenConnections?.()
+              }}
+            >
+              打开连接管理
+            </Button>
           </div>
         )
 
@@ -573,9 +662,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onClose, 
         </Space>
       }
       width={800}
-      styles={{ body: { padding: 0 } }}
+      styles={{ 
+        body: { 
+          padding: 0,
+          maxHeight: '70vh', 
+          overflow: 'hidden' 
+        } 
+      }}
+      maskClosable={true}
     >
-      <div style={{ display: 'flex', height: 500 }}>
+      <div style={{ display: 'flex', height: '500px', maxHeight: 'calc(70vh - 100px)' }}>
         <div style={{ width: 220, borderRight: '1px solid #e8e8e8', display: 'flex', flexDirection: 'column' }}>
           <Input
             placeholder="搜索设置..."

@@ -13,7 +13,7 @@ interface EditProjectModalProps {
 
 export const EditProjectModal: React.FC<EditProjectModalProps> = ({ open, project, onClose }) => {
   const [form] = Form.useForm()
-  const { updateProject, projects, editingProjectId } = useAppStore() as any
+  const { updateProject, projects } = useAppStore() as any
 
   useEffect(() => {
     if (open && project) {
@@ -26,9 +26,9 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({ open, projec
   }, [open, project, form])
 
   const handleUpdate = async (values: any) => {
-    if (editingProjectId) {
+    if (project?.id) {
       try {
-        await updateProject(editingProjectId, {
+        await updateProject(project.id, {
           name: values.name,
           description: values.description || '',
           databaseType: values.databaseType || 'MYSQL'
@@ -77,7 +77,7 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({ open, projec
               { pattern: /^[\u4e00-\u9fa5a-zA-Z_][\u4e00-\u9fa5a-zA-Z0-9_\s-]*$/, message: '项目名只能包含中文、字母、数字、下划线、空格和连字符，必须以中文、字母或下划线开头' },
               ({ getFieldValue }) => ({
                 validator(_, value) {
-                  if (value && projects.some((p: any) => p.id !== editingProjectId && p.name.toLowerCase() === value.toLowerCase())) {
+                  if (value && projects.some((p: any) => p.id !== project?.id && p.name.toLowerCase() === value.toLowerCase())) {
                     return Promise.reject(new Error('该项目名已存在'))
                   }
                   return Promise.resolve()

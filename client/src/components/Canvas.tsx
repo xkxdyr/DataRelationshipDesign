@@ -15,21 +15,49 @@ import { Table, Relationship } from '../types'
 import TableNode from './TableNode'
 import RelationshipEditor from './RelationshipEditor'
 import { useAppStore } from '../stores/appStore'
-import { Button, Space, Dropdown, message } from 'antd'
-import { PlusOutlined, CodeOutlined, LinkOutlined, ExportOutlined, PictureOutlined, FileImageOutlined } from '@ant-design/icons'
+import { Button, Space, Dropdown, message, Modal, Form, Card, Radio, Slider, Select, Input } from 'antd'
+import { PlusOutlined, CodeOutlined, LinkOutlined, ExportOutlined, PictureOutlined, FileImageOutlined, SettingOutlined, ZoomInOutlined, ZoomOutOutlined, RotateLeftOutlined, CompressOutlined, AimOutlined, LockOutlined } from '@ant-design/icons'
 import CreateTableModal from './CreateTableModal'
 import { projectApi } from '../services/api'
+
+interface AutoLayoutOptions {
+  layoutType: 'grid' | 'hierarchical' | 'compact'
+  paddingX: number
+  paddingY: number
+  tableWidth: number
+  tableHeight: number
+  startX: number
+  startY: number
+  maxColumns: number
+  direction: 'horizontal' | 'vertical'
+}
+
+const defaultLayoutOptions: AutoLayoutOptions = {
+  layoutType: 'grid',
+  paddingX: 60,
+  paddingY: 60,
+  tableWidth: 280,
+  tableHeight: 120,
+  startX: 100,
+  startY: 100,
+  maxColumns: 4,
+  direction: 'horizontal'
+}
 
 const nodeTypes = {
   tableNode: TableNode
 }
 
 const CanvasContent: React.FC = () => {
-  const { tables, currentProject, updateTablePosition, selectTable, selectedTableId, deleteTable, createTable, loadTables, relationships, loadRelationships, canvasZoom, setCanvasZoom, showMiniMap, setShowMiniMap, edgeStyle, showEdgeLabels } = useAppStore()
+  const { tables, currentProject, updateTablePosition, selectTable, selectedTableId, deleteTable, createTable, loadTables, relationships, loadRelationships, canvasZoom, setCanvasZoom, showMiniMap, setShowMiniMap, edgeStyle, showEdgeLabels, updateTable } = useAppStore()
   const reactFlow = useReactFlow()
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isRelationshipEditorOpen, setIsRelationshipEditorOpen] = useState(false)
+  const [showAutoLayoutModal, setShowAutoLayoutModal] = useState(false)
+  const [layoutOptions, setLayoutOptions] = useState<AutoLayoutOptions>(defaultLayoutOptions)
+  const [autoLayoutForm] = Form.useForm()
+  const [isLocked, setIsLocked] = useState(false)
 
   useEffect(() => {
     if (currentProject) {
@@ -39,10 +67,18 @@ const CanvasContent: React.FC = () => {
   }, [currentProject?.id])
 
   useEffect(() => {
-    if (reactFlow && canvasZoom !== 1) {
+    if (reactFlow) {
       reactFlow.zoomTo(canvasZoom)
     }
   }, [reactFlow, canvasZoom])
+
+  useEffect(() => {
+    if (canvasZoom < 0.5) {
+      setCanvasZoom(0.5)
+    } else if (canvasZoom > 2) {
+      setCanvasZoom(2)
+    }
+  }, [canvasZoom, setCanvasZoom])
 
   // 没有选择项目时渲染空内容
   if (!currentProject) {
@@ -123,9 +159,163 @@ const CanvasContent: React.FC = () => {
 
   const onMoveEnd = useCallback((event: any, viewport: any) => {
     if (viewport.zoom !== canvasZoom) {
-      setCanvasZoom(viewport.zoom)
+      const clampedZoom = Math.max(0.5, Math.min(viewport.zoom, 2))
+      setCanvasZoom(Math.round(clampedZoom * 100) / 100)
     }
   }, [canvasZoom, setCanvasZoom])
+
+  const autoLayoutTables = (tablesToLayout: any[], options: Partial<AutoLayoutOptions> = {}): any[] => {
+    if (!tablesToLayout || tablesToLayout.length === 0) return tablesToLayout
+
+    const opts = { ...defaultLayoutOptions, ...options }
+
+    const calculateTableHeight = (table: any) => {
+      const baseHeight = opts.tableHeight
+      const columnCount = table.columns?.length || 0
+      const heightPerColumn = 28
+      const headerHeight = 50
+      return Math.max(baseHeight, headerHeight + columnCount * heightPerColumn)
+    }
+
+    if (opts.layoutType === 'grid') {
+      const cols = opts.maxColumns ? Math.min(Math.ceil(Math.sqrt(tablesToLayout.length)), opts.maxColumns) : Math.ceil(Math.sqrt(tablesToLayout.length))
+      
+      const rowHeights: number[] = []
+      for (let row = 0; row < Math.ceil(tablesToLayout.length / cols); row++) {
+        let maxHeight = opts.tableHeight
+        for (let col = 0; col < cols; col++) {
+          const idx = row * cols + col
+          if (idx < tablesToLayout.length) {
+            maxHeight = Math.max(maxHeight, calculateTableHeight(tablesToLayout[idx]))
+          }
+        }
+        rowHeights.push(maxHeight)
+      }
+
+      return tablesToLayout.map((table, index) => {
+        const col = index % cols
+        const row = Math.floor(index / cols)
+        
+        let y = opts.startY
+        for (let i = 0; i < row; i++) {
+          y += rowHeights[i] + opts.paddingY
+        }
+        
+        return {
+          ...table,
+          positionX: opts.startX + col * (opts.tableWidth + opts.paddingX),
+          positionY: y
+        }
+      })
+    } else if (opts.layoutType === 'hierarchical') {
+      const rowSizes = [1, 2, 3, Math.ceil(tablesToLayout.length / 2)]
+      let currentIndex = 0
+      let currentRow = 0
+      let currentCol = 0
+      let currentY = opts.startY
+      
+      const rowHeights: number[] = []
+      
+      return tablesToLayout.map((table) => {
+        const rowTables = rowSizes[currentRow] || 4
+        const height = calculateTableHeight(table)
+        
+        if (currentCol === 0) {
+          rowHeights[currentRow] = height
+        } else {
+          rowHeights[currentRow] = Math.max(rowHeights[currentRow], height)
+        }
+        
+        const result = {
+          ...table,
+          positionX: opts.startX + currentCol * (opts.tableWidth + opts.paddingX),
+          positionY: currentY
+        }
+        
+        currentCol++
+        if (currentCol >= rowTables) {
+          currentCol = 0
+          currentRow++
+          currentY += rowHeights[currentRow - 1] + opts.paddingY
+        }
+        
+        return result
+      })
+    } else if (opts.layoutType === 'compact') {
+      const cols = opts.maxColumns ? Math.min(Math.ceil(Math.sqrt(tablesToLayout.length)), opts.maxColumns) : Math.ceil(Math.sqrt(tablesToLayout.length))
+      const compactPaddingX = 30
+      const compactPaddingY = 30
+
+      const rowHeights: number[] = []
+      for (let row = 0; row < Math.ceil(tablesToLayout.length / cols); row++) {
+        let maxHeight = opts.tableHeight
+        for (let col = 0; col < cols; col++) {
+          const idx = row * cols + col
+          if (idx < tablesToLayout.length) {
+            maxHeight = Math.max(maxHeight, calculateTableHeight(tablesToLayout[idx]))
+          }
+        }
+        rowHeights.push(maxHeight)
+      }
+
+      return tablesToLayout.map((table, index) => {
+        const col = index % cols
+        const row = Math.floor(index / cols)
+        
+        let y = opts.startY
+        for (let i = 0; i < row; i++) {
+          y += rowHeights[i] + compactPaddingY
+        }
+        
+        return {
+          ...table,
+          positionX: opts.startX + col * (opts.tableWidth + compactPaddingX),
+          positionY: y
+        }
+      })
+    }
+    
+    return tablesToLayout
+  }
+
+  const handleAutoLayout = () => {
+    setShowAutoLayoutModal(true)
+    autoLayoutForm.setFieldsValue({
+      layoutType: layoutOptions.layoutType,
+      paddingX: layoutOptions.paddingX,
+      paddingY: layoutOptions.paddingY,
+      maxColumns: layoutOptions.maxColumns
+    })
+  }
+
+  const applyAutoLayout = () => {
+    if (tables.length === 0) {
+      message.warning('没有表需要布局')
+      return
+    }
+    
+    const values = autoLayoutForm.getFieldsValue()
+    const options: Partial<AutoLayoutOptions> = {
+      layoutType: values.layoutType,
+      paddingX: values.paddingX,
+      paddingY: values.paddingY,
+      maxColumns: values.maxColumns
+    }
+    
+    const layoutedTables = autoLayoutTables(tables, options)
+    
+    layoutedTables.forEach(table => {
+      updateTablePosition(table.id, table.positionX, table.positionY)
+    })
+    
+    setLayoutOptions(prev => ({ ...prev, ...options }))
+    setShowAutoLayoutModal(false)
+    message.success('布局整理完成')
+  }
+
+  const resetLayoutOptions = () => {
+    autoLayoutForm.setFieldsValue(defaultLayoutOptions)
+  }
 
   const handleOpenModal = () => {
     setIsModalOpen(true)
@@ -320,6 +510,14 @@ const CanvasContent: React.FC = () => {
 
   return (
     <>
+      <div style={{ display: 'none' }}>
+        <Form form={autoLayoutForm} layout="vertical">
+          <Form.Item name="layoutType"><Input /></Form.Item>
+          <Form.Item name="paddingX"><Input /></Form.Item>
+          <Form.Item name="paddingY"><Input /></Form.Item>
+          <Form.Item name="maxColumns"><Input /></Form.Item>
+        </Form>
+      </div>
       <div style={{ height: '100%', width: '100%', position: 'relative' }} ref={reactFlowWrapper}>
         <div style={{ position: 'absolute', top: 16, left: 16, zIndex: 10 }}>
           <Space>
@@ -328,6 +526,9 @@ const CanvasContent: React.FC = () => {
             </Button>
             <Button icon={<LinkOutlined />} onClick={() => setIsRelationshipEditorOpen(true)}>
               关系管理
+            </Button>
+            <Button icon={<SettingOutlined />} onClick={handleAutoLayout}>
+              自动布局
             </Button>
             <Dropdown menu={{ items: exportMenuItems }} placement="bottomLeft">
               <Button icon={<ExportOutlined />}>
@@ -352,9 +553,136 @@ const CanvasContent: React.FC = () => {
           nodeTypes={nodeTypes}
           fitView
           style={{ background: '#fafafa', width: '100%', height: '100%' }}
+          nodesDraggable={!isLocked}
+          panOnDrag={true}
         >
           <Background color="#eee" gap={16} size={2} />
-          <Controls />
+          <div style={{ 
+            position: 'absolute', 
+            top: 10, 
+            right: 10, 
+            zIndex: 100,
+            background: '#ffffff',
+            borderRadius: 8,
+            padding: 4,
+            boxShadow: 'rgba(0, 0, 0, 0.1) 0 2px 12px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 2
+          }}>
+            <Button
+              type="text"
+              icon={<ZoomInOutlined style={{ fontSize: 14 }} />}
+              onClick={() => setCanvasZoom(Math.min(canvasZoom + 0.1, 2))}
+              disabled={isLocked}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 6,
+                padding: 0,
+                margin: 0,
+                color: isLocked ? '#ccc' : '#666',
+                '&:hover': {
+                  backgroundColor: '#f5f5f5'
+                }
+              }}
+              title="放大"
+            />
+            <Button
+              type="text"
+              icon={<ZoomOutOutlined style={{ fontSize: 14 }} />}
+              onClick={() => setCanvasZoom(Math.max(canvasZoom - 0.1, 0.5))}
+              disabled={isLocked}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 6,
+                padding: 0,
+                margin: 0,
+                color: isLocked ? '#ccc' : '#666',
+                '&:hover': {
+                  backgroundColor: '#f5f5f5'
+                }
+              }}
+              title="缩小"
+            />
+            <div style={{ height: 4, borderTop: '1px solid #f0f0f0', margin: '2px 0' }} />
+            <Button
+              type="text"
+              icon={<RotateLeftOutlined style={{ fontSize: 14 }} />}
+              onClick={() => setCanvasZoom(1)}
+              disabled={isLocked}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 6,
+                padding: 0,
+                margin: 0,
+                color: isLocked ? '#ccc' : '#666',
+                '&:hover': {
+                  backgroundColor: '#f5f5f5'
+                }
+              }}
+              title="重置缩放"
+            />
+            <Button
+              type="text"
+              icon={<CompressOutlined style={{ fontSize: 14 }} />}
+              onClick={() => reactFlow?.fitView()}
+              disabled={isLocked}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 6,
+                padding: 0,
+                margin: 0,
+                color: isLocked ? '#ccc' : '#666',
+                '&:hover': {
+                  backgroundColor: '#f5f5f5'
+                }
+              }}
+              title="适应视图"
+            />
+            <Button
+              type="text"
+              icon={<AimOutlined style={{ fontSize: 14 }} />}
+              onClick={() => {
+                reactFlow?.setViewport({ x: 0, y: 0, zoom: canvasZoom })
+              }}
+              disabled={isLocked}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 6,
+                padding: 0,
+                margin: 0,
+                color: isLocked ? '#ccc' : '#666',
+                '&:hover': {
+                  backgroundColor: '#f5f5f5'
+                }
+              }}
+              title="居中"
+            />
+            <div style={{ height: 4, borderTop: '1px solid #f0f0f0', margin: '2px 0' }} />
+            <Button
+              type="text"
+              icon={<LockOutlined style={{ fontSize: 14 }} />}
+              onClick={() => setIsLocked(!isLocked)}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 6,
+                padding: 0,
+                margin: 0,
+                color: isLocked ? '#1890ff' : '#666',
+                backgroundColor: isLocked ? '#e6f7ff' : 'transparent',
+                '&:hover': {
+                  backgroundColor: isLocked ? '#bae7ff' : '#f5f5f5'
+                }
+              }}
+              title={isLocked ? '解锁' : '锁定'}
+            />
+          </div>
           {showMiniMap && (
             <MiniMap
               style={{
@@ -371,6 +699,54 @@ const CanvasContent: React.FC = () => {
             />
           )}
         </ReactFlow>
+
+        <div style={{
+          position: 'absolute',
+          bottom: 10,
+          right: 10,
+          background: 'rgba(255, 255, 255, 0.95)',
+          borderRadius: 8,
+          padding: '6px 12px',
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+          fontSize: 12,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          zIndex: 100
+        }}>
+          <Dropdown
+            menu={{
+              items: [
+                { key: '50%', label: '50%', onClick: () => setCanvasZoom(0.5) },
+                { key: '60%', label: '60%', onClick: () => setCanvasZoom(0.6) },
+                { key: '70%', label: '70%', onClick: () => setCanvasZoom(0.7) },
+                { key: '75%', label: '75%', onClick: () => setCanvasZoom(0.75) },
+                { key: '80%', label: '80%', onClick: () => setCanvasZoom(0.8) },
+                { key: '85%', label: '85%', onClick: () => setCanvasZoom(0.85) },
+                { key: '90%', label: '90%', onClick: () => setCanvasZoom(0.9) },
+                { key: '95%', label: '95%', onClick: () => setCanvasZoom(0.95) },
+                { key: '100%', label: '100%', onClick: () => setCanvasZoom(1) },
+                { key: '105%', label: '105%', onClick: () => setCanvasZoom(1.05) },
+                { key: '110%', label: '110%', onClick: () => setCanvasZoom(1.1) },
+                { key: '115%', label: '115%', onClick: () => setCanvasZoom(1.15) },
+                { key: '120%', label: '120%', onClick: () => setCanvasZoom(1.2) },
+                { key: '125%', label: '125%', onClick: () => setCanvasZoom(1.25) },
+                { key: '130%', label: '130%', onClick: () => setCanvasZoom(1.3) },
+                { key: '140%', label: '140%', onClick: () => setCanvasZoom(1.4) },
+                { key: '150%', label: '150%', onClick: () => setCanvasZoom(1.5) },
+                { key: '160%', label: '160%', onClick: () => setCanvasZoom(1.6) },
+                { key: '170%', label: '170%', onClick: () => setCanvasZoom(1.7) },
+                { key: '180%', label: '180%', onClick: () => setCanvasZoom(1.8) },
+                { key: '190%', label: '190%', onClick: () => setCanvasZoom(1.9) },
+                { key: '200%', label: '200%', onClick: () => setCanvasZoom(2) }
+              ]
+            }}
+          >
+            <span style={{ cursor: 'pointer', fontWeight: 500, color: '#1890ff' }}>
+              {(canvasZoom * 100).toFixed(0)}%
+            </span>
+          </Dropdown>
+        </div>
       </div>
 
       <CreateTableModal
@@ -382,6 +758,65 @@ const CanvasContent: React.FC = () => {
         visible={isRelationshipEditorOpen}
         onClose={() => setIsRelationshipEditorOpen(false)}
       />
+
+      <Modal
+        title={
+          <Space>
+            <SettingOutlined />
+            <span>自动布局</span>
+          </Space>
+        }
+        open={showAutoLayoutModal}
+        onCancel={() => setShowAutoLayoutModal(false)}
+        footer={null}
+        width={500}
+      >
+        <Form form={autoLayoutForm} layout="vertical">
+          <Card size="small" title="布局类型" style={{ marginBottom: 16 }}>
+            <Form.Item name="layoutType">
+              <Radio.Group>
+                <Radio.Button value="grid">网格布局</Radio.Button>
+                <Radio.Button value="hierarchical">层级布局</Radio.Button>
+                <Radio.Button value="compact">紧凑布局</Radio.Button>
+              </Radio.Group>
+            </Form.Item>
+          </Card>
+
+          <Card size="small" title="布局选项" style={{ marginBottom: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <Form.Item label="水平间距" name="paddingX">
+                <Slider min={20} max={150} defaultValue={defaultLayoutOptions.paddingX} />
+              </Form.Item>
+              <Form.Item label="垂直间距" name="paddingY">
+                <Slider min={20} max={150} defaultValue={defaultLayoutOptions.paddingY} />
+              </Form.Item>
+              <Form.Item label="最大列数" name="maxColumns">
+                <Select style={{ width: '100%' }} defaultValue={defaultLayoutOptions.maxColumns}>
+                  <Select.Option value={2}>2 列</Select.Option>
+                  <Select.Option value={3}>3 列</Select.Option>
+                  <Select.Option value={4}>4 列</Select.Option>
+                  <Select.Option value={5}>5 列</Select.Option>
+                  <Select.Option value={6}>6 列</Select.Option>
+                </Select>
+              </Form.Item>
+            </div>
+          </Card>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24 }}>
+            <Button onClick={resetLayoutOptions}>
+              默认
+            </Button>
+            <Space>
+              <Button onClick={() => setShowAutoLayoutModal(false)}>
+                取消
+              </Button>
+              <Button type="primary" onClick={applyAutoLayout}>
+                应用
+              </Button>
+            </Space>
+          </div>
+        </Form>
+      </Modal>
     </>
   )
 }

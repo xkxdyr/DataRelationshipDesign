@@ -222,3 +222,244 @@ export const llmApi = {
       body: JSON.stringify({ tables })
     })
 }
+
+export interface ConnectionConfig {
+  id: string
+  name: string
+  databaseType: string
+  host: string
+  port: number
+  databaseName: string
+  username: string
+  password: string
+  sslEnabled: boolean
+  description?: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface TestConnectionResult {
+  success: boolean
+  message: string
+  responseTime?: number
+}
+
+export const connectionApi = {
+  getAll: () => request<ConnectionConfig[]>('/connections'),
+  getById: (id: string) => request<ConnectionConfig>(`/connections/${id}`),
+  create: (data: Partial<ConnectionConfig>) => request<ConnectionConfig>('/connections', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }),
+  update: (id: string, data: Partial<ConnectionConfig>) => request<ConnectionConfig>(`/connections/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data)
+  }),
+  delete: (id: string) => request<void>(`/connections/${id}`, { method: 'DELETE' }),
+  testConnection: (data: { databaseType: string; host: string; port: number; databaseName: string; username: string; password: string; sslEnabled?: boolean }) =>
+    request<TestConnectionResult>('/connections/test', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    })
+}
+
+export interface ColumnInfo {
+  name: string
+  type: string
+  isPrimaryKey: boolean
+  isForeignKey: boolean
+  isNullable: boolean
+  defaultValue: string | null
+  comment: string
+  autoIncrement: boolean
+}
+
+export interface TableInfo {
+  name: string
+  comment: string
+  columns: ColumnInfo[]
+  indexes: Array<{ name: string; columns: string[]; isUnique: boolean; isPrimary: boolean }>
+  foreignKeys: Array<{ name: string; column: string; referencedTable: string; referencedColumn: string }>
+}
+
+export interface ReverseEngineeringResult {
+  success: boolean
+  message: string
+  tables?: TableInfo[]
+}
+
+export const reverseEngineeringApi = {
+  importFromDatabase: (data: { databaseType: string; host: string; port: number; databaseName: string; username: string; password: string; sslEnabled?: boolean; tables?: string[] }) =>
+    request<ReverseEngineeringResult>('/reverse-engineering/import', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+  getTableList: (data: { databaseType: string; host: string; port: number; databaseName: string; username: string; password: string; sslEnabled?: boolean }) =>
+    request<string[]>('/reverse-engineering/tables', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    })
+}
+
+export interface SyncConnection {
+  databaseType: string
+  host: string
+  port: number
+  databaseName: string
+  username: string
+  password: string
+  sslEnabled?: boolean
+}
+
+export interface TableSchema {
+  name: string
+  comment?: string
+  columns: ColumnSchema[]
+  indexes: IndexSchema[]
+  foreignKeys: ForeignKeySchema[]
+}
+
+export interface ColumnSchema {
+  name: string
+  dataType: string
+  nullable: boolean
+  defaultValue?: string
+  autoIncrement: boolean
+  primaryKey: boolean
+  unique: boolean
+  comment?: string
+}
+
+export interface IndexSchema {
+  name: string
+  columns: string[]
+  unique: boolean
+  primary: boolean
+}
+
+export interface ForeignKeySchema {
+  name: string
+  column: string
+  referencedTable: string
+  referencedColumn: string
+  onDelete?: string
+  onUpdate?: string
+}
+
+export interface SyncResult {
+  success: boolean
+  message: string
+  executedDDL?: string[]
+  errors?: string[]
+}
+
+export interface DryRunResult {
+  success: boolean
+  ddl: string
+  message: string
+}
+
+export const databaseSyncApi = {
+  syncToDatabase: (connection: SyncConnection, tables: TableSchema[]) =>
+    request<SyncResult>('/database-sync/sync', {
+      method: 'POST',
+      body: JSON.stringify({ connection, tables })
+    }),
+  dryRun: (connection: SyncConnection, tables: TableSchema[]) =>
+    request<DryRunResult>('/database-sync/dry-run', {
+      method: 'POST',
+      body: JSON.stringify({ connection, tables })
+    })
+}
+
+export interface Team {
+  id: string
+  name: string
+  description?: string
+  avatar?: string
+  ownerId: string
+  members: TeamMember[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface TeamMember {
+  userId: string
+  userName: string
+  role: 'owner' | 'admin' | 'member'
+  joinedAt: string
+}
+
+export interface CreateTeamRequest {
+  name: string
+  description?: string
+  avatar?: string
+  ownerId: string
+}
+
+export interface UpdateTeamRequest {
+  name?: string
+  description?: string
+  avatar?: string
+}
+
+export interface AddMemberRequest {
+  userId: string
+  userName: string
+  role?: 'admin' | 'member'
+}
+
+export interface UpdateMemberRoleRequest {
+  role: 'admin' | 'member'
+}
+
+export const teamApi = {
+  createTeam: (data: CreateTeamRequest) =>
+    request<Team>('/teams', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+  getAllTeams: () =>
+    request<Team[]>('/teams', {
+      method: 'GET'
+    }),
+  getTeamsByUserId: (userId: string) =>
+    request<Team[]>(`/teams/user/${userId}`, {
+      method: 'GET'
+    }),
+  getTeamById: (teamId: string) =>
+    request<Team>(`/teams/${teamId}`, {
+      method: 'GET'
+    }),
+  updateTeam: (teamId: string, data: UpdateTeamRequest) =>
+    request<Team>(`/teams/${teamId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    }),
+  deleteTeam: (teamId: string) =>
+    request<{ message: string }>(`/teams/${teamId}`, {
+      method: 'DELETE'
+    }),
+  addMember: (teamId: string, data: AddMemberRequest) =>
+    request<Team>(`/teams/${teamId}/members`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+  removeMember: (teamId: string, userId: string) =>
+    request<Team>(`/teams/${teamId}/members/${userId}`, {
+      method: 'DELETE'
+    }),
+  updateMemberRole: (teamId: string, userId: string, data: UpdateMemberRoleRequest) =>
+    request<Team>(`/teams/${teamId}/members/${userId}/role`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    }),
+  isMember: (teamId: string, userId: string) =>
+    request<{ isMember: boolean }>(`/teams/${teamId}/members/${userId}/is-member`, {
+      method: 'GET'
+    }),
+  isAdmin: (teamId: string, userId: string) =>
+    request<{ isAdmin: boolean }>(`/teams/${teamId}/members/${userId}/is-admin`, {
+      method: 'GET'
+    })
+}

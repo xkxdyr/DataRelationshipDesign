@@ -1,16 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Modal, Tabs, Button, Upload, message, Alert, Space, Typography, Select, Switch, Form, Card, Divider, Input, Tag, Steps, Descriptions, Badge } from 'antd'
-import { DownloadOutlined, UploadOutlined, FileTextOutlined, DatabaseOutlined, CheckCircleOutlined, SettingOutlined, PlusOutlined, InboxOutlined, FileWordOutlined, SafetyCertificateOutlined, ArrowRightOutlined, InfoCircleOutlined, RightOutlined } from '@ant-design/icons'
+import { Modal, Tabs, Button, Upload, message, Alert, Space, Typography, Select, Switch, Form, Card, Input, Tag, Descriptions, Badge } from 'antd'
+import { DownloadOutlined, UploadOutlined, FileTextOutlined, DatabaseOutlined, CheckCircleOutlined, SettingOutlined, PlusOutlined, FileWordOutlined, SafetyCertificateOutlined, InfoCircleOutlined } from '@ant-design/icons'
 import { useAppStore } from '../stores/appStore'
 import { exportService } from '../services/exportService'
 import { importService, ImportResult } from '../services/importService'
 import { projectApi, tableApi, columnApi, relationshipApi, indexApi } from '../services/api'
 import { localStorageService } from '../services/localStorageService'
 import { Project, Table, Column, Relationship, Index } from '../types'
-import type { LocalProject, LocalTable, LocalColumn, LocalRelationship, LocalIndex } from '../types'
+import type { LocalProject, LocalTable, LocalColumn, LocalRelationship, LocalIndex } from '../services/localStorageService'
 import { DDLOptions } from '../ddl/types'
 
-const { Title, Text, Paragraph } = Typography
+const { Title, Text } = Typography
 const { Option } = Select
 
 const databaseTypeOptions = [
@@ -28,7 +28,7 @@ interface ImportExportModalProps {
 }
 
 export const ImportExportModal: React.FC<ImportExportModalProps> = ({ open, onClose, initialTab = 'export' }) => {
-  const { currentProject, tables, relationships, versions, loadProjects, selectProject, tablePrefix, tablePrefixPresets, setTablePrefix, addTablePrefixPreset, removeTablePrefixPreset, isLocalMode, set: setStore } = useAppStore()
+  const { currentProject, tables, relationships, versions, loadProjects, selectProject, tablePrefix, tablePrefixPresets, setTablePrefix, addTablePrefixPreset, removeTablePrefixPreset, isLocalMode, createProject } = useAppStore()
   const [activeTab, setActiveTab] = useState(initialTab)
 
   useEffect(() => {
@@ -36,12 +36,12 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({ open, onCl
       setActiveTab(initialTab)
     }
   }, [open, initialTab])
+
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [importing, setImporting] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [form] = Form.useForm()
   const [importForm] = Form.useForm()
-  const fileInputRef = useRef<HTMLInputElement>(null)
   const [showImportConfirm, setShowImportConfirm] = useState(false)
   const [pendingImportFile, setPendingImportFile] = useState<File | null>(null)
   const [pendingImportType, setPendingImportType] = useState<'json' | 'sql' | null>(null)
@@ -77,11 +77,11 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({ open, onCl
     setExporting(true)
     try {
       const sql = exportService.exportToSQL(
-      { ...currentProject, databaseType: options.databaseType || currentProject.databaseType },
-      tables,
-      relationships,
-      options
-    )
+        { ...currentProject, databaseType: options.databaseType || currentProject.databaseType },
+        tables,
+        relationships,
+        options
+      )
 
       const selectedDbType = databaseTypeOptions.find(dt => dt.value === (options.databaseType || currentProject.databaseType))
       const dbTypeLabel = selectedDbType?.label || options.databaseType || currentProject.databaseType || 'MYSQL'
@@ -101,16 +101,14 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({ open, onCl
       return
     }
 
-    // 根据当前模式创建项目
     let createdProjectId: string;
     
     if (isLocalMode) {
-      // 本地模式：使用 store 的 createProject
       const localProject: LocalProject = {
         id: `local_${Date.now()}`,
-        name: result.project.name,
-        description: result.project.description,
-        databaseType: result.project.databaseType,
+        name: result.project.name || '',
+        description: result.project.description || undefined,
+        databaseType: result.project.databaseType || 'MYSQL',
         status: 'active',
         version: 1,
         createdAt: new Date().toISOString(),
@@ -119,13 +117,14 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({ open, onCl
         lastModified: Date.now()
       }
       
-      await localStorageService.saveProject(localProject)
+      await createProject({
+        id: localProject.id,
+        name: localProject.name,
+        description: localProject.description,
+        databaseType: localProject.databaseType
+      })
       createdProjectId = localProject.id
-      
-      // 更新 store 状态
-      setStore(state => ({ projects: [...state.projects, localProject as Project] }))
     } else {
-      // 在线模式：使用 API
       const newProject = await projectApi.create({
         name: result.project.name,
         description: result.project.description,
@@ -142,7 +141,6 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({ open, onCl
     const tableIdMap = new Map<string, string>()
     const createdTables: Array<{ oldId: string, newId: string, name: string, columns: any[] }> = []
 
-    // 创建表
     for (const tableData of (result.tables || [])) {
       let createdTable: Table | undefined;
       
@@ -150,10 +148,10 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({ open, onCl
         const localTable: LocalTable = {
           id: `local_table_${Date.now()}_${Math.random().toString(36).substring(7)}`,
           projectId: createdProjectId,
-          name: tableData.name,
-          comment: tableData.comment,
-          positionX: tableData.positionX,
-          positionY: tableData.positionY,
+          name: tableData.name || '',
+          comment: tableData.comment || undefined,
+          positionX: tableData.positionX || 0,
+          positionY: tableData.positionY || 0,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           lastModified: Date.now()
@@ -189,7 +187,6 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({ open, onCl
     const columnIdMap = new Map<string, string>()
     const columnNameToIdMap = new Map<string, string>()
 
-    // 创建列
     for (const tableInfo of createdTables) {
       const oldColumns = (result as any).columns?.filter((col: any) =>
         col.tableId === tableInfo.oldId || col.tableId === tableInfo.name
@@ -197,7 +194,6 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({ open, onCl
 
       if (oldColumns.length > 0) {
         if (isLocalMode) {
-          // 本地模式：直接保存
           for (let i = 0; i < oldColumns.length; i++) {
             const oldCol = oldColumns[i]
             const localColumn: LocalColumn = {
@@ -229,7 +225,6 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({ open, onCl
             }
           }
         } else {
-          // 在线模式：使用批量创建
           const columnsToCreate: Partial<Column>[] = []
           for (let i = 0; i < oldColumns.length; i++) {
             const oldCol = oldColumns[i]
@@ -270,7 +265,6 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({ open, onCl
       }
     }
 
-    // 创建索引
     if ((result as any).indexes) {
       for (const idxData of (result as any).indexes || []) {
         const newTableId = tableIdMap.get(idxData.tableId)
@@ -295,12 +289,10 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({ open, onCl
             const localIndex: LocalIndex = {
               id: `local_idx_${Date.now()}`,
               tableId: newTableId,
-              name: idxData.name,
+              name: idxData.name || '',
               columns: indexColumns,
-              unique: idxData.unique,
-              type: idxData.type,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
+              unique: idxData.unique || false,
+              type: idxData.type || 'BTREE',
               lastModified: Date.now()
             }
             await localStorageService.saveIndex(localIndex)
@@ -317,7 +309,6 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({ open, onCl
       }
     }
 
-    // 创建关系
     for (const relData of (result.relationships || [])) {
       const newSourceTableId = tableIdMap.get(relData.sourceTableId || '') || ''
       const newTargetTableId = tableIdMap.get(relData.targetTableId || '') || ''
@@ -333,11 +324,10 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({ open, onCl
             sourceColumnId: newSourceColumnId,
             targetTableId: newTargetTableId,
             targetColumnId: newTargetColumnId,
-            relationshipType: relData.relationshipType,
-            onUpdate: relData.onUpdate,
-            onDelete: relData.onDelete,
+            relationshipType: relData.relationshipType || 'ONE_TO_MANY',
+            onUpdate: relData.onUpdate || 'CASCADE',
+            onDelete: relData.onDelete || 'CASCADE',
             createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
             lastModified: Date.now()
           }
           await localStorageService.saveRelationship(localRel)
@@ -421,7 +411,7 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({ open, onCl
   }
 
   const confirmImport = async () => {
-    if (!pendingImportFile || !pendingImportType) {
+    if (!importResult || !importResult.success) {
       return
     }
 
@@ -429,27 +419,18 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({ open, onCl
 
     try {
       const values = importForm.getFieldsValue()
-      let result: ImportResult
-
-      if (pendingImportType === 'json') {
-        result = await importService.importFromJSON(pendingImportFile, { type: 'create_new' })
-        if (result.project) {
-          result.project.name = values.projectName
-        }
-      } else {
-        result = await importService.importFromSQL(pendingImportFile, {
-          projectName: values.projectName,
-          databaseType: values.databaseType
-        })
+      const result = { ...importResult }
+      if (result.project) {
+        result.project.name = values.projectName
+        result.project.databaseType = values.databaseType
       }
 
-      if (result.success) {
-        await processImportResult(result)
-        setShowImportConfirm(false)
-        setPendingImportFile(null)
-        setPendingImportType(null)
-        onClose()
-      }
+      await processImportResult(result)
+      setShowImportConfirm(false)
+      setPendingImportFile(null)
+      setPendingImportType(null)
+      setImportResult(null)
+      onClose()
     } catch (e) {
       message.error(`导入失败: ${e instanceof Error ? e.message : '未知错误'}`)
     } finally {
@@ -678,7 +659,7 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({ open, onCl
 
   const renderImport = () => (
     <div style={{ padding: '8px 0 24px 0' }}>
-      {importResult && !importResult.success && importResult.errors && !showImportConfirm && (
+      {importResult && !importResult.success && importResult.errors && (
         <Alert
           message="导入失败"
           description={importResult.errors.join('；')}
@@ -846,10 +827,6 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({ open, onCl
               type="warning"
               showIcon
             />
-            <Form form={importForm} layout="vertical" style={{ display: 'none' }}>
-              <Form.Item name="projectName"><Input /></Form.Item>
-              <Form.Item name="databaseType"><Input /></Form.Item>
-            </Form>
           </div>
         )}
       </Modal>
@@ -858,7 +835,6 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({ open, onCl
 
   return (
     <>
-      {/* 始终渲染隐藏的 Form，确保 useForm 不会报警告（放在 Modal 外面避免 destroyOnHidden 销毁） */}
       <Form form={form} layout="vertical" style={{ display: 'none' }}>
         <Form.Item name="databaseType"><Input /></Form.Item>
         <Form.Item name="tablePrefix"><Input /></Form.Item>
@@ -867,53 +843,52 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({ open, onCl
         <Form.Item name="schema"><Input /></Form.Item>
       </Form>
       
-      {/* 为 importForm 也添加隐藏的 Form */}
       <Form form={importForm} layout="vertical" style={{ display: 'none' }}>
         <Form.Item name="projectName"><Input /></Form.Item>
         <Form.Item name="databaseType"><Input /></Form.Item>
       </Form>
       
       <Modal
-      title={
-        <Space>
-          <DownloadOutlined style={{ color: '#1890ff' }} />
-          <span>数据导入 / 导出</span>
-        </Space>
-      }
-      open={open}
-      onCancel={onClose}
-      footer={null}
-      width={580}
-      destroyOnHidden
-      style={{ top: 40 }}
-    >
-      <Tabs
-        activeKey={activeTab}
-        onChange={setActiveTab as (key: string) => void}
-        items={[
-          {
-            key: 'export',
-            label: (
-              <Space>
-                <DownloadOutlined />
-                导出
-              </Space>
-            ),
-            children: renderExport()
-          },
-          {
-            key: 'import',
-            label: (
-              <Space>
-                <UploadOutlined />
-                导入
-              </Space>
-            ),
-            children: renderImport()
-          }
-        ]}
-      />
-    </Modal>
+        title={
+          <Space>
+            <DownloadOutlined style={{ color: '#1890ff' }} />
+            <span>数据导入 / 导出</span>
+          </Space>
+        }
+        open={open}
+        onCancel={onClose}
+        footer={null}
+        width={580}
+        destroyOnHidden
+        style={{ top: 40 }}
+      >
+        <Tabs
+          activeKey={activeTab}
+          onChange={setActiveTab as (key: string) => void}
+          items={[
+            {
+              key: 'export',
+              label: (
+                <Space>
+                  <DownloadOutlined />
+                  导出
+                </Space>
+              ),
+              children: renderExport()
+            },
+            {
+              key: 'import',
+              label: (
+                <Space>
+                  <UploadOutlined />
+                  导入
+                </Space>
+              ),
+              children: renderImport()
+            }
+          ]}
+        />
+      </Modal>
     </>
   )
 }

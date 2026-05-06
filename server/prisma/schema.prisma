@@ -112,3 +112,20 @@ model Version {
   
   @@unique([projectId, version])
 }
+
+model ConnectionConfig {
+  id            String   @id @default(cuid())
+  name          String
+  databaseType  String   @default("MYSQL")
+  host          String   @default("localhost")
+  port          Int      @default(3306)
+  databaseName  String
+  username      String
+  password      String
+  sslEnabled    Boolean  @default(false)
+  description   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@index([name])
+}

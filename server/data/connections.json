@@ -1,0 +1,29 @@
+[
+  {
+    "id": "mottwe64ql40plp0vf",
+    "name": "测试连接1",
+    "databaseType": "MYSQL",
+    "host": "localhost",
+    "port": 3306,
+    "databaseName": "works",
+    "username": "root",
+    "password": "root",
+    "sslEnabled": false,
+    "description": "测试连接数据库",
+    "createdAt": "2026-05-06T09:02:05.500Z",
+    "updatedAt": "2026-05-06T09:02:05.500Z"
+  },
+  {
+    "id": "moucqb636uiv6er6jqr",
+    "name": "测试连接2",
+    "databaseType": "MYSQL",
+    "host": "localhost",
+    "port": 3306,
+    "databaseName": "测试连接2",
+    "username": "root",
+    "password": "root",
+    "sslEnabled": false,
+    "createdAt": "2026-05-06T17:49:14.379Z",
+    "updatedAt": "2026-05-06T17:49:14.379Z"
+  }
+]

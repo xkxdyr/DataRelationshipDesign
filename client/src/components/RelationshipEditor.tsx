@@ -9,19 +9,46 @@ import {
   Tag,
   Popconfirm,
   Input,
-  Typography
+  Typography,
+  Tooltip
 } from 'antd';
 import {
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
-  LinkOutlined
+  LinkOutlined,
+  InfoCircleOutlined
 } from '@ant-design/icons';
 import { Table as TableType, Relationship, Column } from '../types';
 import { useAppStore } from '../stores/appStore';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
+
+const getColumnConstraints = (col: Column) => {
+  const constraints = [];
+  if (col.primaryKey) {
+    constraints.push(<Tag key="pk" color="blue" style={{ fontSize: 10, marginRight: 4 }} title="主键">PK</Tag>);
+  }
+  if (col.unique) {
+    constraints.push(<Tag key="unique" color="green" style={{ fontSize: 10, marginRight: 4 }} title="唯一约束">UQ</Tag>);
+  }
+  if (col.autoIncrement) {
+    constraints.push(<Tag key="ai" color="orange" style={{ fontSize: 10, marginRight: 4 }} title="自增">AI</Tag>);
+  }
+  if (!col.nullable) {
+    constraints.push(<Tag key="notnull" color="red" style={{ fontSize: 10, marginRight: 4 }} title="非空">NN</Tag>);
+  }
+  return constraints;
+};
+
+const cascadeRules = {
+  CASCADE: '当父表中的记录被更新/删除时，子表中对应的记录也会被更新/删除',
+  RESTRICT: '如果子表中存在关联记录，阻止父表中的记录被更新/删除',
+  'NO ACTION': '与 RESTRICT 类似，检查关联记录，但在约束检查时间点执行',
+  'SET NULL': '当父表中的记录被更新/删除时，子表中对应的外键字段被设置为 NULL（需要字段允许为 NULL）',
+  'SET DEFAULT': '当父表中的记录被更新/删除时，子表中对应的外键字段被设置为默认值（需要字段有默认值）'
+};
 
 interface RelationshipEditorProps {
   visible: boolean;
@@ -167,6 +194,17 @@ const RelationshipEditor: React.FC<RelationshipEditorProps> = ({
       ]}
       width={900}
     >
+      <div style={{ display: 'none' }}>
+        <Form form={form} layout="vertical">
+          <Form.Item name="sourceTable"><Input /></Form.Item>
+          <Form.Item name="sourceColumn"><Input /></Form.Item>
+          <Form.Item name="targetTable"><Input /></Form.Item>
+          <Form.Item name="targetColumn"><Input /></Form.Item>
+          <Form.Item name="relationshipType"><Input /></Form.Item>
+          <Form.Item name="onUpdate"><Input /></Form.Item>
+          <Form.Item name="onDelete"><Input /></Form.Item>
+        </Form>
+      </div>
       <div style={{ marginBottom: 16 }}>
         <Button
           type="primary"
@@ -216,7 +254,12 @@ const RelationshipEditor: React.FC<RelationshipEditorProps> = ({
               >
                 {tables.map(table => (
                   <Option key={table.id} value={table.id}>
-                    {table.name}
+                    <Space>
+                      <span>{table.name}</span>
+                      {table.comment && (
+                        <Tag color="blue" style={{ fontSize: 11 }}>{table.comment}</Tag>
+                      )}
+                    </Space>
                   </Option>
                 ))}
               </Select>
@@ -231,7 +274,14 @@ const RelationshipEditor: React.FC<RelationshipEditorProps> = ({
                 {sourceTableId &&
                   getSourceColumns(sourceTableId).map((col: Column) => (
                     <Option key={col.id} value={col.id}>
-                      {col.name} ({col.dataType})
+                      <Space>
+                        {getColumnConstraints(col)}
+                        <span>{col.name}</span>
+                        <span style={{ color: '#999', fontSize: 12 }}>({col.dataType})</span>
+                        {col.comment && (
+                          <Tag color="green" style={{ fontSize: 11 }}>{col.comment}</Tag>
+                        )}
+                      </Space>
                     </Option>
                   ))
                 }
@@ -249,7 +299,12 @@ const RelationshipEditor: React.FC<RelationshipEditorProps> = ({
               >
                 {tables.map(table => (
                   <Option key={table.id} value={table.id}>
-                    {table.name}
+                    <Space>
+                      <span>{table.name}</span>
+                      {table.comment && (
+                        <Tag color="blue" style={{ fontSize: 11 }}>{table.comment}</Tag>
+                      )}
+                    </Space>
                   </Option>
                 ))}
               </Select>
@@ -264,7 +319,14 @@ const RelationshipEditor: React.FC<RelationshipEditorProps> = ({
                 {targetTableId &&
                   getTargetColumns(targetTableId).map((col: Column) => (
                     <Option key={col.id} value={col.id}>
-                      {col.name} ({col.dataType})
+                      <Space>
+                        {getColumnConstraints(col)}
+                        <span>{col.name}</span>
+                        <span style={{ color: '#999', fontSize: 12 }}>({col.dataType})</span>
+                        {col.comment && (
+                          <Tag color="green" style={{ fontSize: 11 }}>{col.comment}</Tag>
+                        )}
+                      </Space>
                     </Option>
                   ))
                 }
@@ -284,30 +346,64 @@ const RelationshipEditor: React.FC<RelationshipEditorProps> = ({
             </Form.Item>
 
             <Form.Item
-              label="更新时规则"
+              label={
+                <Tooltip title="选择当父表记录被更新时，子表记录的处理方式">
+                  <Space>
+                    更新时规则
+                    <InfoCircleOutlined style={{ fontSize: 14, color: '#1890ff' }} />
+                  </Space>
+                </Tooltip>
+              }
               name="onUpdate"
               initialValue="CASCADE"
             >
               <Select>
-                <Option value="CASCADE">CASCADE</Option>
-                <Option value="RESTRICT">RESTRICT</Option>
-                <Option value="NO ACTION">NO ACTION</Option>
-                <Option value="SET NULL">SET NULL</Option>
-                <Option value="SET DEFAULT">SET DEFAULT</Option>
+                <Option value="CASCADE">
+                  <Tooltip title={cascadeRules['CASCADE']}>CASCADE</Tooltip>
+                </Option>
+                <Option value="RESTRICT">
+                  <Tooltip title={cascadeRules['RESTRICT']}>RESTRICT</Tooltip>
+                </Option>
+                <Option value="NO ACTION">
+                  <Tooltip title={cascadeRules['NO ACTION']}>NO ACTION</Tooltip>
+                </Option>
+                <Option value="SET NULL">
+                  <Tooltip title={cascadeRules['SET NULL']}>SET NULL</Tooltip>
+                </Option>
+                <Option value="SET DEFAULT">
+                  <Tooltip title={cascadeRules['SET DEFAULT']}>SET DEFAULT</Tooltip>
+                </Option>
               </Select>
             </Form.Item>
 
             <Form.Item
-              label="删除时规则"
+              label={
+                <Tooltip title="选择当父表记录被删除时，子表记录的处理方式">
+                  <Space>
+                    删除时规则
+                    <InfoCircleOutlined style={{ fontSize: 14, color: '#1890ff' }} />
+                  </Space>
+                </Tooltip>
+              }
               name="onDelete"
               initialValue="RESTRICT"
             >
               <Select>
-                <Option value="CASCADE">CASCADE</Option>
-                <Option value="RESTRICT">RESTRICT</Option>
-                <Option value="NO ACTION">NO ACTION</Option>
-                <Option value="SET NULL">SET NULL</Option>
-                <Option value="SET DEFAULT">SET DEFAULT</Option>
+                <Option value="CASCADE">
+                  <Tooltip title={cascadeRules['CASCADE']}>CASCADE</Tooltip>
+                </Option>
+                <Option value="RESTRICT">
+                  <Tooltip title={cascadeRules['RESTRICT']}>RESTRICT</Tooltip>
+                </Option>
+                <Option value="NO ACTION">
+                  <Tooltip title={cascadeRules['NO ACTION']}>NO ACTION</Tooltip>
+                </Option>
+                <Option value="SET NULL">
+                  <Tooltip title={cascadeRules['SET NULL']}>SET NULL</Tooltip>
+                </Option>
+                <Option value="SET DEFAULT">
+                  <Tooltip title={cascadeRules['SET DEFAULT']}>SET DEFAULT</Tooltip>
+                </Option>
               </Select>
             </Form.Item>
           </Form>

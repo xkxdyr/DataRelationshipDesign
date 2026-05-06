@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react'
-import { Layout, Typography, Badge, Tooltip, Button } from 'antd'
-import { DatabaseOutlined, CloseOutlined, CloudOutlined, CloudSyncOutlined, SyncOutlined, WifiOutlined, DisconnectOutlined, SettingOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons'
+import { Layout, Typography, Badge, Tooltip, Button, message } from 'antd'
+import { DatabaseOutlined, CloseOutlined, CloudOutlined, CloudSyncOutlined, CloudUploadOutlined, SyncOutlined, WifiOutlined, DisconnectOutlined, SettingOutlined, LeftOutlined, RightOutlined, TeamOutlined } from '@ant-design/icons'
 import { useAppStore } from './stores/appStore'
 import { useTheme } from './theme/useTheme'
 import ProjectList from './components/ProjectList'
@@ -11,12 +11,17 @@ import { SettingsModal } from './components/SettingsModal'
 import { TypeConvertModal } from './components/TypeConvertModal'
 import { LLMModal } from './components/LLMModal'
 import ImportExportModal from './components/ImportExportModal'
+import { ConnectionConfigModal } from './components/ConnectionConfigModal'
+import { DatabaseImportModal } from './components/DatabaseImportModal'
+import { DatabaseSyncModal } from './components/DatabaseSyncModal'
+import { TeamManagementModal } from './components/TeamManagementModal'
+import { TableInfo } from './services/api'
 
 const { Header } = Layout
 const { Title } = Typography
 
 function App() {
-  const { currentProject, loadProjects, selectedTableId, tables, selectTable, undo, redo, canUndo, canRedo, isOnline, isSyncing, lastSaved, fontSize, themeColor, loadSettings, createTable, saveToLocal, deleteTable } = useAppStore()
+  const { currentProject, projects, loadProjects, selectedTableId, tables, columns, selectTable, undo, redo, canUndo, canRedo, isOnline, isSyncing, lastSaved, fontSize, setFontSize, themeColor, loadSettings, createTable, createColumn, createIndex, createRelationship, saveToLocal, deleteTable, setCanvasZoom, canvasZoom } = useAppStore()
   const { colors } = useTheme()
   const [leftWidth, setLeftWidth] = useState(350)
   const [rightWidth, setRightWidth] = useState(900)
@@ -26,6 +31,10 @@ function App() {
   const [showTypeConvert, setShowTypeConvert] = useState(false)
   const [showLLM, setShowLLM] = useState(false)
   const [showImportExport, setShowImportExport] = useState(false)
+  const [showConnections, setShowConnections] = useState(false)
+  const [showDatabaseImport, setShowDatabaseImport] = useState(false)
+  const [showDatabaseSync, setShowDatabaseSync] = useState(false)
+  const [showTeamManagement, setShowTeamManagement] = useState(false)
   const [leftCollapsed, setLeftCollapsed] = useState(false)
   const [rightCollapsed, setRightCollapsed] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -36,6 +45,26 @@ function App() {
   const [rightLastWidth, setRightLastWidth] = useState(900)
 
   useEffect(() => {
+    const ZOOM_MIN = 0.5
+    const ZOOM_MAX = 2
+    const ZOOM_STEP = 0.05
+
+    const getCurrentZoom = () => {
+      return useAppStore.getState().canvasZoom || 1
+    }
+
+    const zoomIn = () => {
+      const currentZoom = getCurrentZoom()
+      const newZoom = Math.min(currentZoom + ZOOM_STEP, ZOOM_MAX)
+      setCanvasZoom(Math.round(newZoom * 100) / 100)
+    }
+
+    const zoomOut = () => {
+      const currentZoom = getCurrentZoom()
+      const newZoom = Math.max(currentZoom - ZOOM_STEP, ZOOM_MIN)
+      setCanvasZoom(Math.round(newZoom * 100) / 100)
+    }
+
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement
       const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
@@ -56,7 +85,7 @@ function App() {
           if (!isInput) {
             saveToLocal()
           }
-        } else if (e.key === 'n') {
+        } else if (e.key === 't') {
           e.preventDefault()
           if (!isInput && currentProject) {
             createTable(currentProject.id, {
@@ -65,35 +94,74 @@ function App() {
               positionY: 100
             })
           }
-        } else if (e.key === ',') {
+        } else if (e.key === '0') {
+          e.preventDefault()
+          if (!isInput) {
+            setCanvasZoom(1)
+          }
+        } else if ((e.key === '+' || e.key === '=' || e.code === 'Equal' || e.shiftKey && e.key === '=') && !e.altKey) {
+          e.preventDefault()
+          if (!isInput) {
+            zoomIn()
+          }
+        } else if ((e.key === '-' || e.code === 'Minus') && !e.altKey) {
+          e.preventDefault()
+          if (!isInput) {
+            zoomOut()
+          }
+        } else if (e.key === ',' || e.code === 'Comma' || e.keyCode === 188) {
           e.preventDefault()
           if (!isInput) {
             setShowSettings(true)
           }
-        } else if (e.key === 'e' && e.shiftKey) {
-          e.preventDefault()
-          if (!isInput && currentProject) {
-            setShowImportExport(true)
-          }
-        } else if (e.key === 'Backspace' || e.key === 'Delete') {
-          e.preventDefault()
-          if (!isInput && selectedTableId) {
-            deleteTable(selectedTableId)
-          }
-        } else if (e.key === 'Escape') {
+        } else if ((e.key === 'e' || e.key === 'E') && e.shiftKey) {
           e.preventDefault()
           if (!isInput) {
-            if (showSettings) {
-              setShowSettings(false)
-            } else if (showImportExport) {
-              setShowImportExport(false)
-            } else if (showTypeConvert) {
-              setShowTypeConvert(false)
-            } else if (showLLM) {
-              setShowLLM(false)
-            } else if (selectedTableId) {
-              selectTable(null)
-            }
+            setShowImportExport(true)
+          }
+        } else if (e.key === 'a') {
+          e.preventDefault()
+          if (!isInput) {
+            message.info('全选功能')
+          }
+        } else if (e.key === 'c') {
+          e.preventDefault()
+          if (!isInput && selectedTableId) {
+            message.info('复制表')
+          }
+        } else if (e.key === 'v') {
+          e.preventDefault()
+          if (!isInput && currentProject) {
+            message.info('粘贴表')
+          }
+        } else if (e.key === 'f') {
+          e.preventDefault()
+          if (!isInput) {
+            message.info('查找功能')
+          }
+        }
+      } else if (e.key === 'Backspace' || e.key === 'Delete') {
+        if (!isInput && selectedTableId) {
+          e.preventDefault()
+          deleteTable(selectedTableId)
+        }
+      } else if (e.key === 'Escape') {
+        if (!isInput) {
+          e.preventDefault()
+          if (showSettings) {
+            setShowSettings(false)
+          } else if (showImportExport) {
+            setShowImportExport(false)
+          } else if (showTypeConvert) {
+            setShowTypeConvert(false)
+          } else if (showLLM) {
+            setShowLLM(false)
+          } else if (showConnections) {
+            setShowConnections(false)
+          } else if (showDatabaseImport) {
+            setShowDatabaseImport(false)
+          } else if (selectedTableId) {
+            selectTable(null)
           }
         }
       }
@@ -103,12 +171,130 @@ function App() {
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [undo, redo, canUndo, canRedo, currentProject, createTable, saveToLocal, selectedTableId, deleteTable, selectTable, showSettings, showImportExport, showTypeConvert, showLLM])
+  }, [undo, redo, canUndo, canRedo, currentProject, createTable, saveToLocal, selectedTableId, deleteTable, selectTable, showSettings, showImportExport, showTypeConvert, showLLM, showConnections, showDatabaseImport, setCanvasZoom])
 
   useEffect(() => {
-    loadSettings()
     loadProjects()
+    loadSettings()
   }, [])
+
+  useEffect(() => {
+    document.documentElement.style.fontSize = `${fontSize}px`
+  }, [fontSize])
+
+  const handleDatabaseImport = async (importedTables: TableInfo[], targetProjectId?: string) => {
+    console.log('handleDatabaseImport called with:', importedTables, 'targetProjectId:', targetProjectId)
+    
+    // 使用指定的目标项目或当前项目
+    const projectId = targetProjectId || currentProject?.id
+    if (!projectId) {
+      message.error('请先选择或创建项目')
+      return
+    }
+    
+    let x = 100
+    let y = 100
+    const tableMap = new Map<string, { tableId: string; columnMap: Map<string, string> }>()
+    
+    for (let index = 0; index < importedTables.length; index++) {
+      const tableInfo = importedTables[index]
+      console.log('Processing table:', tableInfo.name, 'columns:', tableInfo.columns)
+      
+      await createTable(projectId, {
+        name: tableInfo.name,
+        comment: tableInfo.comment || undefined,
+        positionX: x,
+        positionY: y,
+      }, true) // skipAutoIdColumn=true，导入数据库表时跳过自动添加id列
+      
+      // Wait for the tables state to update
+      await new Promise(resolve => setTimeout(resolve, 50))
+      
+      const newTable = tables.find(t => t.name === tableInfo.name && t.projectId === projectId)
+      if (newTable) {
+        const columnMap = new Map<string, string>()
+        
+        for (let colIndex = 0; colIndex < tableInfo.columns.length; colIndex++) {
+          const col = tableInfo.columns[colIndex]
+          await createColumn(newTable.id, {
+            name: col.name,
+            dataType: col.type,
+            nullable: col.isNullable,
+            defaultValue: col.defaultValue || undefined,
+            autoIncrement: col.autoIncrement || false,
+            primaryKey: col.isPrimaryKey,
+            unique: false,
+            comment: col.comment || undefined,
+            order: colIndex,
+          })
+          
+          // Get the column ID for foreign key mapping
+          await new Promise(resolve => setTimeout(resolve, 50))
+          // 从 tables 中获取最新的表数据，然后找到对应的列
+          const updatedTable = tables.find(t => t.id === newTable.id)
+          const createdColumn = updatedTable?.columns.find(c => c.name === col.name)
+          if (createdColumn) {
+            columnMap.set(col.name, createdColumn.id)
+          }
+        }
+        
+        tableMap.set(tableInfo.name, { tableId: newTable.id, columnMap })
+        
+        // Create indexes
+        if (tableInfo.indexes && tableInfo.indexes.length > 0) {
+          for (const idx of tableInfo.indexes) {
+            if (idx.isPrimary) continue // Primary key already handled
+            
+            // 将列名转换为列 ID
+            const columnIds = idx.columns.map(colName => columnMap.get(colName)).filter(Boolean) as string[]
+            
+            if (columnIds.length > 0) {
+              await createIndex(newTable.id, {
+                name: idx.name,
+                columns: columnIds,
+                unique: idx.isUnique,
+                type: 'BTREE'
+              })
+            }
+          }
+        }
+      }
+      
+      x += 250
+      if (index > 0 && index % 3 === 0) {
+        x = 100
+        y += 200
+      }
+    }
+    
+    // Create foreign key relationships after all tables and columns are created
+    for (const tableInfo of importedTables) {
+      const sourceInfo = tableMap.get(tableInfo.name)
+      if (!sourceInfo || !tableInfo.foreignKeys) continue
+      
+      for (const fk of tableInfo.foreignKeys) {
+        const targetInfo = tableMap.get(fk.referencedTable)
+        if (!targetInfo) continue
+        
+        const sourceColumnId = sourceInfo.columnMap.get(fk.column)
+        const targetColumnId = targetInfo.columnMap.get(fk.referencedColumn)
+        
+        if (sourceColumnId && targetColumnId) {
+          await createRelationship(projectId, {
+            sourceTableId: sourceInfo.tableId,
+            sourceColumnId: sourceColumnId,
+            targetTableId: targetInfo.tableId,
+            targetColumnId: targetColumnId,
+            relationshipType: 'one-to-many',
+            onUpdate: 'CASCADE',
+            onDelete: 'RESTRICT',
+          })
+        }
+      }
+    }
+    
+    message.success(`成功导入 ${importedTables.length} 张表，已添加到画布`)
+  }
 
   const selectedTable = tables.find(t => t.id === selectedTableId)
 
@@ -232,12 +418,63 @@ function App() {
             )}
           </Tooltip>
 
-          <Tooltip title="设置">
+          <Tooltip title="从数据库导入" mouseEnterDelay={0.1}>
+            <Button
+              type="text"
+              icon={<DatabaseOutlined style={{ fontSize: 14 }} />}
+              onClick={() => setShowDatabaseImport(true)}
+              style={{ 
+                color: colors.textSecondary,
+                border: 'none',
+                boxShadow: 'none',
+                outline: 'none',
+                background: 'transparent'
+              }}
+            />
+          </Tooltip>
+
+          <Tooltip title="同步到数据库" mouseEnterDelay={0.1}>
+            <Button
+              type="text"
+              icon={<CloudUploadOutlined style={{ fontSize: 14 }} />}
+              onClick={() => setShowDatabaseSync(true)}
+              style={{ 
+                color: colors.textSecondary,
+                border: 'none',
+                boxShadow: 'none',
+                outline: 'none',
+                background: 'transparent'
+              }}
+            />
+          </Tooltip>
+
+          <Tooltip title="团队管理" mouseEnterDelay={0.1}>
+            <Button
+              type="text"
+              icon={<TeamOutlined style={{ fontSize: 14 }} />}
+              onClick={() => setShowTeamManagement(true)}
+              style={{ 
+                color: colors.textSecondary,
+                border: 'none',
+                boxShadow: 'none',
+                outline: 'none',
+                background: 'transparent'
+              }}
+            />
+          </Tooltip>
+
+          <Tooltip title="设置" mouseEnterDelay={0.1}>
             <Button
               type="text"
               icon={<SettingOutlined style={{ fontSize: 14 }} />}
               onClick={() => setShowSettings(true)}
-              style={{ color: colors.textSecondary }}
+              style={{ 
+                color: colors.textSecondary,
+                border: 'none',
+                boxShadow: 'none',
+                outline: 'none',
+                background: 'transparent'
+              }}
             />
           </Tooltip>
         </div>
@@ -253,10 +490,31 @@ function App() {
           setShowSettings(false)
           setShowLLM(true)
         }}
+        onOpenConnections={() => {
+          setShowSettings(false)
+          setShowConnections(true)
+        }}
       />
       <TypeConvertModal visible={showTypeConvert} onClose={() => setShowTypeConvert(false)} />
       <LLMModal visible={showLLM} onClose={() => setShowLLM(false)} />
       <ImportExportModal open={showImportExport} onClose={() => setShowImportExport(false)} />
+      <ConnectionConfigModal visible={showConnections} onClose={() => setShowConnections(false)} />
+      <DatabaseImportModal 
+        visible={showDatabaseImport} 
+        onClose={() => setShowDatabaseImport(false)}
+        onImport={handleDatabaseImport}
+        projects={projects}
+        currentProjectId={currentProject?.id}
+      />
+      <DatabaseSyncModal 
+        visible={showDatabaseSync} 
+        onClose={() => setShowDatabaseSync(false)}
+        tables={tables}
+      />
+      <TeamManagementModal 
+        visible={showTeamManagement} 
+        onClose={() => setShowTeamManagement(false)}
+      />
 
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', marginTop: 0, paddingTop: 0, backgroundColor: colors.background }} ref={containerRef}>
         {/* 左侧边栏 */}
@@ -349,6 +607,8 @@ function App() {
             projectId: 'persistent',
             positionX: 0,
             positionY: 0,
+            columns: [],
+            indexes: [],
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
           }} onClose={() => {}} />

@@ -186,6 +186,20 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
 
   return (
     <div style={{ padding: '20px' }}>
+      {/* 始终渲染隐藏的 Form，确保 useForm 不会报警告 */}
+      <div style={{ display: 'none' }}>
+        <Form form={form} layout="vertical">
+          <Form.Item name="name"><Input /></Form.Item>
+          <Form.Item name="comment"><Input /></Form.Item>
+        </Form>
+        <Form form={indexForm} layout="vertical">
+          <Form.Item name="name"><Input /></Form.Item>
+          <Form.Item name="columns"><Input /></Form.Item>
+          <Form.Item name="unique"><Input /></Form.Item>
+          <Form.Item name="type"><Input /></Form.Item>
+        </Form>
+      </div>
+      
       <div style={{ marginBottom: '20px' }}>
         <Form form={form} layout="inline">
           <Form.Item label="表名" name="name">
