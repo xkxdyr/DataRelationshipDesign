@@ -56,36 +56,44 @@ export const CreateVersionModal: React.FC<CreateVersionModalProps> = ({
   }
 
   return (
-    <Modal
-      title="新建版本"
-      open={open}
-      onOk={() => form.submit()}
-      onCancel={handleClose}
-      okText="创建"
-      cancelText="取消"
-      width={500}
-    >
-      <Form
-        form={form}
-        layout="vertical"
-        onFinish={handleCreateVersion}
-      >
-        <Form.Item
-          name="name"
-          label="版本名称"
-          rules={[{ required: true, message: "请输入版本名称" }]}
-        >
-          <Input placeholder="请输入版本名称" />
-        </Form.Item>
-        
-        <Form.Item
-          name="comment"
-          label="备注说明"
-        >
-          <Input.TextArea placeholder="请输入备注说明" rows={3} />
-        </Form.Item>
+    <>
+      {/* 始终渲染隐藏的 Form，确保 useForm 不会报警告 */}
+      <Form form={form} layout="vertical" style={{ display: 'none' }}>
+        <Form.Item name="name"><Input /></Form.Item>
+        <Form.Item name="comment"><Input /></Form.Item>
       </Form>
-    </Modal>
+      
+      <Modal
+        title="新建版本"
+        open={open}
+        onOk={() => form.submit()}
+        onCancel={handleClose}
+        okText="创建"
+        cancelText="取消"
+        width={500}
+      >
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={handleCreateVersion}
+        >
+          <Form.Item
+            name="name"
+            label="版本名称"
+            rules={[{ required: true, message: "请输入版本名称" }]}
+          >
+            <Input placeholder="请输入版本名称" />
+          </Form.Item>
+          
+          <Form.Item
+            name="comment"
+            label="备注说明"
+          >
+            <Input.TextArea placeholder="请输入备注说明" rows={3} />
+          </Form.Item>
+        </Form>
+      </Modal>
+    </>
   )
 }
 

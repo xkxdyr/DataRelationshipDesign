@@ -26,46 +26,54 @@ export const CreateTableModal: React.FC<CreateTableModalProps> = ({ open, onClos
   }
 
   return (
-    <Modal
-      title="新建表"
-      open={open}
-      onOk={() => form.submit()}
-      onCancel={onClose}
-      okText="创建"
-      cancelText="取消"
-    >
-      <Form
-        form={form}
-        layout="vertical"
-        onFinish={handleCreateTable}
-      >
-        <Form.Item
-          name="name"
-          label="表名称"
-          rules={[
-            { required: true, message: '请输入表名称' },
-            { pattern: /^[a-zA-Z_][a-zA-Z0-9_]*$/, message: '表名只能包含字母、数字和下划线，必须以字母或下划线开头' },
-            ({ getFieldValue }) => ({
-              validator(_, value) {
-                if (value && tables.some(t => t.name.toLowerCase() === value.toLowerCase())) {
-                  return Promise.reject(new Error('该表名已存在'))
-                }
-                return Promise.resolve()
-              }
-            })
-          ]}
-        >
-          <Input placeholder="请输入表名称" />
-        </Form.Item>
-        
-        <Form.Item
-          name="comment"
-          label="表注释"
-        >
-          <Input.TextArea placeholder="请输入表注释" rows={3} />
-        </Form.Item>
+    <>
+      {/* 始终渲染隐藏的 Form，确保 useForm 不会报警告 */}
+      <Form form={form} layout="vertical" style={{ display: 'none' }}>
+        <Form.Item name="name"><Input /></Form.Item>
+        <Form.Item name="comment"><Input /></Form.Item>
       </Form>
-    </Modal>
+      
+      <Modal
+        title="新建表"
+        open={open}
+        onOk={() => form.submit()}
+        onCancel={onClose}
+        okText="创建"
+        cancelText="取消"
+      >
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={handleCreateTable}
+        >
+          <Form.Item
+            name="name"
+            label="表名称"
+            rules={[
+              { required: true, message: '请输入表名称' },
+              { pattern: /^[a-zA-Z_][a-zA-Z0-9_]*$/, message: '表名只能包含字母、数字和下划线，必须以字母或下划线开头' },
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  if (value && tables.some(t => t.name.toLowerCase() === value.toLowerCase())) {
+                    return Promise.reject(new Error('该表名已存在'))
+                  }
+                  return Promise.resolve()
+                }
+              })
+            ]}
+          >
+            <Input placeholder="请输入表名称" />
+          </Form.Item>
+          
+          <Form.Item
+            name="comment"
+            label="表注释"
+          >
+            <Input.TextArea placeholder="请输入表注释" rows={3} />
+          </Form.Item>
+        </Form>
+      </Modal>
+    </>
   )
 }
 

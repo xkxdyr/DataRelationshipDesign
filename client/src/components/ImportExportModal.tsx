@@ -5,7 +5,9 @@ import { useAppStore } from '../stores/appStore'
 import { exportService } from '../services/exportService'
 import { importService, ImportResult } from '../services/importService'
 import { projectApi, tableApi, columnApi, relationshipApi, indexApi } from '../services/api'
+import { localStorageService } from '../services/localStorageService'
 import { Project, Table, Column, Relationship, Index } from '../types'
+import type { LocalProject, LocalTable, LocalColumn, LocalRelationship, LocalIndex } from '../types'
 import { DDLOptions } from '../ddl/types'
 
 const { Title, Text, Paragraph } = Typography
@@ -26,7 +28,7 @@ interface ImportExportModalProps {
 }
 
 export const ImportExportModal: React.FC<ImportExportModalProps> = ({ open, onClose, initialTab = 'export' }) => {
-  const { currentProject, tables, relationships, versions, loadProjects, selectProject, tablePrefix, tablePrefixPresets, setTablePrefix, addTablePrefixPreset, removeTablePrefixPreset } = useAppStore()
+  const { currentProject, tables, relationships, versions, loadProjects, selectProject, tablePrefix, tablePrefixPresets, setTablePrefix, addTablePrefixPreset, removeTablePrefixPreset, isLocalMode, set: setStore } = useAppStore()
   const [activeTab, setActiveTab] = useState(initialTab)
 
   useEffect(() => {
@@ -99,32 +101,79 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({ open, onCl
       return
     }
 
-    const newProject = await projectApi.create({
-      name: result.project.name,
-      description: result.project.description,
-      databaseType: result.project.databaseType as any
-    })
+    // 根据当前模式创建项目
+    let createdProjectId: string;
+    
+    if (isLocalMode) {
+      // 本地模式：使用 store 的 createProject
+      const localProject: LocalProject = {
+        id: `local_${Date.now()}`,
+        name: result.project.name,
+        description: result.project.description,
+        databaseType: result.project.databaseType,
+        status: 'active',
+        version: 1,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: 'local',
+        lastModified: Date.now()
+      }
+      
+      await localStorageService.saveProject(localProject)
+      createdProjectId = localProject.id
+      
+      // 更新 store 状态
+      setStore(state => ({ projects: [...state.projects, localProject as Project] }))
+    } else {
+      // 在线模式：使用 API
+      const newProject = await projectApi.create({
+        name: result.project.name,
+        description: result.project.description,
+        databaseType: result.project.databaseType as any
+      })
 
-    if (!newProject.success || !newProject.data) {
-      message.error('创建项目失败')
-      return
+      if (!newProject.success || !newProject.data) {
+        message.error('创建项目失败')
+        return
+      }
+      createdProjectId = newProject.data.id
     }
-
-    const createdProject = newProject.data
 
     const tableIdMap = new Map<string, string>()
     const createdTables: Array<{ oldId: string, newId: string, name: string, columns: any[] }> = []
 
+    // 创建表
     for (const tableData of (result.tables || [])) {
-      const tableResponse = await tableApi.create(createdProject.id, {
-        name: tableData.name,
-        comment: tableData.comment,
-        positionX: tableData.positionX,
-        positionY: tableData.positionY
-      })
+      let createdTable: Table | undefined;
+      
+      if (isLocalMode) {
+        const localTable: LocalTable = {
+          id: `local_table_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+          projectId: createdProjectId,
+          name: tableData.name,
+          comment: tableData.comment,
+          positionX: tableData.positionX,
+          positionY: tableData.positionY,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          lastModified: Date.now()
+        }
+        await localStorageService.saveTable(localTable)
+        createdTable = localTable as Table
+      } else {
+        const tableResponse = await tableApi.create(createdProjectId, {
+          name: tableData.name,
+          comment: tableData.comment,
+          positionX: tableData.positionX,
+          positionY: tableData.positionY
+        })
+        if (tableResponse.success && tableResponse.data) {
+          createdTable = tableResponse.data
+        }
+      }
 
-      if (tableResponse.success && tableResponse.data) {
-        const tableId = tableResponse.data.id
+      if (createdTable) {
+        const tableId = createdTable.id
         if (tableData.id) {
           tableIdMap.set(tableData.id, tableId)
         }
@@ -140,52 +189,88 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({ open, onCl
     const columnIdMap = new Map<string, string>()
     const columnNameToIdMap = new Map<string, string>()
 
+    // 创建列
     for (const tableInfo of createdTables) {
       const oldColumns = (result as any).columns?.filter((col: any) =>
         col.tableId === tableInfo.oldId || col.tableId === tableInfo.name
       ) || []
 
       if (oldColumns.length > 0) {
-        const columnsToCreate: Partial<Column>[] = []
-
-        for (let i = 0; i < oldColumns.length; i++) {
-          const oldCol = oldColumns[i]
-          const colData: Partial<Column> = {
-            tableId: tableInfo.newId,
-            name: oldCol.name,
-            dataType: oldCol.dataType || 'VARCHAR',
-            length: oldCol.length,
-            precision: oldCol.precision,
-            scale: oldCol.scale,
-            nullable: oldCol.nullable ?? true,
-            primaryKey: oldCol.primaryKey || false,
-            unique: oldCol.unique || false,
-            autoIncrement: oldCol.autoIncrement || false,
-            defaultValue: oldCol.defaultValue,
-            comment: oldCol.comment,
-            order: oldCol.order ?? i
+        if (isLocalMode) {
+          // 本地模式：直接保存
+          for (let i = 0; i < oldColumns.length; i++) {
+            const oldCol = oldColumns[i]
+            const localColumn: LocalColumn = {
+              id: `local_col_${Date.now()}_${i}`,
+              tableId: tableInfo.newId,
+              name: oldCol.name,
+              dataType: oldCol.dataType || 'VARCHAR',
+              length: oldCol.length,
+              precision: oldCol.precision,
+              scale: oldCol.scale,
+              nullable: oldCol.nullable ?? true,
+              primaryKey: oldCol.primaryKey || false,
+              unique: oldCol.unique || false,
+              autoIncrement: oldCol.autoIncrement || false,
+              defaultValue: oldCol.defaultValue,
+              comment: oldCol.comment,
+              order: oldCol.order ?? i,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              lastModified: Date.now()
+            }
+            await localStorageService.saveColumn(localColumn)
+            if (oldCol.id) {
+              columnIdMap.set(oldCol.id, localColumn.id)
+            }
+            if (oldCol.name) {
+              const key = `${tableInfo.newId}_${oldCol.name}`
+              columnNameToIdMap.set(key, localColumn.id)
+            }
           }
-          columnsToCreate.push(colData)
-        }
-
-        if (columnsToCreate.length > 0) {
-          const bulkResponse = await columnApi.bulkCreate(tableInfo.newId, columnsToCreate)
-          if (bulkResponse.success && bulkResponse.data) {
-            bulkResponse.data.forEach((newCol, idx) => {
-              const oldCol = oldColumns[idx]
-              if (oldCol?.id) {
-                columnIdMap.set(oldCol.id, newCol.id)
-              }
-              if (oldCol?.name) {
-                const key = `${tableInfo.newId}_${oldCol.name}`
-                columnNameToIdMap.set(key, newCol.id)
-              }
-            })
+        } else {
+          // 在线模式：使用批量创建
+          const columnsToCreate: Partial<Column>[] = []
+          for (let i = 0; i < oldColumns.length; i++) {
+            const oldCol = oldColumns[i]
+            const colData: Partial<Column> = {
+              tableId: tableInfo.newId,
+              name: oldCol.name,
+              dataType: oldCol.dataType || 'VARCHAR',
+              length: oldCol.length,
+              precision: oldCol.precision,
+              scale: oldCol.scale,
+              nullable: oldCol.nullable ?? true,
+              primaryKey: oldCol.primaryKey || false,
+              unique: oldCol.unique || false,
+              autoIncrement: oldCol.autoIncrement || false,
+              defaultValue: oldCol.defaultValue,
+              comment: oldCol.comment,
+              order: oldCol.order ?? i
+            }
+            columnsToCreate.push(colData)
+          }
+          
+          if (columnsToCreate.length > 0) {
+            const bulkResponse = await columnApi.bulkCreate(tableInfo.newId, columnsToCreate)
+            if (bulkResponse.success && bulkResponse.data) {
+              bulkResponse.data.forEach((newCol, idx) => {
+                const oldCol = oldColumns[idx]
+                if (oldCol?.id) {
+                  columnIdMap.set(oldCol.id, newCol.id)
+                }
+                if (oldCol?.name) {
+                  const key = `${tableInfo.newId}_${oldCol.name}`
+                  columnNameToIdMap.set(key, newCol.id)
+                }
+              })
+            }
           }
         }
       }
     }
 
+    // 创建索引
     if ((result as any).indexes) {
       for (const idxData of (result as any).indexes || []) {
         const newTableId = tableIdMap.get(idxData.tableId)
@@ -206,17 +291,33 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({ open, onCl
             }
           }
 
-          await indexApi.create(newTableId, {
-            tableId: newTableId,
-            name: idxData.name,
-            columns: indexColumns,
-            unique: idxData.unique,
-            type: idxData.type
-          })
+          if (isLocalMode) {
+            const localIndex: LocalIndex = {
+              id: `local_idx_${Date.now()}`,
+              tableId: newTableId,
+              name: idxData.name,
+              columns: indexColumns,
+              unique: idxData.unique,
+              type: idxData.type,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              lastModified: Date.now()
+            }
+            await localStorageService.saveIndex(localIndex)
+          } else {
+            await indexApi.create(newTableId, {
+              tableId: newTableId,
+              name: idxData.name,
+              columns: indexColumns,
+              unique: idxData.unique,
+              type: idxData.type
+            })
+          }
         }
       }
     }
 
+    // 创建关系
     for (const relData of (result.relationships || [])) {
       const newSourceTableId = tableIdMap.get(relData.sourceTableId || '') || ''
       const newTargetTableId = tableIdMap.get(relData.targetTableId || '') || ''
@@ -224,20 +325,38 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({ open, onCl
       const newTargetColumnId = columnIdMap.get(relData.targetColumnId || '') || ''
 
       if (newSourceTableId && newTargetTableId && newSourceColumnId && newTargetColumnId) {
-        await relationshipApi.create(createdProject.id, {
-          sourceTableId: newSourceTableId,
-          sourceColumnId: newSourceColumnId,
-          targetTableId: newTargetTableId,
-          targetColumnId: newTargetColumnId,
-          relationshipType: relData.relationshipType,
-          onUpdate: relData.onUpdate,
-          onDelete: relData.onDelete
-        })
+        if (isLocalMode) {
+          const localRel: LocalRelationship = {
+            id: `local_rel_${Date.now()}`,
+            projectId: createdProjectId,
+            sourceTableId: newSourceTableId,
+            sourceColumnId: newSourceColumnId,
+            targetTableId: newTargetTableId,
+            targetColumnId: newTargetColumnId,
+            relationshipType: relData.relationshipType,
+            onUpdate: relData.onUpdate,
+            onDelete: relData.onDelete,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            lastModified: Date.now()
+          }
+          await localStorageService.saveRelationship(localRel)
+        } else {
+          await relationshipApi.create(createdProjectId, {
+            sourceTableId: newSourceTableId,
+            sourceColumnId: newSourceColumnId,
+            targetTableId: newTargetTableId,
+            targetColumnId: newTargetColumnId,
+            relationshipType: relData.relationshipType,
+            onUpdate: relData.onUpdate,
+            onDelete: relData.onDelete
+          })
+        }
       }
     }
 
     await loadProjects()
-    await selectProject(createdProject.id)
+    await selectProject(createdProjectId)
     message.success('导入成功')
   }
 
@@ -668,7 +787,7 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({ open, onCl
         okText="确认导入"
         cancelText="取消"
       >
-        {importResult && importResult.success && (
+        {importResult && importResult.success ? (
           <div>
             <Alert
               message="导入预览"
@@ -720,13 +839,41 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({ open, onCl
               </Form.Item>
             </Form>
           </div>
+        ) : (
+          <div>
+            <Alert
+              message="无导入数据"
+              type="warning"
+              showIcon
+            />
+            <Form form={importForm} layout="vertical" style={{ display: 'none' }}>
+              <Form.Item name="projectName"><Input /></Form.Item>
+              <Form.Item name="databaseType"><Input /></Form.Item>
+            </Form>
+          </div>
         )}
       </Modal>
     </div>
   )
 
   return (
-    <Modal
+    <>
+      {/* 始终渲染隐藏的 Form，确保 useForm 不会报警告（放在 Modal 外面避免 destroyOnHidden 销毁） */}
+      <Form form={form} layout="vertical" style={{ display: 'none' }}>
+        <Form.Item name="databaseType"><Input /></Form.Item>
+        <Form.Item name="tablePrefix"><Input /></Form.Item>
+        <Form.Item name="includeDropTable"><Input type="checkbox" /></Form.Item>
+        <Form.Item name="includeComments"><Input type="checkbox" /></Form.Item>
+        <Form.Item name="schema"><Input /></Form.Item>
+      </Form>
+      
+      {/* 为 importForm 也添加隐藏的 Form */}
+      <Form form={importForm} layout="vertical" style={{ display: 'none' }}>
+        <Form.Item name="projectName"><Input /></Form.Item>
+        <Form.Item name="databaseType"><Input /></Form.Item>
+      </Form>
+      
+      <Modal
       title={
         <Space>
           <DownloadOutlined style={{ color: '#1890ff' }} />
@@ -767,6 +914,7 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({ open, onCl
         ]}
       />
     </Modal>
+    </>
   )
 }
 

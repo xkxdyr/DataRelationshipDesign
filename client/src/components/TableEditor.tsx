@@ -433,54 +433,63 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
         cancelText="取消"
         width={500}
       >
-        <Form
-          form={indexForm}
-          layout="vertical"
-          onFinish={handleSaveIndex}
-        >
-          <Form.Item
-            name="name"
-            label="索引名"
-            rules={[{ required: true, message: "请输入索引名" }]}
+        {isIndexModalOpen ? (
+          <Form
+            form={indexForm}
+            layout="vertical"
+            onFinish={handleSaveIndex}
           >
-            <Input placeholder="请输入索引名" />
-          </Form.Item>
-          
-          <Form.Item
-            name="columns"
-            label="包含列"
-            rules={[{ required: true, message: "请选择包含列" }]}
-          >
-            <Select mode="multiple" placeholder="请选择列">
-              {(table.columns || []).map(col => (
-                <Option key={col.id} value={col.name}>{col.name}</Option>
-              ))}
-            </Select>
-          </Form.Item>
-          
-          <Form.Item
-            name="unique"
-            label="约束类型"
-            initialValue={false}
-          >
-            <Select>
-              <Option value={false}>普通索引</Option>
-              <Option value={true}>唯一索引</Option>
-            </Select>
-          </Form.Item>
-          
-          <Form.Item
-            name="type"
-            label="索引类型"
-            initialValue="BTREE"
-          >
-            <Select>
-              <Option value="BTREE">BTREE</Option>
-              <Option value="HASH">HASH</Option>
-              <Option value="FULLTEXT">FULLTEXT</Option>
-            </Select>
-          </Form.Item>
-        </Form>
+            <Form.Item
+              name="name"
+              label="索引名"
+              rules={[{ required: true, message: "请输入索引名" }]}
+            >
+              <Input placeholder="请输入索引名" />
+            </Form.Item>
+            
+            <Form.Item
+              name="columns"
+              label="包含列"
+              rules={[{ required: true, message: "请选择包含列" }]}
+            >
+              <Select mode="multiple" placeholder="请选择列">
+                {(table.columns || []).map(col => (
+                  <Option key={col.id} value={col.name}>{col.name}</Option>
+                ))}
+              </Select>
+            </Form.Item>
+            
+            <Form.Item
+              name="unique"
+              label="约束类型"
+              initialValue={false}
+            >
+              <Select>
+                <Option value={false}>普通索引</Option>
+                <Option value={true}>唯一索引</Option>
+              </Select>
+            </Form.Item>
+            
+            <Form.Item
+              name="type"
+              label="索引类型"
+              initialValue="BTREE"
+            >
+              <Select>
+                <Option value="BTREE">BTREE</Option>
+                <Option value="HASH">HASH</Option>
+                <Option value="FULLTEXT">FULLTEXT</Option>
+              </Select>
+            </Form.Item>
+          </Form>
+        ) : (
+          <Form form={indexForm} layout="vertical" style={{ display: 'none' }}>
+            <Form.Item name="name"><Input /></Form.Item>
+            <Form.Item name="columns"><Input /></Form.Item>
+            <Form.Item name="unique"><Input /></Form.Item>
+            <Form.Item name="type"><Input /></Form.Item>
+          </Form>
+        )}
       </Modal>
     </div>
   )

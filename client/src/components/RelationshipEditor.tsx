@@ -8,6 +8,7 @@ import {
   Table,
   Tag,
   Popconfirm,
+  Input,
   Typography
 } from 'antd';
 import {
@@ -198,117 +199,129 @@ const RelationshipEditor: React.FC<RelationshipEditorProps> = ({
         cancelText="取消"
         width={600}
       >
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={handleCreate}
-        >
-          <Form.Item
-            label="源表"
-            name="sourceTable"
-            rules={[{ required: true, message: '请选择源表' }]}
+        {isCreateModalOpen ? (
+          <Form
+            form={form}
+            layout="vertical"
+            onFinish={handleCreate}
           >
-            <Select 
-              placeholder="请选择源表"
-              onChange={(value) => setSourceTableId(value)}
+            <Form.Item
+              label="源表"
+              name="sourceTable"
+              rules={[{ required: true, message: '请选择源表' }]}
             >
-              {tables.map(table => (
-                <Option key={table.id} value={table.id}>
-                  {table.name}
-                </Option>
-              ))}
-            </Select>
-          </Form.Item>
-
-          <Form.Item
-            label="源字段"
-            name="sourceColumn"
-            rules={[{ required: true, message: '请选择源字段' }]}
-          >
-            <Select placeholder="请选择源字段">
-              {sourceTableId &&
-                getSourceColumns(sourceTableId).map((col: Column) => (
-                  <Option key={col.id} value={col.id}>
-                    {col.name} ({col.dataType})
+              <Select 
+                placeholder="请选择源表"
+                onChange={(value) => setSourceTableId(value)}
+              >
+                {tables.map(table => (
+                  <Option key={table.id} value={table.id}>
+                    {table.name}
                   </Option>
-                ))
-              }
-            </Select>
-          </Form.Item>
+                ))}
+              </Select>
+            </Form.Item>
 
-          <Form.Item
-            label="目标表"
-            name="targetTable"
-            rules={[{ required: true, message: '请选择目标表' }]}
-          >
-            <Select 
-              placeholder="请选择目标表"
-              onChange={(value) => setTargetTableId(value)}
+            <Form.Item
+              label="源字段"
+              name="sourceColumn"
+              rules={[{ required: true, message: '请选择源字段' }]}
             >
-              {tables.map(table => (
-                <Option key={table.id} value={table.id}>
-                  {table.name}
-                </Option>
-              ))}
-            </Select>
-          </Form.Item>
+              <Select placeholder="请选择源字段">
+                {sourceTableId &&
+                  getSourceColumns(sourceTableId).map((col: Column) => (
+                    <Option key={col.id} value={col.id}>
+                      {col.name} ({col.dataType})
+                    </Option>
+                  ))
+                }
+              </Select>
+            </Form.Item>
 
-          <Form.Item
-            label="目标字段"
-            name="targetColumn"
-            rules={[{ required: true, message: '请选择目标字段' }]}
-          >
-            <Select placeholder="请选择目标字段">
-              {targetTableId &&
-                getTargetColumns(targetTableId).map((col: Column) => (
-                  <Option key={col.id} value={col.id}>
-                    {col.name} ({col.dataType})
+            <Form.Item
+              label="目标表"
+              name="targetTable"
+              rules={[{ required: true, message: '请选择目标表' }]}
+            >
+              <Select 
+                placeholder="请选择目标表"
+                onChange={(value) => setTargetTableId(value)}
+              >
+                {tables.map(table => (
+                  <Option key={table.id} value={table.id}>
+                    {table.name}
                   </Option>
-                ))
-              }
-            </Select>
-          </Form.Item>
+                ))}
+              </Select>
+            </Form.Item>
 
-          <Form.Item
-            label="关系类型"
-            name="relationshipType"
-            initialValue="one-to-many"
-          >
-            <Select>
-              <Option value="one-to-one">一对一</Option>
-              <Option value="one-to-many">一对多</Option>
-              <Option value="many-to-many">多对多</Option>
-            </Select>
-          </Form.Item>
+            <Form.Item
+              label="目标字段"
+              name="targetColumn"
+              rules={[{ required: true, message: '请选择目标字段' }]}
+            >
+              <Select placeholder="请选择目标字段">
+                {targetTableId &&
+                  getTargetColumns(targetTableId).map((col: Column) => (
+                    <Option key={col.id} value={col.id}>
+                      {col.name} ({col.dataType})
+                    </Option>
+                  ))
+                }
+              </Select>
+            </Form.Item>
 
-          <Form.Item
-            label="更新时规则"
-            name="onUpdate"
-            initialValue="CASCADE"
-          >
-            <Select>
-              <Option value="CASCADE">CASCADE</Option>
-              <Option value="RESTRICT">RESTRICT</Option>
-              <Option value="NO ACTION">NO ACTION</Option>
-              <Option value="SET NULL">SET NULL</Option>
-              <Option value="SET DEFAULT">SET DEFAULT</Option>
-            </Select>
-          </Form.Item>
+            <Form.Item
+              label="关系类型"
+              name="relationshipType"
+              initialValue="one-to-many"
+            >
+              <Select>
+                <Option value="one-to-one">一对一</Option>
+                <Option value="one-to-many">一对多</Option>
+                <Option value="many-to-many">多对多</Option>
+              </Select>
+            </Form.Item>
 
-          <Form.Item
-            label="删除时规则"
-            name="onDelete"
-            initialValue="RESTRICT"
-          >
-            <Select>
-              <Option value="CASCADE">CASCADE</Option>
-              <Option value="RESTRICT">RESTRICT</Option>
-              <Option value="NO ACTION">NO ACTION</Option>
-              <Option value="SET NULL">SET NULL</Option>
-              <Option value="SET DEFAULT">SET DEFAULT</Option>
-            </Select>
-          </Form.Item>
-        </Form>
+            <Form.Item
+              label="更新时规则"
+              name="onUpdate"
+              initialValue="CASCADE"
+            >
+              <Select>
+                <Option value="CASCADE">CASCADE</Option>
+                <Option value="RESTRICT">RESTRICT</Option>
+                <Option value="NO ACTION">NO ACTION</Option>
+                <Option value="SET NULL">SET NULL</Option>
+                <Option value="SET DEFAULT">SET DEFAULT</Option>
+              </Select>
+            </Form.Item>
+
+            <Form.Item
+              label="删除时规则"
+              name="onDelete"
+              initialValue="RESTRICT"
+            >
+              <Select>
+                <Option value="CASCADE">CASCADE</Option>
+                <Option value="RESTRICT">RESTRICT</Option>
+                <Option value="NO ACTION">NO ACTION</Option>
+                <Option value="SET NULL">SET NULL</Option>
+                <Option value="SET DEFAULT">SET DEFAULT</Option>
+              </Select>
+            </Form.Item>
+          </Form>
+        ) : (
+          <Form form={form} layout="vertical" style={{ display: 'none' }}>
+            <Form.Item name="sourceTable"><Input /></Form.Item>
+            <Form.Item name="sourceColumn"><Input /></Form.Item>
+            <Form.Item name="targetTable"><Input /></Form.Item>
+            <Form.Item name="targetColumn"><Input /></Form.Item>
+            <Form.Item name="relationshipType"><Input /></Form.Item>
+            <Form.Item name="onUpdate"><Input /></Form.Item>
+            <Form.Item name="onDelete"><Input /></Form.Item>
+          </Form>
+        )}
       </Modal>
     </Modal>
   );

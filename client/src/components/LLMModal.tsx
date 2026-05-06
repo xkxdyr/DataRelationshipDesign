@@ -284,6 +284,13 @@ export const LLMModal: React.FC<LLMModalProps> = ({ visible, onClose, onApplyTab
           </Button>
         </div>
 
+        {/* 始终渲染 Form，但只在 config 标签显示 */}
+        <Form form={form} layout="vertical" style={{ display: 'none' }}>
+          <Form.Item label="API 密钥" name="apiKey"><Input /></Form.Item>
+          <Form.Item label="API 端点" name="endpoint"><Input /></Form.Item>
+          <Form.Item label="模型" name="model"><Input /></Form.Item>
+        </Form>
+
         {activeTab === 'config' ? renderConfigTab() : renderGenerateTab()}
       </Space>
     </Modal>

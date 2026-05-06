@@ -341,6 +341,19 @@ function App() {
           )}
         </div>
 
+        {/* 始终渲染一个隐藏的 TableEditor，确保 useForm 不会报警告 */}
+        <div style={{ display: 'none' }}>
+          <TableEditor table={{
+            id: 'persistent_table_editor',
+            name: 'persistent',
+            projectId: 'persistent',
+            positionX: 0,
+            positionY: 0,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          }} onClose={() => {}} />
+        </div>
+
         {/* 右侧边栏 */}
         {selectedTable && (
           <>
@@ -417,14 +430,20 @@ function App() {
                   </div>
                 </>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 8 }}>
-                  <Button 
-                    type="text" 
-                    icon={<LeftOutlined style={{ color: colors.textSecondary }} />} 
-                    onClick={toggleRightCollapse}
-                    style={{ padding: '4px 8px', marginBottom: 8 }}
-                  />
-                </div>
+                <>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 8 }}>
+                    <Button 
+                      type="text" 
+                      icon={<LeftOutlined style={{ color: colors.textSecondary }} />} 
+                      onClick={toggleRightCollapse}
+                      style={{ padding: '4px 8px', marginBottom: 8 }}
+                    />
+                  </div>
+                  {/* 折叠时也渲染但隐藏 TableEditor */}
+                  <div style={{ display: 'none' }}>
+                    <TableEditor table={selectedTable} onClose={() => selectTable(null)} />
+                  </div>
+                </>
               )}
             </div>
           </>

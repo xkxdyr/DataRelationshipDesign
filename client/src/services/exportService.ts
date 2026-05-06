@@ -24,6 +24,7 @@ export interface ExportData {
     positionY: number
     columns: {
       id: string
+      tableId: string
       name: string
       dataType: string
       length?: number
@@ -95,6 +96,7 @@ export const exportService = {
         positionY: table.positionY,
         columns: (table.columns || []).map(col => ({
           id: col.id,
+          tableId: table.id,
           name: col.name,
           dataType: col.dataType,
           length: col.length,
