@@ -209,6 +209,7 @@
 | 198 | 项目启动全流程验证（对比分支） | 项目启动 | 2026-05-07 | Assistant | 完整执行查文档→校前置→开发编码→自测校验→分类归档流程：1.查阅README/DESIGN_DOC等文档；2.校验依赖安装；3.初始化Prisma数据库；4.启动后端服务(http://0.0.0.0:3001)；5.启动前端服务(http://localhost:3002)；6.自测通过：健康检查API✓、项目列表API✓、连接列表API✓、前端页面HTTP 200✓；零崩溃、零报错、项目完整正常运行 |
 | 199 | TypeScript编译错误修复 | 前端 Bug修复 | 2026-05-07 | Assistant | 修复前端编译的6个TypeScript错误：1.App.tsx移除未使用的columns变量；2.Canvas.tsx移除6处'&:hover'无效CSS属性；3.DatabaseImportModal.tsx修复Project类型导入路径；4.TypeConvertModal.tsx修复response.data.result类型访问错误；前端构建成功✓ |
 | 200 | 数据模拟功能 | 测试辅助 | 2026-05-07 | Assistant | 根据表结构自动生成模拟数据：1.创建mockDataService.ts服务，支持9种数据生成规则（随机值/序列号/固定值/姓名/邮箱/手机号/地址/日期/UUID）；2.根据字段名智能推断规则（如name字段自动使用姓名规则）；3.支持SQL/JSON/CSV三种格式导出；4.在TableEditor添加数据模拟Tab和弹窗；5.前端构建成功✓ |
+| 201 | 可视化版本对比功能 | 版本管理 | 2026-05-07 | Assistant | 创建版本对比服务和弹窗组件：1.创建versionDiffService.ts，比较两个版本的表、字段、关系差异；2.创建VersionCompareModal.tsx，支持新增/删除/修改三种变更类型展示；3.统计变更数量并以卡片形式展示；4.支持导出对比报告为txt文件；5.修复Version接口中description字段不存在的问题；6.前端构建成功✓ |
 
 ---
 
