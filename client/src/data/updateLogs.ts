@@ -13,6 +13,32 @@ export interface UpdateChange {
 export const updateLogs: UpdateLog[] = [
   {
     date: '2026-05-07',
+    version: 'v1.1.5',
+    changes: [
+      {
+        type: 'improvement',
+        title: '索引管理界面增强',
+        description: '索引列表显示统计信息（总数、唯一索引数），空状态显示友好提示'
+      },
+      {
+        type: 'improvement',
+        title: '索引列字段信息增强',
+        description: '包含列显示字段数量，悬停提示显示完整列名和注释信息'
+      },
+      {
+        type: 'ui',
+        title: '索引编辑按钮优化',
+        description: '添加编辑按钮图标，与删除按钮保持一致的视觉风格'
+      },
+      {
+        type: 'ui',
+        title: '索引卡片交互优化',
+        description: '索引卡片添加过渡动画效果，提升用户体验'
+      }
+    ]
+  },
+  {
+    date: '2026-05-07',
     version: 'v1.1.4',
     changes: [
       {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { Form, Input, InputNumber, Button, Space, Tag, Select, Popconfirm, Tabs, Modal, message, Row, Col, Tooltip } from 'antd'
-import { PlusOutlined, DeleteOutlined, SaveOutlined, ArrowUpOutlined, ArrowDownOutlined, DatabaseOutlined, HolderOutlined, CommentOutlined } from '@ant-design/icons'
+import { Form, Input, InputNumber, Button, Space, Tag, Select, Popconfirm, Tabs, Modal, message, Row, Col, Tooltip, Empty } from 'antd'
+import { PlusOutlined, DeleteOutlined, SaveOutlined, ArrowUpOutlined, ArrowDownOutlined, DatabaseOutlined, HolderOutlined, CommentOutlined, EditOutlined } from '@ant-design/icons'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -463,8 +463,13 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
           label: '索引管理',
           children: (
             <div>
-              <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between' }}>
-                <h3 style={{ margin: 0 }}>索引列表</h3>
+              <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <h3 style={{ margin: 0 }}>索引列表</h3>
+                  <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
+                    共 {(table.indexes || []).length} 个索引，其中 {(table.indexes || []).filter(i => i.unique).length} 个唯一索引
+                  </div>
+                </div>
                 <Button type="primary" icon={<PlusOutlined />} onClick={() => handleOpenIndexModal()}>
                   添加索引
                 </Button>
@@ -472,11 +477,12 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
               <div>
                 <Space direction="vertical" style={{ width: '100%' }}>
                   {(table.indexes || []).map(idx => (
-                    <div key={idx.id} style={{ 
-                      background: '#fafafa', 
-                      border: '1px solid #e8e8e8', 
-                      borderRadius: '8px', 
-                      padding: '16px' 
+                    <div key={idx.id} style={{
+                      background: '#fafafa',
+                      border: '1px solid #e8e8e8',
+                      borderRadius: '8px',
+                      padding: '16px',
+                      transition: 'border-color 0.2s'
                     }}>
                       <Row gutter={12} align="middle">
                         <Col span={4}>
@@ -488,8 +494,22 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
                           />
                         </Col>
                         <Col span={6}>
-                          <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>包含列</div>
-                          <div>{idx.columns?.join(', ') || '-'}</div>
+                          <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>
+                            包含列 ({idx.columns?.length || 0})
+                          </div>
+                          <Tooltip title={idx.columns?.map(colName => {
+                            const col = table.columns?.find(c => c.name === colName)
+                            return col ? `${col.name}${col.comment ? ` - ${col.comment}` : ''}` : colName
+                          }).join(', ')}>
+                            <div style={{
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              cursor: 'help'
+                            }}>
+                              {idx.columns?.join(', ') || '-'}
+                            </div>
+                          </Tooltip>
                         </Col>
                         <Col span={3}>
                           <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>类型</div>
@@ -515,7 +535,7 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
                         </Col>
                         <Col span={7}>
                           <Space>
-                            <Button type="text" onClick={() => handleOpenIndexModal(idx)}>编辑</Button>
+                            <Button type="text" onClick={() => handleOpenIndexModal(idx)} icon={<EditOutlined />}>编辑</Button>
                             <Popconfirm
                               title="确定删除这个索引吗？"
                               onConfirm={() => handleDeleteIndex(idx.id)}
@@ -529,6 +549,9 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
                       </Row>
                     </div>
                   ))}
+                  {(table.indexes || []).length === 0 && (
+                    <Empty description="暂无索引，点击上方按钮添加" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                  )}
                 </Space>
               </div>
             </div>
