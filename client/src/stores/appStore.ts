@@ -100,6 +100,7 @@ interface AppStore extends AppState {
   deleteTable: (id: string) => Promise<void>
   selectTable: (id: string | null) => void
   selectTables: (ids: string[]) => void
+  selectAllTables: () => void
   addToSelection: (id: string) => void
   removeFromSelection: (id: string) => void
   clearSelection: () => void
@@ -1075,6 +1076,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
   selectTable: (id: string | null) => set({ selectedTableId: id }),
 
   selectTables: (ids: string[]) => set({ selectedTableIds: ids }),
+
+  selectAllTables: () => set(state => ({
+    selectedTableIds: state.tables.map(t => t.id)
+  })),
 
   addToSelection: (id: string) => set(state => ({
     selectedTableIds: state.selectedTableIds.includes(id)

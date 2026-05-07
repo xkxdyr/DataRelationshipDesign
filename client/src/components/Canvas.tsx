@@ -16,8 +16,8 @@ import { Table, Relationship } from '../types'
 import TableNode from './TableNode'
 import RelationshipEditor from './RelationshipEditor'
 import { useAppStore } from '../stores/appStore'
-import { Button, Space, Dropdown, message, Modal, Form, Card, Radio, Slider, Select, Input, Popconfirm, AutoComplete } from 'antd'
-import { PlusOutlined, CodeOutlined, LinkOutlined, ExportOutlined, PictureOutlined, FileImageOutlined, SettingOutlined, ZoomInOutlined, ZoomOutOutlined, RotateLeftOutlined, CompressOutlined, AimOutlined, LockOutlined, DeleteOutlined, CheckSquareOutlined, BorderOutlined, SearchOutlined, CloseCircleFilled, CopyOutlined, AlignLeftOutlined, AlignRightOutlined, AlignCenterOutlined, VerticalAlignTopOutlined, VerticalAlignBottomOutlined } from '@ant-design/icons'
+import { Button, Space, Dropdown, message, Modal, Form, Card, Radio, Slider, Select, Input, Popconfirm, AutoComplete, Tooltip } from 'antd'
+import { PlusOutlined, CodeOutlined, LinkOutlined, ExportOutlined, PictureOutlined, FileImageOutlined, SettingOutlined, ZoomInOutlined, ZoomOutOutlined, RotateLeftOutlined, CompressOutlined, AimOutlined, LockOutlined, DeleteOutlined, CheckSquareOutlined, BorderOutlined, SearchOutlined, CloseCircleFilled, CopyOutlined, AlignLeftOutlined, AlignRightOutlined, AlignCenterOutlined, VerticalAlignTopOutlined, VerticalAlignBottomOutlined, UndoOutlined, RedoOutlined } from '@ant-design/icons'
 import CreateTableModal from './CreateTableModal'
 import { projectApi } from '../services/api'
 
@@ -75,7 +75,7 @@ const MenuDivider = () => (
 )
 
 const CanvasContent: React.FC = () => {
-  const { tables, currentProject, updateTablePosition, selectTable, selectedTableId, selectedTableIds, selectTables, addToSelection, removeFromSelection, clearSelection, deleteSelectedTables, deleteTable, createTable, loadTables, relationships, loadRelationships, canvasZoom, setCanvasZoom, showMiniMap, setShowMiniMap, edgeStyle, showEdgeLabels, updateTable, snapToGrid, gridSize, showGuides, highlightedRelationshipId, hoveredRelationshipId, setHighlightedRelationship, setHoveredRelationship, themeColor, copySelectedTables, pasteTables } = useAppStore()
+  const { tables, currentProject, updateTablePosition, selectTable, selectedTableId, selectedTableIds, selectTables, selectAllTables, addToSelection, removeFromSelection, clearSelection, deleteSelectedTables, deleteTable, createTable, loadTables, relationships, loadRelationships, canvasZoom, setCanvasZoom, showMiniMap, setShowMiniMap, edgeStyle, showEdgeLabels, updateTable, snapToGrid, gridSize, showGuides, highlightedRelationshipId, hoveredRelationshipId, setHighlightedRelationship, setHoveredRelationship, themeColor, copySelectedTables, pasteTables, undo, redo, canUndo, canRedo } = useAppStore()
   const reactFlow = useReactFlow()
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -368,13 +368,24 @@ const CanvasContent: React.FC = () => {
         e.preventDefault()
         handleDuplicateSelected()
       }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+        e.preventDefault()
+        if (canRedo()) redo()
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
+        e.preventDefault()
+        selectAllTables()
+      }
+      if (e.key === 'Delete' && selectedTableIds.length > 0) {
+        handleDeleteSelected()
+      }
       if (e.key === 'Escape' && highlightedTableId) {
         handleClearSearch()
       }
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [highlightedTableId, setCanvasZoom])
+  }, [selectedTableIds, canRedo, redo, handleDeleteSelected, selectAllTables])
 
   const handleDuplicateSelected = async () => {
     if (selectedTableIds.length === 0) {
@@ -852,6 +863,14 @@ const CanvasContent: React.FC = () => {
             <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenModal}>
               新建表
             </Button>
+            <Button.Group>
+              <Tooltip title="撤销 (Ctrl+Z)">
+                <Button icon={<UndoOutlined />} onClick={undo} disabled={!canUndo()} />
+              </Tooltip>
+              <Tooltip title="重做 (Ctrl+Y)">
+                <Button icon={<RedoOutlined />} onClick={redo} disabled={!canRedo()} />
+              </Tooltip>
+            </Button.Group>
             <Button icon={<LinkOutlined />} onClick={() => setIsRelationshipEditorOpen(true)}>
               关系管理
             </Button>

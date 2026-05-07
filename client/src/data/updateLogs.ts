@@ -13,6 +13,39 @@ export interface UpdateChange {
 export const updateLogs: UpdateLog[] = [
   {
     date: '2026-05-07',
+    version: 'v1.2.2',
+    changes: [
+      {
+        type: 'feature',
+        title: '全选功能 (Ctrl+A)',
+        description: '按Ctrl+A可快速选中画布上所有表节点'
+      }
+    ]
+  },
+  {
+    date: '2026-05-07',
+    version: 'v1.2.1',
+    changes: [
+      {
+        type: 'feature',
+        title: '键盘Delete键删除选中表',
+        description: '选中表后按Delete键可快速删除选中表，提升操作效率'
+      }
+    ]
+  },
+  {
+    date: '2026-05-07',
+    version: 'v1.2.0',
+    changes: [
+      {
+        type: 'feature',
+        title: '撤销/重做工具栏按钮',
+        description: '在画布工具栏添加撤销和重做快捷按钮，支持 Ctrl+Z 撤销和 Ctrl+Y 重做操作'
+      }
+    ]
+  },
+  {
+    date: '2026-05-07',
     version: 'v1.1.9',
     changes: [
       {
