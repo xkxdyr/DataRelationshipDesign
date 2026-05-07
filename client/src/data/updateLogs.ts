@@ -13,6 +13,17 @@ export interface UpdateChange {
 export const updateLogs: UpdateLog[] = [
   {
     date: '2026-05-07',
+    version: 'v1.3.4',
+    changes: [
+      {
+        type: 'feature',
+        title: '画布缩放/平移控制设置',
+        description: '在设置面板添加画布滚动控制选项，支持开关滚轮平移和滚轮缩放功能，满足不同用户的操作习惯需求'
+      }
+    ]
+  },
+  {
+    date: '2026-05-07',
     version: 'v1.3.3',
     changes: [
       {

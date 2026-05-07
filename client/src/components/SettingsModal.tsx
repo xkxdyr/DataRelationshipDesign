@@ -133,6 +133,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onClose, 
   const setShowGuides = useAppStore(state => state.setShowGuides)
   const canvasBackground = useAppStore(state => state.canvasBackground)
   const setCanvasBackground = useAppStore(state => state.setCanvasBackground)
+  const panOnScroll = useAppStore(state => state.panOnScroll)
+  const setPanOnScroll = useAppStore(state => state.setPanOnScroll)
+  const zoomOnScroll = useAppStore(state => state.zoomOnScroll)
+  const setZoomOnScroll = useAppStore(state => state.setZoomOnScroll)
 
   const handleReset = () => {
     setFontSize(14)
@@ -149,6 +153,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onClose, 
     setGridSize(20)
     setShowGuides(true)
     setAutoAddIdColumn(true)
+    setPanOnScroll(true)
+    setZoomOnScroll(true)
   }
 
   const formatInterval = (ms: number) => {
@@ -458,6 +464,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onClose, 
                   />
                 </Tooltip>
               </Space>
+            </div>
+
+            <div style={{ marginTop: 24 }}>
+              <Text strong style={{ display: 'block', marginBottom: 16 }}>画布滚动控制</Text>
+              
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <div>
+                  <Text strong>滚轮平移</Text>
+                  <br />
+                  <Text type="secondary" style={{ fontSize: 12 }}>滚轮滚动画布（不缩放时）</Text>
+                </div>
+                <Switch checked={panOnScroll} onChange={setPanOnScroll} />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <Text strong>滚轮缩放</Text>
+                  <br />
+                  <Text type="secondary" style={{ fontSize: 12 }}>滚轮缩放画布</Text>
+                </div>
+                <Switch checked={zoomOnScroll} onChange={setZoomOnScroll} />
+              </div>
             </div>
           </div>
         )

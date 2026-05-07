@@ -81,6 +81,8 @@ interface AppState {
   gridSize: number
   showGuides: boolean
   canvasBackground: string
+  panOnScroll: boolean
+  zoomOnScroll: boolean
   clipboardTables: Table[]
   highlightedRelationshipId: string | null
   hoveredRelationshipId: string | null
@@ -156,6 +158,8 @@ interface AppStore extends AppState {
   setGridSize: (size: number) => void
   setShowGuides: (show: boolean) => void
   setCanvasBackground: (color: string) => void
+  setPanOnScroll: (pan: boolean) => void
+  setZoomOnScroll: (zoom: boolean) => void
   setHighlightedRelationship: (id: string | null) => void
   setHoveredRelationship: (id: string | null) => void
   loadSettings: () => Promise<void>
@@ -215,6 +219,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
     gridSize: 20,
     showGuides: true,
     canvasBackground: '#fafafa',
+    panOnScroll: true,
+    zoomOnScroll: true,
     clipboardTables: [],
     highlightedRelationshipId: null,
     hoveredRelationshipId: null
@@ -240,6 +246,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   gridSize: 20,
   showGuides: true,
   canvasBackground: '#fafafa',
+  panOnScroll: true,
+  zoomOnScroll: true,
   clipboardTables: [],
   highlightedRelationshipId: null,
   hoveredRelationshipId: null,
@@ -328,6 +336,14 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setCanvasBackground: (color: string) => {
     set({ canvasBackground: color })
     localStorageService.setMeta('canvasBackground', color)
+  },
+  setPanOnScroll: (pan: boolean) => {
+    set({ panOnScroll: pan })
+    localStorageService.setMeta('panOnScroll', pan)
+  },
+  setZoomOnScroll: (zoom: boolean) => {
+    set({ zoomOnScroll: zoom })
+    localStorageService.setMeta('zoomOnScroll', zoom)
   },
   setHighlightedRelationship: (id: string | null) => {
     set({ highlightedRelationshipId: id })
@@ -419,6 +435,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const savedCanvasBackground = await localStorageService.getMeta<string>('canvasBackground')
     if (savedCanvasBackground !== undefined) {
       set({ canvasBackground: savedCanvasBackground })
+    }
+
+    const savedPanOnScroll = await localStorageService.getMeta<boolean>('panOnScroll')
+    if (savedPanOnScroll !== undefined) {
+      set({ panOnScroll: savedPanOnScroll })
+    }
+
+    const savedZoomOnScroll = await localStorageService.getMeta<boolean>('zoomOnScroll')
+    if (savedZoomOnScroll !== undefined) {
+      set({ zoomOnScroll: savedZoomOnScroll })
     }
   },
 
@@ -656,6 +682,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
       gridSize: get().gridSize,
       showGuides: get().showGuides,
       canvasBackground: get().canvasBackground,
+      panOnScroll: get().panOnScroll,
+      zoomOnScroll: get().zoomOnScroll,
       clipboardTables: get().clipboardTables,
       highlightedRelationshipId: get().highlightedRelationshipId,
       hoveredRelationshipId: get().hoveredRelationshipId
@@ -722,6 +750,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
       gridSize: get().gridSize,
       showGuides: get().showGuides,
       canvasBackground: get().canvasBackground,
+      panOnScroll: get().panOnScroll,
+      zoomOnScroll: get().zoomOnScroll,
       clipboardTables: get().clipboardTables,
       highlightedRelationshipId: get().highlightedRelationshipId,
       hoveredRelationshipId: get().hoveredRelationshipId

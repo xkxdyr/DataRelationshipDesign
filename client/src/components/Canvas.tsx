@@ -76,7 +76,7 @@ const MenuDivider = () => (
 )
 
 const CanvasContent: React.FC = () => {
-  const { tables, currentProject, updateTablePosition, selectTable, selectedTableId, selectedTableIds, selectTables, selectAllTables, addToSelection, removeFromSelection, clearSelection, deleteSelectedTables, deleteTable, createTable, loadTables, relationships, loadRelationships, canvasZoom, setCanvasZoom, showMiniMap, setShowMiniMap, edgeStyle, showEdgeLabels, updateTable, snapToGrid, gridSize, showGuides, canvasBackground, highlightedRelationshipId, hoveredRelationshipId, setHighlightedRelationship, setHoveredRelationship, themeColor, copySelectedTables, pasteTables, undo, redo, canUndo, canRedo } = useAppStore()
+  const { tables, currentProject, updateTablePosition, selectTable, selectedTableId, selectedTableIds, selectTables, selectAllTables, addToSelection, removeFromSelection, clearSelection, deleteSelectedTables, deleteTable, createTable, loadTables, relationships, loadRelationships, canvasZoom, setCanvasZoom, showMiniMap, setShowMiniMap, edgeStyle, showEdgeLabels, updateTable, snapToGrid, gridSize, showGuides, canvasBackground, panOnScroll, zoomOnScroll, highlightedRelationshipId, hoveredRelationshipId, setHighlightedRelationship, setHoveredRelationship, themeColor, copySelectedTables, pasteTables, undo, redo, canUndo, canRedo } = useAppStore()
   const reactFlow = useReactFlow()
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -1139,6 +1139,8 @@ const CanvasContent: React.FC = () => {
           style={{ background: canvasBackground, width: '100%', height: '100%' }}
           nodesDraggable={!isLocked}
           panOnDrag={true}
+          panOnScroll={panOnScroll}
+          zoomOnScroll={zoomOnScroll}
           selectNodesOnDrag={false}
           snapToGrid={snapToGrid}
           snapGrid={[gridSize, gridSize]}
