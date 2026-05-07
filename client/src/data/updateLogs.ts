@@ -13,6 +13,22 @@ export interface UpdateChange {
 export const updateLogs: UpdateLog[] = [
   {
     date: '2026-05-07',
+    version: 'v1.0.8',
+    changes: [
+      {
+        type: 'feature',
+        title: '多选和批量操作功能',
+        description: '支持Ctrl/Cmd+点击多选表、框选多表、批量删除选中表、全选/取消选择功能'
+      },
+      {
+        type: 'improvement',
+        title: 'Canvas选择体验优化',
+        description: '优化节点选择逻辑，支持Shift/Ctrl/Cmd多选操作，添加选择变化回调'
+      }
+    ]
+  },
+  {
+    date: '2026-05-07',
     version: 'v1.0.7',
     changes: [
       {

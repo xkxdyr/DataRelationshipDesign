@@ -10,6 +10,7 @@ interface AppState {
   tables: Table[]
   relationships: Relationship[]
   selectedTableId: string | null
+  selectedTableIds: string[]
   versions: Version[]
   loading: boolean
   past: AppState[]
@@ -45,6 +46,11 @@ interface AppStore extends AppState {
   updateTablePosition: (id: string, x: number, y: number) => Promise<void>
   deleteTable: (id: string) => Promise<void>
   selectTable: (id: string | null) => void
+  selectTables: (ids: string[]) => void
+  addToSelection: (id: string) => void
+  removeFromSelection: (id: string) => void
+  clearSelection: () => void
+  deleteSelectedTables: () => Promise<void>
 
   loadColumns: (tableId: string) => Promise<void>
   createColumn: (tableId: string, data: Partial<Column>) => Promise<void>
@@ -112,6 +118,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   tables: [],
   relationships: [],
   selectedTableId: null,
+  selectedTableIds: [],
   versions: [],
   loading: false,
   past: [{
@@ -120,6 +127,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     tables: [],
     relationships: [],
     selectedTableId: null,
+    selectedTableIds: [],
     versions: [],
     loading: false,
     past: [],
@@ -505,6 +513,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       tables: get().tables,
       relationships: get().relationships,
       selectedTableId: get().selectedTableId,
+      selectedTableIds: get().selectedTableIds,
       versions: get().versions,
       loading: get().loading,
       past: get().past,
@@ -560,6 +569,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       tables: get().tables,
       relationships: get().relationships,
       selectedTableId: get().selectedTableId,
+      selectedTableIds: get().selectedTableIds,
       versions: get().versions,
       loading: get().loading,
       past: get().past,
@@ -944,6 +954,40 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   selectTable: (id: string | null) => set({ selectedTableId: id }),
+
+  selectTables: (ids: string[]) => set({ selectedTableIds: ids }),
+
+  addToSelection: (id: string) => set(state => ({
+    selectedTableIds: state.selectedTableIds.includes(id)
+      ? state.selectedTableIds
+      : [...state.selectedTableIds, id]
+  })),
+
+  removeFromSelection: (id: string) => set(state => ({
+    selectedTableIds: state.selectedTableIds.filter(i => i !== id)
+  })),
+
+  clearSelection: () => set({ selectedTableIds: [] }),
+
+  deleteSelectedTables: async () => {
+    const { selectedTableIds, tables } = get()
+    if (selectedTableIds.length === 0) return
+
+    get().pushHistory()
+
+    for (const id of selectedTableIds) {
+      if (get().isOnline) {
+        await tableApi.delete(id)
+      }
+      await localStorageService.deleteTable(id)
+    }
+
+    set(state => ({
+      tables: state.tables.filter(t => !selectedTableIds.includes(t.id)),
+      selectedTableId: null,
+      selectedTableIds: []
+    }))
+  },
 
   loadColumns: async (tableId: string) => {
     if (get().isOnline) {

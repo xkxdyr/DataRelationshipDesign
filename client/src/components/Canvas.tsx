@@ -8,15 +8,16 @@ import ReactFlow, {
   useNodesState,
   useEdgesState,
   useReactFlow,
-  ReactFlowProvider
+  ReactFlowProvider,
+  OnSelectionChangeParams
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { Table, Relationship } from '../types'
 import TableNode from './TableNode'
 import RelationshipEditor from './RelationshipEditor'
 import { useAppStore } from '../stores/appStore'
-import { Button, Space, Dropdown, message, Modal, Form, Card, Radio, Slider, Select, Input } from 'antd'
-import { PlusOutlined, CodeOutlined, LinkOutlined, ExportOutlined, PictureOutlined, FileImageOutlined, SettingOutlined, ZoomInOutlined, ZoomOutOutlined, RotateLeftOutlined, CompressOutlined, AimOutlined, LockOutlined } from '@ant-design/icons'
+import { Button, Space, Dropdown, message, Modal, Form, Card, Radio, Slider, Select, Input, Popconfirm } from 'antd'
+import { PlusOutlined, CodeOutlined, LinkOutlined, ExportOutlined, PictureOutlined, FileImageOutlined, SettingOutlined, ZoomInOutlined, ZoomOutOutlined, RotateLeftOutlined, CompressOutlined, AimOutlined, LockOutlined, DeleteOutlined, CheckSquareOutlined, BorderOutlined } from '@ant-design/icons'
 import CreateTableModal from './CreateTableModal'
 import { projectApi } from '../services/api'
 
@@ -49,7 +50,7 @@ const nodeTypes = {
 }
 
 const CanvasContent: React.FC = () => {
-  const { tables, currentProject, updateTablePosition, selectTable, selectedTableId, deleteTable, createTable, loadTables, relationships, loadRelationships, canvasZoom, setCanvasZoom, showMiniMap, setShowMiniMap, edgeStyle, showEdgeLabels, updateTable } = useAppStore()
+  const { tables, currentProject, updateTablePosition, selectTable, selectedTableId, selectedTableIds, selectTables, addToSelection, removeFromSelection, clearSelection, deleteSelectedTables, deleteTable, createTable, loadTables, relationships, loadRelationships, canvasZoom, setCanvasZoom, showMiniMap, setShowMiniMap, edgeStyle, showEdgeLabels, updateTable } = useAppStore()
   const reactFlow = useReactFlow()
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -96,9 +97,9 @@ const CanvasContent: React.FC = () => {
         onEdit: selectTable,
         onDelete: deleteTable
       },
-      selected: selectedTableId === table.id
+      selected: selectedTableIds.includes(table.id)
     }))
-  }, [tables, selectedTableId, selectTable, deleteTable])
+  }, [tables, selectedTableIds, selectTable, deleteTable])
 
   const edges: Edge[] = useMemo(() => {
     if (!relationships || !Array.isArray(relationships)) return []
@@ -147,15 +148,48 @@ const CanvasContent: React.FC = () => {
   }, [updateTablePosition])
 
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
-    const table = tables.find(t => t.id === node.id)
-    if (table) {
-      selectTable(table.id)
+    if (event.shiftKey || event.ctrlKey || event.metaKey) {
+      if (selectedTableIds.includes(node.id)) {
+        removeFromSelection(node.id)
+      } else {
+        addToSelection(node.id)
+      }
+    } else {
+      selectTable(node.id)
     }
-  }, [tables, selectTable])
+  }, [tables, selectTable, selectedTableIds, addToSelection, removeFromSelection])
+
+  const onSelectionChange = useCallback((params: OnSelectionChangeParams) => {
+    const ids = params.nodes.map(n => n.id)
+    if (ids.length > 0) {
+      selectTables(ids)
+    }
+  }, [selectTables])
 
   const onPaneClick = useCallback(() => {
     selectTable(null)
-  }, [selectTable])
+    clearSelection()
+  }, [selectTable, clearSelection])
+
+  const handleDeleteSelected = async () => {
+    if (selectedTableIds.length === 0) {
+      message.warning('请先选择要删除的表')
+      return
+    }
+    await deleteSelectedTables()
+    message.success(`已删除 ${selectedTableIds.length} 个表`)
+  }
+
+  const handleSelectAll = () => {
+    const allIds = tables.map(t => t.id)
+    selectTables(allIds)
+    message.success(`已选择 ${allIds.length} 个表`)
+  }
+
+  const handleClearSelection = () => {
+    clearSelection()
+    message.info('已取消选择')
+  }
 
   const onMoveEnd = useCallback((event: any, viewport: any) => {
     if (viewport.zoom !== canvasZoom) {
@@ -541,6 +575,57 @@ const CanvasContent: React.FC = () => {
           </Space>
         </div>
 
+        {selectedTableIds.length > 0 && (
+          <div style={{
+            position: 'absolute',
+            top: 70,
+            left: 16,
+            zIndex: 10,
+            background: '#1890ff',
+            borderRadius: 8,
+            padding: '8px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            boxShadow: '0 4px 12px rgba(24, 144, 255, 0.3)'
+          }}>
+            <span style={{ color: '#fff', fontWeight: 500 }}>
+              已选择 {selectedTableIds.length} 个表
+            </span>
+            <Button
+              size="small"
+              icon={<CheckSquareOutlined />}
+              onClick={handleSelectAll}
+              style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff' }}
+            >
+              全选
+            </Button>
+            <Button
+              size="small"
+              icon={<BorderOutlined />}
+              onClick={handleClearSelection}
+              style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff' }}
+            >
+              取消
+            </Button>
+            <Popconfirm
+              title={`确定要删除选中的 ${selectedTableIds.length} 个表吗？`}
+              onConfirm={handleDeleteSelected}
+              okText="删除"
+              cancelText="取消"
+              okButtonProps={{ danger: true }}
+            >
+              <Button
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+              >
+                批量删除
+              </Button>
+            </Popconfirm>
+          </div>
+        )}
+
         <ReactFlow
           nodes={nodeState}
           edges={edgeState}
@@ -550,11 +635,13 @@ const CanvasContent: React.FC = () => {
           onNodeClick={onNodeClick}
           onPaneClick={onPaneClick}
           onMoveEnd={onMoveEnd}
+          onSelectionChange={onSelectionChange}
           nodeTypes={nodeTypes}
           fitView
           style={{ background: '#fafafa', width: '100%', height: '100%' }}
           nodesDraggable={!isLocked}
           panOnDrag={true}
+          selectNodesOnDrag={false}
         >
           <Background color="#eee" gap={16} size={2} />
           <div style={{ 
