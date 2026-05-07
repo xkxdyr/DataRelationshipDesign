@@ -21,7 +21,7 @@ const { Header } = Layout
 const { Title } = Typography
 
 function App() {
-  const { currentProject, projects, loadProjects, selectedTableId, tables, columns, selectTable, undo, redo, canUndo, canRedo, isOnline, isSyncing, lastSaved, fontSize, setFontSize, themeColor, loadSettings, createTable, createColumn, createIndex, createRelationship, saveToLocal, deleteTable, setCanvasZoom, canvasZoom } = useAppStore()
+  const { currentProject, projects, loadProjects, selectedTableId, tables, selectTable, undo, redo, canUndo, canRedo, isOnline, isSyncing, lastSaved, fontSize, setFontSize, themeColor, loadSettings, createTable, createColumn, createIndex, createRelationship, saveToLocal, deleteTable, setCanvasZoom, canvasZoom } = useAppStore()
   const { colors } = useTheme()
   const [leftWidth, setLeftWidth] = useState(350)
   const [rightWidth, setRightWidth] = useState(900)

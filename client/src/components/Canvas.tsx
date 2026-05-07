@@ -581,10 +581,7 @@ const CanvasContent: React.FC = () => {
                 borderRadius: 6,
                 padding: 0,
                 margin: 0,
-                color: isLocked ? '#ccc' : '#666',
-                '&:hover': {
-                  backgroundColor: '#f5f5f5'
-                }
+                color: isLocked ? '#ccc' : '#666'
               }}
               title="放大"
             />
@@ -599,10 +596,7 @@ const CanvasContent: React.FC = () => {
                 borderRadius: 6,
                 padding: 0,
                 margin: 0,
-                color: isLocked ? '#ccc' : '#666',
-                '&:hover': {
-                  backgroundColor: '#f5f5f5'
-                }
+                color: isLocked ? '#ccc' : '#666'
               }}
               title="缩小"
             />
@@ -618,10 +612,7 @@ const CanvasContent: React.FC = () => {
                 borderRadius: 6,
                 padding: 0,
                 margin: 0,
-                color: isLocked ? '#ccc' : '#666',
-                '&:hover': {
-                  backgroundColor: '#f5f5f5'
-                }
+                color: isLocked ? '#ccc' : '#666'
               }}
               title="重置缩放"
             />
@@ -636,10 +627,7 @@ const CanvasContent: React.FC = () => {
                 borderRadius: 6,
                 padding: 0,
                 margin: 0,
-                color: isLocked ? '#ccc' : '#666',
-                '&:hover': {
-                  backgroundColor: '#f5f5f5'
-                }
+                color: isLocked ? '#ccc' : '#666'
               }}
               title="适应视图"
             />
@@ -656,10 +644,7 @@ const CanvasContent: React.FC = () => {
                 borderRadius: 6,
                 padding: 0,
                 margin: 0,
-                color: isLocked ? '#ccc' : '#666',
-                '&:hover': {
-                  backgroundColor: '#f5f5f5'
-                }
+                color: isLocked ? '#ccc' : '#666'
               }}
               title="居中"
             />
@@ -675,10 +660,7 @@ const CanvasContent: React.FC = () => {
                 padding: 0,
                 margin: 0,
                 color: isLocked ? '#1890ff' : '#666',
-                backgroundColor: isLocked ? '#e6f7ff' : 'transparent',
-                '&:hover': {
-                  backgroundColor: isLocked ? '#bae7ff' : '#f5f5f5'
-                }
+                backgroundColor: isLocked ? '#e6f7ff' : 'transparent'
               }}
               title={isLocked ? '解锁' : '锁定'}
             />

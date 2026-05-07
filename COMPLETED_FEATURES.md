@@ -207,6 +207,7 @@
 | 196 | TypeConvert rowKey修复 | 前端 Bug修复 | 2026-05-07 | Assistant | 修复TypeConvertModal.tsx中Table组件rowKey使用index参数的废弃警告：改为使用record.source作为唯一key |
 | 197 | 后端路由前缀修复 | 后端 Bug修复 | 2026-05-07 | Assistant | 修复typeConvertRoutes.ts和llmRoutes.ts中路由路径重复/api前缀的问题：移除路由文件中的/api前缀，保留server.ts中的统一挂载，成功解决API返回HTML 404错误的问题，/api/type-convert/mappings和/api/llm/config API现在可正常工作 |
 | 198 | 项目启动全流程验证（对比分支） | 项目启动 | 2026-05-07 | Assistant | 完整执行查文档→校前置→开发编码→自测校验→分类归档流程：1.查阅README/DESIGN_DOC等文档；2.校验依赖安装；3.初始化Prisma数据库；4.启动后端服务(http://0.0.0.0:3001)；5.启动前端服务(http://localhost:3002)；6.自测通过：健康检查API✓、项目列表API✓、连接列表API✓、前端页面HTTP 200✓；零崩溃、零报错、项目完整正常运行 |
+| 199 | TypeScript编译错误修复 | 前端 Bug修复 | 2026-05-07 | Assistant | 修复前端编译的6个TypeScript错误：1.App.tsx移除未使用的columns变量；2.Canvas.tsx移除6处'&:hover'无效CSS属性；3.DatabaseImportModal.tsx修复Project类型导入路径；4.TypeConvertModal.tsx修复response.data.result类型访问错误；前端构建成功✓ |
 
 ---
 

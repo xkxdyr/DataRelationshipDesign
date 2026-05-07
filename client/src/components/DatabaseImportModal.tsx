@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { Modal, message, Select } from 'antd'
 import { DatabaseOutlined, PlusOutlined } from '@ant-design/icons'
-import { connectionApi, reverseEngineeringApi, TableInfo, ConnectionConfig, Project } from '../services/api'
+import { connectionApi, reverseEngineeringApi, TableInfo, ConnectionConfig } from '../services/api'
+import { Project } from '../types'
 import { DatabaseImportForm, ConnectionFormData } from './DatabaseImportForm'
 
 interface DatabaseImportModalProps {

@@ -36,10 +36,10 @@ export const TypeConvertModal: React.FC<TypeConvertModalProps> = ({ visible, onC
   const loadMappings = async () => {
     try {
       const response = await typeConvertApi.getMappings(sourceDb, targetDb)
-      if (response.success && response.result) {
+      if (response.success && response.data) {
+        setMappings(response.data.mappings)
+      } else if (response.success && response.result) {
         setMappings(response.result.mappings)
-      } else if (response.data && response.data.result) {
-        setMappings(response.data.result.mappings)
       }
     } catch (error) {
       console.error('加载类型映射失败:', error)
