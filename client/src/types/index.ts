@@ -48,6 +48,8 @@ export interface Relationship {
   targetTableId: string
   targetColumnId: string
   relationshipType: string
+  sourceCardinality: '1' | 'N' | '*'
+  targetCardinality: '1' | 'N' | '*'
   onUpdate: string
   onDelete: string
   createdAt: string

@@ -325,6 +325,8 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({ open, onCl
             targetTableId: newTargetTableId,
             targetColumnId: newTargetColumnId,
             relationshipType: relData.relationshipType || 'ONE_TO_MANY',
+            sourceCardinality: (relData as any).sourceCardinality || '1',
+            targetCardinality: (relData as any).targetCardinality || 'N',
             onUpdate: relData.onUpdate || 'CASCADE',
             onDelete: relData.onDelete || 'CASCADE',
             createdAt: new Date().toISOString(),
@@ -338,6 +340,8 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({ open, onCl
             targetTableId: newTargetTableId,
             targetColumnId: newTargetColumnId,
             relationshipType: relData.relationshipType,
+            sourceCardinality: (relData as any).sourceCardinality || '1',
+            targetCardinality: (relData as any).targetCardinality || 'N',
             onUpdate: relData.onUpdate,
             onDelete: relData.onDelete
           })

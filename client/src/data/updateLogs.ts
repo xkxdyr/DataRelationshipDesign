@@ -13,6 +13,32 @@ export interface UpdateChange {
 export const updateLogs: UpdateLog[] = [
   {
     date: '2026-05-07',
+    version: 'v1.1.4',
+    changes: [
+      {
+        type: 'feature',
+        title: '关系基数设置功能',
+        description: '关系编辑器新增源表和目标表基数设置选项，支持 1、N、* 三种基数类型'
+      },
+      {
+        type: 'feature',
+        title: '基数信息展示',
+        description: '关系列表显示基数信息（格式：1→N），Canvas 连线标签显示基数标识'
+      },
+      {
+        type: 'feature',
+        title: '后端基数字段支持',
+        description: '数据库 Relationship 表新增 sourceCardinality 和 targetCardinality 字段'
+      },
+      {
+        type: 'ui',
+        title: '基数设置工具提示',
+        description: '基数选择器添加 InfoCircleOutlined 图标提示，说明基数含义'
+      }
+    ]
+  },
+  {
+    date: '2026-05-07',
     version: 'v1.1.3',
     changes: [
       {

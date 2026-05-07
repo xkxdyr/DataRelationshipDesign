@@ -155,6 +155,8 @@ const RelationshipEditor: React.FC<RelationshipEditorProps> = ({
         targetTableId: values.targetTable,
         targetColumnId: values.targetColumn,
         relationshipType: values.relationshipType || 'one-to-many',
+        sourceCardinality: values.sourceCardinality || '1',
+        targetCardinality: values.targetCardinality || 'N',
         onUpdate: values.onUpdate || 'CASCADE',
         onDelete: values.onDelete || 'RESTRICT'
       });
@@ -183,13 +185,20 @@ const RelationshipEditor: React.FC<RelationshipEditorProps> = ({
       title: '关系',
       dataIndex: 'relationshipType',
       key: 'relationshipType',
-      render: (type: string) => {
+      render: (type: string, record: Relationship) => {
         const map: Record<string, string> = {
           'one-to-one': '一对一',
           'one-to-many': '一对多',
           'many-to-many': '多对多'
         };
-        return <Tag color="green">{map[type] || type}</Tag>;
+        const sourceCard = record.sourceCardinality || '1';
+        const targetCard = record.targetCardinality || 'N';
+        return (
+          <Space>
+            <Tag color="purple">{map[type] || type}</Tag>
+            <Text type="secondary">({sourceCard}→{targetCard})</Text>
+          </Space>
+        );
       },
     },
     {
@@ -250,6 +259,8 @@ const RelationshipEditor: React.FC<RelationshipEditorProps> = ({
           <Form.Item name="targetTable"><Input /></Form.Item>
           <Form.Item name="targetColumn"><Input /></Form.Item>
           <Form.Item name="relationshipType"><Input /></Form.Item>
+          <Form.Item name="sourceCardinality"><Input /></Form.Item>
+          <Form.Item name="targetCardinality"><Input /></Form.Item>
           <Form.Item name="onUpdate"><Input /></Form.Item>
           <Form.Item name="onDelete"><Input /></Form.Item>
         </Form>
@@ -421,6 +432,46 @@ const RelationshipEditor: React.FC<RelationshipEditorProps> = ({
                 <Option value="many-to-many">多对多</Option>
               </Select>
             </Form.Item>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <Form.Item
+                label={
+                  <Tooltip title="源表基数：源表中每个记录对应目标表记录的数量">
+                    <Space>
+                      源表基数
+                      <InfoCircleOutlined style={{ fontSize: 12, color: '#1890ff' }} />
+                    </Space>
+                  </Tooltip>
+                }
+                name="sourceCardinality"
+                initialValue="1"
+              >
+                <Select>
+                  <Option value="1">1 (唯一)</Option>
+                  <Option value="N">N (多个)</Option>
+                  <Option value="*">* (任意)</Option>
+                </Select>
+              </Form.Item>
+
+              <Form.Item
+                label={
+                  <Tooltip title="目标表基数：目标表中每个记录对应源表记录的数量">
+                    <Space>
+                      目标表基数
+                      <InfoCircleOutlined style={{ fontSize: 12, color: '#1890ff' }} />
+                    </Space>
+                  </Tooltip>
+                }
+                name="targetCardinality"
+                initialValue="N"
+              >
+                <Select>
+                  <Option value="1">1 (唯一)</Option>
+                  <Option value="N">N (多个)</Option>
+                  <Option value="*">* (任意)</Option>
+                </Select>
+              </Form.Item>
+            </div>
 
             <Form.Item
               label={

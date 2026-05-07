@@ -119,21 +119,29 @@ const CanvasContent: React.FC = () => {
       const sourceTable = tables.find(t => t.id === rel.sourceTableId)
       const targetTable = tables.find(t => t.id === rel.targetTableId)
 
-      // 如果表都存在，生成边
       if (sourceTable && targetTable) {
         const sourceColumn = sourceTable.columns?.find(c => c.id === rel.sourceColumnId)
         const targetColumn = targetTable.columns?.find(c => c.id === rel.targetColumnId)
-        const label = `${sourceTable.name}.${sourceColumn?.name || ''} → ${targetTable.name}.${targetColumn?.name || ''}`
+        const sourceCard = rel.sourceCardinality || '1'
+        const targetCard = rel.targetCardinality || 'N'
+        const cardinalityLabel = showEdgeLabels ? `${sourceCard} → ${targetCard}` : undefined
+        const fieldLabel = `${sourceTable.name}.${sourceColumn?.name || ''} → ${targetTable.name}.${targetColumn?.name || ''}`
+        const label = showEdgeLabels ? `${cardinalityLabel}\n${fieldLabel}` : undefined
 
         return {
           id: rel.id,
           source: rel.sourceTableId,
           target: rel.targetTableId,
           animated: true,
-          label: showEdgeLabels ? label : undefined,
+          label,
           labelStyle: {
-            fontSize: 11,
-            fill: '#666'
+            fontSize: 10,
+            fill: '#666',
+            whiteSpace: 'pre'
+          },
+          labelBgStyle: {
+            fill: 'rgba(255, 255, 255, 0.9)',
+            rx: 4
           },
           style: {
             stroke: '#1890ff',

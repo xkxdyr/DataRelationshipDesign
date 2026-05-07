@@ -1309,6 +1309,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
           targetTableId: data.targetTableId || '',
           targetColumnId: data.targetColumnId || '',
           relationshipType: data.relationshipType || 'one-to-one',
+          sourceCardinality: data.sourceCardinality || '1',
+          targetCardinality: data.targetCardinality || 'N',
           onUpdate: data.onUpdate || 'NO ACTION',
           onDelete: data.onDelete || 'NO ACTION',
           createdAt: new Date().toISOString(),

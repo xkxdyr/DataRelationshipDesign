@@ -8,6 +8,8 @@ export interface CreateRelationshipDTO {
   targetTableId: string
   targetColumnId: string
   relationshipType?: string
+  sourceCardinality?: string
+  targetCardinality?: string
   onUpdate?: string
   onDelete?: string
   name?: string
@@ -16,6 +18,8 @@ export interface CreateRelationshipDTO {
 export interface UpdateRelationshipDTO {
   name?: string
   relationshipType?: string
+  sourceCardinality?: string
+  targetCardinality?: string
   onUpdate?: string
   onDelete?: string
 }
@@ -43,6 +47,8 @@ export const relationshipService = {
         targetTableId: data.targetTableId,
         targetColumnId: data.targetColumnId,
         relationshipType: data.relationshipType || 'ONE_TO_MANY',
+        sourceCardinality: data.sourceCardinality || '1',
+        targetCardinality: data.targetCardinality || 'N',
         onUpdate: data.onUpdate || 'CASCADE',
         onDelete: data.onDelete || 'CASCADE',
         name: data.name
@@ -56,6 +62,8 @@ export const relationshipService = {
       data: {
         name: data.name,
         relationshipType: data.relationshipType,
+        sourceCardinality: data.sourceCardinality,
+        targetCardinality: data.targetCardinality,
         onUpdate: data.onUpdate,
         onDelete: data.onDelete
       }

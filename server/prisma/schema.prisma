@@ -75,6 +75,8 @@ model Relationship {
   targetTableId   String
   targetColumnId  String
   relationshipType String   @default("ONE_TO_MANY")
+  sourceCardinality String @default("1")
+  targetCardinality String @default("N")
   onUpdate        String   @default("CASCADE")
   onDelete        String   @default("CASCADE")
   createdAt       DateTime @default(now())
