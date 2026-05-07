@@ -13,6 +13,32 @@ export interface UpdateChange {
 export const updateLogs: UpdateLog[] = [
   {
     date: '2026-05-07',
+    version: 'v1.1.3',
+    changes: [
+      {
+        type: 'feature',
+        title: '画布搜索定位功能',
+        description: '实现 Ctrl+F 搜索表名功能，支持搜索表名和注释，自动定位并高亮显示搜索结果'
+      },
+      {
+        type: 'feature',
+        title: '搜索历史记录',
+        description: '保存最近搜索的10个表名到 localStorage，支持快速选择历史记录'
+      },
+      {
+        type: 'feature',
+        title: '节点高亮定位',
+        description: '搜索命中的表节点显示金色高亮边框和平滑阴影效果，支持 Esc 键清除高亮'
+      },
+      {
+        type: 'ui',
+        title: '搜索结果下拉面板',
+        description: '搜索时显示匹配结果下拉列表，悬停高亮效果，显示表名和注释信息'
+      }
+    ]
+  },
+  {
+    date: '2026-05-07',
     version: 'v1.1.2',
     changes: [
       {

@@ -8,10 +8,11 @@ interface TableNodeData {
   table: Table
   onEdit: (tableId: string | null) => void
   onDelete: (tableId: string) => void
+  highlighted?: boolean
 }
 
 const TableNode: React.FC<NodeProps<TableNodeData>> = ({ data, selected }) => {
-  const { table, onEdit, onDelete } = data
+  const { table, onEdit, onDelete, highlighted } = data
   const compactMode = useAppStore(state => state.compactMode)
   const themeColor = useAppStore(state => state.themeColor)
 
@@ -26,11 +27,12 @@ const TableNode: React.FC<NodeProps<TableNodeData>> = ({ data, selected }) => {
 
   return (
     <div style={{
-      border: selected ? `2px solid ${themeColor}` : '1px solid #ddd',
+      border: selected ? `2px solid ${themeColor}` : highlighted ? '2px solid #faad14' : '1px solid #ddd',
       borderRadius: '4px',
       background: '#fff',
       width: nodeWidth,
-      boxShadow: selected ? `0 2px 8px rgba(24,144,255,0.2)` : '0 2px 4px rgba(0,0,0,0.1)'
+      boxShadow: selected ? `0 2px 8px rgba(24,144,255,0.2)` : highlighted ? '0 4px 16px rgba(250,173,20,0.4)' : '0 2px 4px rgba(0,0,0,0.1)',
+      transition: 'all 0.3s ease'
     }}>
       <Handle type="target" position={Position.Top} />
 

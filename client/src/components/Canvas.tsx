@@ -16,8 +16,8 @@ import { Table, Relationship } from '../types'
 import TableNode from './TableNode'
 import RelationshipEditor from './RelationshipEditor'
 import { useAppStore } from '../stores/appStore'
-import { Button, Space, Dropdown, message, Modal, Form, Card, Radio, Slider, Select, Input, Popconfirm } from 'antd'
-import { PlusOutlined, CodeOutlined, LinkOutlined, ExportOutlined, PictureOutlined, FileImageOutlined, SettingOutlined, ZoomInOutlined, ZoomOutOutlined, RotateLeftOutlined, CompressOutlined, AimOutlined, LockOutlined, DeleteOutlined, CheckSquareOutlined, BorderOutlined } from '@ant-design/icons'
+import { Button, Space, Dropdown, message, Modal, Form, Card, Radio, Slider, Select, Input, Popconfirm, AutoComplete } from 'antd'
+import { PlusOutlined, CodeOutlined, LinkOutlined, ExportOutlined, PictureOutlined, FileImageOutlined, SettingOutlined, ZoomInOutlined, ZoomOutOutlined, RotateLeftOutlined, CompressOutlined, AimOutlined, LockOutlined, DeleteOutlined, CheckSquareOutlined, BorderOutlined, SearchOutlined, CloseCircleFilled } from '@ant-design/icons'
 import CreateTableModal from './CreateTableModal'
 import { projectApi } from '../services/api'
 
@@ -59,6 +59,17 @@ const CanvasContent: React.FC = () => {
   const [layoutOptions, setLayoutOptions] = useState<AutoLayoutOptions>(defaultLayoutOptions)
   const [autoLayoutForm] = Form.useForm()
   const [isLocked, setIsLocked] = useState(false)
+  const [searchValue, setSearchValue] = useState('')
+  const [searchResults, setSearchResults] = useState<Table[]>([])
+  const [highlightedTableId, setHighlightedTableId] = useState<string | null>(null)
+  const [searchHistory, setSearchHistory] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('canvasSearchHistory')
+      return saved ? JSON.parse(saved) : []
+    } catch {
+      return []
+    }
+  })
 
   useEffect(() => {
     if (currentProject) {
@@ -95,11 +106,12 @@ const CanvasContent: React.FC = () => {
       data: {
         table,
         onEdit: selectTable,
-        onDelete: deleteTable
+        onDelete: deleteTable,
+        highlighted: highlightedTableId === table.id
       },
       selected: selectedTableIds.includes(table.id)
     }))
-  }, [tables, selectedTableIds, selectTable, deleteTable])
+  }, [tables, selectedTableIds, selectTable, deleteTable, highlightedTableId])
 
   const edges: Edge[] = useMemo(() => {
     if (!relationships || !Array.isArray(relationships)) return []
@@ -190,6 +202,98 @@ const CanvasContent: React.FC = () => {
     clearSelection()
     message.info('已取消选择')
   }
+
+  const handleSearch = (value: string) => {
+    setSearchValue(value)
+    if (!value.trim()) {
+      setSearchResults([])
+      setHighlightedTableId(null)
+      return
+    }
+    const results = tables.filter(table => 
+      table.name.toLowerCase().includes(value.toLowerCase()) ||
+      (table.comment && table.comment.toLowerCase().includes(value.toLowerCase()))
+    )
+    setSearchResults(results)
+  }
+
+  const handleSearchSelect = (value: string) => {
+    const table = tables.find(t => t.id === value || t.name === value)
+    if (table) {
+      setHighlightedTableId(table.id)
+      selectTable(table.id)
+      clearSelection()
+      
+      const node = nodeState.find(n => n.id === table.id)
+      if (node) {
+        reactFlow.setCenter(node.position.x + 140, node.position.y + 60, {
+          duration: 500
+        })
+      }
+      
+      if (!searchHistory.includes(table.name)) {
+        const newHistory = [table.name, ...searchHistory.filter(h => h !== table.name)].slice(0, 10)
+        setSearchHistory(newHistory)
+        localStorage.setItem('canvasSearchHistory', JSON.stringify(newHistory))
+      }
+      
+      setSearchResults([])
+      setSearchValue('')
+    }
+  }
+
+  const handleClearSearch = () => {
+    setSearchValue('')
+    setSearchResults([])
+    setHighlightedTableId(null)
+  }
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault()
+        const searchInput = document.querySelector('.canvas-search-input') as HTMLInputElement
+        if (searchInput) {
+          searchInput.focus()
+          searchInput.select()
+        }
+      }
+      if (e.key === 'Escape' && highlightedTableId) {
+        handleClearSearch()
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [highlightedTableId])
+
+  const searchOptions = useMemo(() => {
+    const tableOptions = tables.map(table => ({
+      value: table.id,
+      label: (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>
+            <strong>{table.name}</strong>
+            {table.comment && <span style={{ color: '#888', marginLeft: 8 }}>{table.comment}</span>}
+          </span>
+        </div>
+      )
+    }))
+    
+    const historyOptions = searchHistory
+      .filter(h => !searchValue || h.toLowerCase().includes(searchValue.toLowerCase()))
+      .slice(0, 3)
+      .map(h => ({
+        value: `history:${h}`,
+        label: (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ color: '#888', fontSize: 12 }}>历史</span>
+            <span>{h}</span>
+          </div>
+        )
+      }))
+    
+    return [...historyOptions, ...tableOptions]
+  }, [tables, searchValue, searchHistory])
 
   const onMoveEnd = useCallback((event: any, viewport: any) => {
     if (viewport.zoom !== canvasZoom) {
@@ -573,6 +677,77 @@ const CanvasContent: React.FC = () => {
               导出DDL
             </Button>
           </Space>
+        </div>
+
+        <div style={{ 
+          position: 'absolute', 
+          top: 16, 
+          right: 16, 
+          zIndex: 10,
+          width: 280
+        }}>
+          <AutoComplete
+            value={searchValue}
+            options={searchOptions}
+            onSearch={handleSearch}
+            onSelect={handleSearchSelect}
+            onClear={handleClearSearch}
+            placeholder="搜索表名 (Ctrl+F)"
+            allowClear
+            style={{ width: '100%' }}
+          >
+            <Input 
+              className="canvas-search-input"
+              prefix={<SearchOutlined style={{ color: '#999' }} />}
+              suffix={
+                highlightedTableId ? (
+                  <CloseCircleFilled 
+                    style={{ color: '#1890ff', cursor: 'pointer' }} 
+                    onClick={handleClearSearch}
+                  />
+                ) : null
+              }
+            />
+          </AutoComplete>
+          {searchResults.length > 0 && (
+            <div style={{
+              position: 'absolute',
+              top: 36,
+              left: 0,
+              right: 0,
+              background: 'white',
+              borderRadius: 4,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              maxHeight: 200,
+              overflowY: 'auto',
+              zIndex: 1000
+            }}>
+              <div style={{ padding: '8px 12px', color: '#999', fontSize: 12, borderBottom: '1px solid #f0f0f0' }}>
+                找到 {searchResults.length} 个结果
+              </div>
+              {searchResults.map(table => (
+                <div
+                  key={table.id}
+                  style={{
+                    padding: '8px 12px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    transition: 'background 0.2s'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#f5f5f5'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  onClick={() => handleSearchSelect(table.id)}
+                >
+                  <span style={{ fontWeight: 500 }}>{table.name}</span>
+                  {table.comment && (
+                    <span style={{ color: '#888', fontSize: 12 }}>{table.comment}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {selectedTableIds.length > 0 && (

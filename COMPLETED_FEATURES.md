@@ -217,6 +217,7 @@
 | 206 | 循环依赖检测功能 | 关系模块 | 2026-05-07 | Assistant | 实现关系设计循环依赖检测：1.在appStore中添加detectCycle函数，使用DFS算法检测图中环；2.在createRelationship中添加循环依赖校验，检测到循环时抛出错误；3.在RelationshipEditor中添加willCauseCycle计算属性，实时检测潜在循环；4.添加循环依赖警告Alert组件，显示会导致循环的关系路径；5.使用表名替代ID显示，提高可读性；6.前端构建成功✓ |
 | 207 | 表/字段注释管理优化 | 画布/编辑器 | 2026-05-07 | Assistant | Canvas节点显示表注释，字段注释图标提示，表编辑器注释快速编辑 |
 | 208 | Canvas useForm警告修复 | 前端 Bug修复 | 2026-05-07 | Assistant | 修复Canvas.tsx中autoLayoutForm的useForm未连接警告 |
+| 209 | 画布搜索定位功能 | 画布模块 | 2026-05-07 | Assistant | 实现 Ctrl+F 搜索表名功能，支持搜索表名和注释，自动定位并高亮显示搜索结果，保存搜索历史 |
 
 ---
 
