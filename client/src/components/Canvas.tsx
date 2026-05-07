@@ -18,7 +18,7 @@ import RelationshipEditor from './RelationshipEditor'
 import { useAppStore } from '../stores/appStore'
 import { Button, Space, Dropdown, message, Modal, Form, Card, Radio, Slider, Select, Input, Popconfirm, AutoComplete, Tooltip, Menu } from 'antd'
 const { SubMenu } = Menu
-import { PlusOutlined, MinusOutlined, CodeOutlined, LinkOutlined, ExportOutlined, PictureOutlined, FileImageOutlined, SettingOutlined, ZoomInOutlined, ZoomOutOutlined, RotateLeftOutlined, CompressOutlined, AimOutlined, LockOutlined, DeleteOutlined, CheckSquareOutlined, BorderOutlined, SearchOutlined, CloseCircleFilled, CopyOutlined, AlignLeftOutlined, AlignRightOutlined, AlignCenterOutlined, VerticalAlignTopOutlined, VerticalAlignBottomOutlined, UndoOutlined, RedoOutlined, FileTextOutlined, ColumnWidthOutlined, FullscreenOutlined, FullscreenExitOutlined } from '@ant-design/icons'
+import { PlusOutlined, MinusOutlined, CodeOutlined, LinkOutlined, ExportOutlined, PictureOutlined, FileImageOutlined, SettingOutlined, ZoomInOutlined, ZoomOutOutlined, RotateLeftOutlined, CompressOutlined, AimOutlined, LockOutlined, DeleteOutlined, CheckSquareOutlined, BorderOutlined, SearchOutlined, CloseCircleFilled, CopyOutlined, AlignLeftOutlined, AlignRightOutlined, AlignCenterOutlined, VerticalAlignTopOutlined, VerticalAlignBottomOutlined, UndoOutlined, RedoOutlined, FileTextOutlined, ColumnWidthOutlined, FullscreenOutlined, FullscreenExitOutlined, QuestionCircleOutlined } from '@ant-design/icons'
 import CreateTableModal from './CreateTableModal'
 import { projectApi } from '../services/api'
 
@@ -98,6 +98,7 @@ const CanvasContent: React.FC = () => {
   })
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; tableId?: string } | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false)
 
   useEffect(() => {
     if (currentProject) {
@@ -396,6 +397,9 @@ const CanvasContent: React.FC = () => {
           selectTable(null)
           clearSelection()
         }
+      }
+      if (e.key === '?' && !e.ctrlKey && !e.metaKey) {
+        setShowShortcutsModal(true)
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
         e.preventDefault()
@@ -984,6 +988,19 @@ const CanvasContent: React.FC = () => {
           />
         </Tooltip>
 
+        <Tooltip title="快捷键帮助 (?)">
+          <Button
+            icon={<QuestionCircleOutlined />}
+            onClick={() => setShowShortcutsModal(true)}
+            style={{
+              position: 'absolute',
+              top: 16,
+              left: 56,
+              zIndex: 10
+            }}
+          />
+        </Tooltip>
+
         <div style={{ 
           position: 'absolute', 
           top: 16, 
@@ -1516,9 +1533,75 @@ const CanvasContent: React.FC = () => {
           </div>
         </Form>
       </Modal>
+
+      <Modal
+        title={
+          <Space>
+            <QuestionCircleOutlined />
+            <span>键盘快捷键</span>
+          </Space>
+        }
+        open={showShortcutsModal}
+        onCancel={() => setShowShortcutsModal(false)}
+        footer={null}
+        width={480}
+      >
+        <div style={{ padding: '8px 0' }}>
+          <div style={{ marginBottom: 16, color: '#666', fontSize: 13 }}>
+            按 <kbd style={{ background: '#f5f5f5', padding: '2px 6px', borderRadius: 4, border: '1px solid #d9d9d9', fontFamily: 'monospace' }}>?</kbd> 可随时打开此面板
+          </div>
+          
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontWeight: 500, marginBottom: 8, color: '#333' }}>基础操作</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <ShortcutItem keys="Ctrl + F" description="搜索表" />
+              <ShortcutItem keys="Ctrl + S" description="保存" />
+              <ShortcutItem keys="Ctrl + T" description="新建表" />
+              <ShortcutItem keys="Ctrl + ," description="设置" />
+            </div>
+          </div>
+          
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontWeight: 500, marginBottom: 8, color: '#333' }}>编辑操作</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <ShortcutItem keys="Ctrl + C" description="复制选中表" />
+              <ShortcutItem keys="Ctrl + V" description="粘贴表" />
+              <ShortcutItem keys="Ctrl + D" description="快速复制" />
+              <ShortcutItem keys="Delete" description="删除选中" />
+            </div>
+          </div>
+          
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontWeight: 500, marginBottom: 8, color: '#333' }}>选择操作</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <ShortcutItem keys="Ctrl + A" description="全选" />
+              <ShortcutItem keys="Ctrl + Z" description="撤销" />
+              <ShortcutItem keys="Ctrl + Y" description="重做" />
+              <ShortcutItem keys="Escape" description="取消选择" />
+            </div>
+          </div>
+          
+          <div style={{ marginBottom: 8 }}>
+            <div style={{ fontWeight: 500, marginBottom: 8, color: '#333' }}>画布操作</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <ShortcutItem keys="+ 或 =" description="放大" />
+              <ShortcutItem keys="-" description="缩小" />
+              <ShortcutItem keys="Ctrl + 0" description="重置缩放" />
+              <ShortcutItem keys="F" description="全屏模式" />
+            </div>
+          </div>
+        </div>
+      </Modal>
     </>
   )
 }
+
+const ShortcutItem: React.FC<{ keys: string; description: string }> = ({ keys, description }) => (
+  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', background: '#fafafa', borderRadius: 4 }}>
+    <span style={{ color: '#666', fontSize: 12 }}>{description}</span>
+    <kbd style={{ background: '#fff', padding: '2px 8px', borderRadius: 4, border: '1px solid #d9d9d9', fontSize: 12, fontFamily: 'monospace', color: '#333' }}>{keys}</kbd>
+  </div>
+)
 
 const Canvas: React.FC = () => (
   <ReactFlowProvider>

@@ -13,6 +13,17 @@ export interface UpdateChange {
 export const updateLogs: UpdateLog[] = [
   {
     date: '2026-05-07',
+    version: 'v1.3.3',
+    changes: [
+      {
+        type: 'feature',
+        title: '键盘快捷键帮助面板',
+        description: '按 ? 键打开快捷键帮助面板，显示所有可用键盘快捷键，包括基础操作、编辑操作、选择操作、画布操作的快捷方式'
+      }
+    ]
+  },
+  {
+    date: '2026-05-07',
     version: 'v1.3.2',
     changes: [
       {
