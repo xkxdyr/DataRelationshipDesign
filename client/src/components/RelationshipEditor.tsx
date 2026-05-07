@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Modal,
   Form,
@@ -10,14 +10,16 @@ import {
   Popconfirm,
   Input,
   Typography,
-  Tooltip
+  Tooltip,
+  Alert
 } from 'antd';
 import {
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
   LinkOutlined,
-  InfoCircleOutlined
+  InfoCircleOutlined,
+  WarningOutlined
 } from '@ant-design/icons';
 import { Table as TableType, Relationship, Column } from '../types';
 import { useAppStore } from '../stores/appStore';
@@ -78,6 +80,53 @@ const RelationshipEditor: React.FC<RelationshipEditorProps> = ({
       loadRelationships(currentProject.id);
     }
   }, [visible, currentProject]);
+
+  const willCauseCycle = useMemo(() => {
+    if (!sourceTableId || !targetTableId || sourceTableId === targetTableId) {
+      return null;
+    }
+    const tempRelationships = [
+      ...relationships,
+      {
+        id: 'temp',
+        sourceTableId,
+        targetTableId
+      } as Relationship
+    ];
+    const adjacency = new Map<string, string[]>();
+    for (const rel of relationships) {
+      if (!adjacency.has(rel.sourceTableId)) {
+        adjacency.set(rel.sourceTableId, []);
+      }
+      adjacency.get(rel.sourceTableId)!.push(rel.targetTableId);
+    }
+    if (!adjacency.has(sourceTableId)) {
+      adjacency.set(sourceTableId, []);
+    }
+    adjacency.get(sourceTableId)!.push(targetTableId);
+    const visited = new Set<string>();
+    const path: string[] = [];
+    function dfs(tableId: string): string[] | null {
+      if (tableId === sourceTableId) {
+        return [...path, sourceTableId];
+      }
+      if (visited.has(tableId)) {
+        return null;
+      }
+      visited.add(tableId);
+      path.push(tableId);
+      const neighbors = adjacency.get(tableId) || [];
+      for (const neighbor of neighbors) {
+        const result = dfs(neighbor);
+        if (result) {
+          return result;
+        }
+      }
+      path.pop();
+      return null;
+    }
+    return dfs(targetTableId);
+  }, [sourceTableId, targetTableId, relationships]);
 
   const getTableName = (tableId: string) => {
     return tables.find(t => t.id === tableId)?.name || 'Unknown';
@@ -309,6 +358,34 @@ const RelationshipEditor: React.FC<RelationshipEditorProps> = ({
                 ))}
               </Select>
             </Form.Item>
+
+            {willCauseCycle && (
+              <Alert
+                type="warning"
+                showIcon
+                icon={<WarningOutlined />}
+                message="循环依赖警告"
+                description={
+                  <div>
+                    <p style={{ margin: 0 }}>
+                      此关系会导致循环依赖：
+                      <br />
+                      {willCauseCycle.map((id, index) => (
+                        <span key={id}>
+                          {getTableName(id)}
+                          {index < willCauseCycle.length - 1 && ' → '}
+                        </span>
+                      ))}
+                      <br />
+                      <span style={{ fontSize: 12, color: '#999' }}>
+                        创建此关系可能会导致数据库操作问题。
+                      </span>
+                    </p>
+                  </div>
+                }
+                style={{ marginBottom: 16 }}
+              />
+            )}
 
             <Form.Item
               label="目标字段"

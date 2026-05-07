@@ -4,6 +4,52 @@ import { projectApi, tableApi, columnApi, relationshipApi, indexApi, versionApi 
 import { localStorageService, LocalProject, LocalTable, LocalColumn, LocalRelationship, LocalIndex, LocalVersion } from '../services/localStorageService'
 import { ThemeMode } from '../theme/types'
 
+function detectCycle(
+  existingRelationships: Relationship[],
+  sourceTableId: string,
+  targetTableId: string
+): string[] | null {
+  const adjacency = new Map<string, string[]>()
+  for (const rel of existingRelationships) {
+    if (!adjacency.has(rel.sourceTableId)) {
+      adjacency.set(rel.sourceTableId, [])
+    }
+    adjacency.get(rel.sourceTableId)!.push(rel.targetTableId)
+  }
+
+  const visited = new Set<string>()
+  const path: string[] = []
+
+  function dfs(tableId: string): string[] | null {
+    if (tableId === sourceTableId) {
+      return [...path, sourceTableId]
+    }
+    if (visited.has(tableId)) {
+      return null
+    }
+
+    visited.add(tableId)
+    path.push(tableId)
+
+    const neighbors = adjacency.get(tableId) || []
+    for (const neighbor of neighbors) {
+      const result = dfs(neighbor)
+      if (result) {
+        return result
+      }
+    }
+
+    path.pop()
+    return null
+  }
+
+  return dfs(targetTableId)
+}
+
+function getTableNameById(tableId: string, tables: Table[]): string {
+  return tables.find(t => t.id === tableId)?.name || tableId
+}
+
 interface AppState {
   projects: Project[]
   currentProject: Project | null
@@ -1235,6 +1281,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   createRelationship: async (projectId: string, data: Partial<Relationship>) => {
+    const sourceTableId = data.sourceTableId
+    const targetTableId = data.targetTableId
+    
+    if (sourceTableId && targetTableId) {
+      const cycle = detectCycle(get().relationships, sourceTableId, targetTableId)
+      if (cycle) {
+        throw new Error(`创建关系会导致循环依赖: ${cycle.join(' → ')} → ${targetTableId}`)
+      }
+    }
+
     set({ loading: true })
     try {
       if (get().isOnline) {

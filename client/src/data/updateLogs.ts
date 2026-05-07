@@ -13,6 +13,22 @@ export interface UpdateChange {
 export const updateLogs: UpdateLog[] = [
   {
     date: '2026-05-07',
+    version: 'v1.1.1',
+    changes: [
+      {
+        type: 'feature',
+        title: '循环依赖检测功能',
+        description: '设计文档3.2.3要求：在创建关系时自动检测循环依赖，使用DFS算法检测图中的环，支持一对一、一对多、多对多关系类型'
+      },
+      {
+        type: 'improvement',
+        title: '关系编辑器增强',
+        description: '添加循环依赖预览警告，实时检测并显示会导致循环的关系路径，提供友好的警告提示'
+      }
+    ]
+  },
+  {
+    date: '2026-05-07',
     version: 'v1.1.0',
     changes: [
       {

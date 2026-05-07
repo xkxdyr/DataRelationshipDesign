@@ -214,6 +214,7 @@
 | 203 | 设置更新日志功能 | UI/设置 | 2026-05-07 | Assistant | 在设置中添加更新日志显示：1.创建updateLogs.ts数据文件，记录所有版本更新记录；2.支持按日期和版本号展示；3.分类显示：新功能(绿色)、改进(蓝色)、Bug修复(红色)、安全更新(紫色)、界面更新(橙色)；4.时间线样式展示，清晰展示更新时间线；5.前端构建成功✓ |
 | 204 | 多选和批量操作功能 | 画布模块 | 2026-05-07 | Assistant | 实现Canvas模块多选功能：1.添加selectedTableIds状态和相关操作方法(selectTables/addToSelection/removeFromSelection/clearSelection/deleteSelectedTables)；2.支持Ctrl/Cmd+点击多选表节点；3.支持框选多表操作；4.添加批量删除选中表功能(带确认弹窗)；5.添加全选和取消选择快捷按钮；6.优化节点选择逻辑(selected改为selectedTableIds.includes判断)；7.添加选择变化回调(onSelectionChange)；8.前端构建成功✓ |
 | 205 | 网格对齐和辅助线功能 | 画布模块 | 2026-05-07 | Assistant | 实现画布网格对齐功能：1.添加snapToGrid/gridSize/showGuides状态到appStore；2.设置面板中添加网格对齐配置选项；3.支持启用/禁用网格对齐开关；4.支持启用/禁用辅助线显示；5.网格大小可调节(10-50px)；6.使用ReactFlow Background组件显示网格；7.设置重置时恢复默认网格设置；8.前端构建成功✓ |
+| 206 | 循环依赖检测功能 | 关系模块 | 2026-05-07 | Assistant | 实现关系设计循环依赖检测：1.在appStore中添加detectCycle函数，使用DFS算法检测图中环；2.在createRelationship中添加循环依赖校验，检测到循环时抛出错误；3.在RelationshipEditor中添加willCauseCycle计算属性，实时检测潜在循环；4.添加循环依赖警告Alert组件，显示会导致循环的关系路径；5.使用表名替代ID显示，提高可读性；6.前端构建成功✓ |
 
 ---
 
