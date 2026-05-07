@@ -17,6 +17,11 @@ export const updateLogs: UpdateLog[] = [
     changes: [
       {
         type: 'feature',
+        title: 'Canvas右键上下文菜单',
+        description: '在画布空白处右键点击显示上下文菜单，提供新建表、适应视图、全选、取消选择、删除选中等功能'
+      },
+      {
+        type: 'feature',
         title: '自动适应视图功能',
         description: '切换项目或表数量变化时自动调整视图，使所有表节点可见，避免表被遮挡'
       },

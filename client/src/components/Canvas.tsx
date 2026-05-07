@@ -70,6 +70,7 @@ const CanvasContent: React.FC = () => {
       return []
     }
   })
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; tableId?: string } | null>(null)
 
   useEffect(() => {
     if (currentProject) {
@@ -99,6 +100,12 @@ const CanvasContent: React.FC = () => {
       setCanvasZoom(2)
     }
   }, [canvasZoom, setCanvasZoom])
+
+  useEffect(() => {
+    const handleClick = () => setContextMenu(null)
+    document.addEventListener('click', handleClick)
+    return () => document.removeEventListener('click', handleClick)
+  }, [])
 
   // 没有选择项目时渲染空内容
   if (!currentProject) {
@@ -683,7 +690,10 @@ const CanvasContent: React.FC = () => {
           <Form.Item name="maxColumns"><Input /></Form.Item>
         </Form>
       </div>
-      <div style={{ height: '100%', width: '100%', position: 'relative' }} ref={reactFlowWrapper}>
+      <div style={{ height: '100%', width: '100%', position: 'relative' }} ref={reactFlowWrapper} onContextMenu={(e) => {
+        e.preventDefault()
+        setContextMenu({ x: e.clientX, y: e.clientY })
+      }}>
         <div style={{ position: 'absolute', top: 16, left: 16, zIndex: 10 }}>
           <Space>
             <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenModal}>
@@ -976,6 +986,82 @@ const CanvasContent: React.FC = () => {
             />
           )}
         </ReactFlow>
+
+        {contextMenu && (
+          <div
+            style={{
+              position: 'absolute',
+              left: contextMenu.x,
+              top: contextMenu.y,
+              zIndex: 1000,
+              background: '#fff',
+              borderRadius: 6,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              padding: '4px 0',
+              minWidth: 160
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13 }}
+              onClick={() => {
+                if (currentProject) {
+                  const rect = reactFlowWrapper.current?.getBoundingClientRect()
+                  if (rect) {
+                    const x = contextMenu.x - rect.left
+                    const y = contextMenu.y - rect.top
+                    createTable(currentProject.id, { name: '新表', positionX: x, positionY: y })
+                  }
+                }
+                setContextMenu(null)
+              }}
+            >
+              新建表
+            </div>
+            <div
+              style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13 }}
+              onClick={() => {
+                reactFlow?.fitView({ padding: 0.2, duration: 300 })
+                setContextMenu(null)
+              }}
+            >
+              适应视图
+            </div>
+            <div style={{ height: 1, background: '#f0f0f0', margin: '4px 0' }} />
+            <div
+              style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13 }}
+              onClick={() => {
+                handleSelectAll()
+                setContextMenu(null)
+              }}
+            >
+              全选 (Ctrl+A)
+            </div>
+            <div
+              style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13 }}
+              onClick={() => {
+                handleClearSelection()
+                setContextMenu(null)
+              }}
+            >
+              取消选择
+            </div>
+            {selectedTableIds.length > 0 && (
+              <>
+                <div style={{ height: 1, background: '#f0f0f0', margin: '4px 0' }} />
+                <div
+                  style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, color: '#ff4d4f' }}
+                  onClick={() => {
+                    handleDeleteSelected()
+                    setContextMenu(null)
+                  }}
+                >
+                  删除选中 ({selectedTableIds.length})
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         <div style={{
           position: 'absolute',
