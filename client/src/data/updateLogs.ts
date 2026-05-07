@@ -13,8 +13,24 @@ export interface UpdateChange {
 export const updateLogs: UpdateLog[] = [
   {
     date: '2026-05-07',
+    version: 'v1.1.9',
+    changes: [
+      {
+        type: 'feature',
+        title: '表节点对齐工具',
+        description: '选中多个表时显示对齐工具按钮，支持左对齐、水平居中、右对齐、顶对齐、底对齐五种对齐方式'
+      }
+    ]
+  },
+  {
+    date: '2026-05-07',
     version: 'v1.1.8',
     changes: [
+      {
+        type: 'feature',
+        title: '表快速复制功能',
+        description: '添加 Ctrl+D 快捷键快速复制选中表，右键菜单新增"快速复制"选项，提升表复制效率'
+      },
       {
         type: 'ui',
         title: '关系线智能高亮显示',

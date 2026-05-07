@@ -17,7 +17,7 @@ import TableNode from './TableNode'
 import RelationshipEditor from './RelationshipEditor'
 import { useAppStore } from '../stores/appStore'
 import { Button, Space, Dropdown, message, Modal, Form, Card, Radio, Slider, Select, Input, Popconfirm, AutoComplete } from 'antd'
-import { PlusOutlined, CodeOutlined, LinkOutlined, ExportOutlined, PictureOutlined, FileImageOutlined, SettingOutlined, ZoomInOutlined, ZoomOutOutlined, RotateLeftOutlined, CompressOutlined, AimOutlined, LockOutlined, DeleteOutlined, CheckSquareOutlined, BorderOutlined, SearchOutlined, CloseCircleFilled } from '@ant-design/icons'
+import { PlusOutlined, CodeOutlined, LinkOutlined, ExportOutlined, PictureOutlined, FileImageOutlined, SettingOutlined, ZoomInOutlined, ZoomOutOutlined, RotateLeftOutlined, CompressOutlined, AimOutlined, LockOutlined, DeleteOutlined, CheckSquareOutlined, BorderOutlined, SearchOutlined, CloseCircleFilled, CopyOutlined, AlignLeftOutlined, AlignRightOutlined, AlignCenterOutlined, VerticalAlignTopOutlined, VerticalAlignBottomOutlined } from '@ant-design/icons'
 import CreateTableModal from './CreateTableModal'
 import { projectApi } from '../services/api'
 
@@ -75,7 +75,7 @@ const MenuDivider = () => (
 )
 
 const CanvasContent: React.FC = () => {
-  const { tables, currentProject, updateTablePosition, selectTable, selectedTableId, selectedTableIds, selectTables, addToSelection, removeFromSelection, clearSelection, deleteSelectedTables, deleteTable, createTable, loadTables, relationships, loadRelationships, canvasZoom, setCanvasZoom, showMiniMap, setShowMiniMap, edgeStyle, showEdgeLabels, updateTable, snapToGrid, gridSize, showGuides, highlightedRelationshipId, hoveredRelationshipId, setHighlightedRelationship, setHoveredRelationship, themeColor } = useAppStore()
+  const { tables, currentProject, updateTablePosition, selectTable, selectedTableId, selectedTableIds, selectTables, addToSelection, removeFromSelection, clearSelection, deleteSelectedTables, deleteTable, createTable, loadTables, relationships, loadRelationships, canvasZoom, setCanvasZoom, showMiniMap, setShowMiniMap, edgeStyle, showEdgeLabels, updateTable, snapToGrid, gridSize, showGuides, highlightedRelationshipId, hoveredRelationshipId, setHighlightedRelationship, setHoveredRelationship, themeColor, copySelectedTables, pasteTables } = useAppStore()
   const reactFlow = useReactFlow()
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -364,6 +364,10 @@ const CanvasContent: React.FC = () => {
         e.preventDefault()
         setCanvasZoom(1)
       }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
+        e.preventDefault()
+        handleDuplicateSelected()
+      }
       if (e.key === 'Escape' && highlightedTableId) {
         handleClearSearch()
       }
@@ -371,6 +375,83 @@ const CanvasContent: React.FC = () => {
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [highlightedTableId, setCanvasZoom])
+
+  const handleDuplicateSelected = async () => {
+    if (selectedTableIds.length === 0) {
+      message.warning('请先选择要复制的表')
+      return
+    }
+    copySelectedTables()
+    await pasteTables(50, 50)
+    message.success(`已复制 ${selectedTableIds.length} 个表`)
+  }
+
+  const handleAlignLeft = () => {
+    if (selectedTableIds.length < 2) {
+      message.warning('请选择至少2个表进行对齐')
+      return
+    }
+    const selectedTables = tables.filter(t => selectedTableIds.includes(t.id))
+    const minX = Math.min(...selectedTables.map(t => t.positionX || 0))
+    selectedTables.forEach(table => {
+      updateTablePosition(table.id, minX, table.positionY || 0)
+    })
+    message.success('已左对齐')
+  }
+
+  const handleAlignRight = () => {
+    if (selectedTableIds.length < 2) {
+      message.warning('请选择至少2个表进行对齐')
+      return
+    }
+    const selectedTables = tables.filter(t => selectedTableIds.includes(t.id))
+    const maxX = Math.max(...selectedTables.map(t => (t.positionX || 0) + 280))
+    selectedTables.forEach(table => {
+      updateTablePosition(table.id, maxX - 280, table.positionY || 0)
+    })
+    message.success('已右对齐')
+  }
+
+  const handleAlignCenter = () => {
+    if (selectedTableIds.length < 2) {
+      message.warning('请选择至少2个表进行对齐')
+      return
+    }
+    const selectedTables = tables.filter(t => selectedTableIds.includes(t.id))
+    const minX = Math.min(...selectedTables.map(t => t.positionX || 0))
+    const maxX = Math.max(...selectedTables.map(t => (t.positionX || 0) + 280))
+    const centerX = (minX + maxX) / 2 - 140
+    selectedTables.forEach(table => {
+      updateTablePosition(table.id, centerX, table.positionY || 0)
+    })
+    message.success('已水平居中')
+  }
+
+  const handleAlignTop = () => {
+    if (selectedTableIds.length < 2) {
+      message.warning('请选择至少2个表进行对齐')
+      return
+    }
+    const selectedTables = tables.filter(t => selectedTableIds.includes(t.id))
+    const minY = Math.min(...selectedTables.map(t => t.positionY || 0))
+    selectedTables.forEach(table => {
+      updateTablePosition(table.id, table.positionX || 0, minY)
+    })
+    message.success('已顶对齐')
+  }
+
+  const handleAlignBottom = () => {
+    if (selectedTableIds.length < 2) {
+      message.warning('请选择至少2个表进行对齐')
+      return
+    }
+    const selectedTables = tables.filter(t => selectedTableIds.includes(t.id))
+    const maxY = Math.max(...selectedTables.map(t => (t.positionY || 0) + 150))
+    selectedTables.forEach(table => {
+      updateTablePosition(table.id, table.positionX || 0, maxY - 150)
+    })
+    message.success('已底对齐')
+  }
 
   const searchOptions = useMemo(() => {
     const tableOptions = tables.map(table => ({
@@ -785,6 +866,22 @@ const CanvasContent: React.FC = () => {
             <Button icon={<CodeOutlined />} onClick={handleGenerateDDL}>
               导出DDL
             </Button>
+            {selectedTableIds.length > 1 && (
+              <Dropdown menu={{
+                items: [
+                  { key: 'left', icon: <AlignLeftOutlined />, label: '左对齐', onClick: handleAlignLeft },
+                  { key: 'center', icon: <AlignCenterOutlined />, label: '水平居中', onClick: handleAlignCenter },
+                  { key: 'right', icon: <AlignRightOutlined />, label: '右对齐', onClick: handleAlignRight },
+                  { key: 'divider1', type: 'divider' },
+                  { key: 'top', icon: <VerticalAlignTopOutlined />, label: '顶对齐', onClick: handleAlignTop },
+                  { key: 'bottom', icon: <VerticalAlignBottomOutlined />, label: '底对齐', onClick: handleAlignBottom },
+                ]
+              }} placement="bottomLeft">
+                <Button icon={<AlignLeftOutlined />}>
+                  对齐
+                </Button>
+              </Dropdown>
+            )}
           </Space>
         </div>
 
@@ -1104,7 +1201,11 @@ const CanvasContent: React.FC = () => {
                 <MenuItem onClick={() => {
                   selectTable(selectedTableIds[0])
                   setContextMenu(null)
-                }}>编辑表</MenuItem>
+                }}><CopyOutlined style={{marginRight: 8}}/>编辑表</MenuItem>
+                <MenuItem onClick={() => {
+                  handleDuplicateSelected()
+                  setContextMenu(null)
+                }}><CopyOutlined style={{marginRight: 8}}/>快速复制 (Ctrl+D)</MenuItem>
                 <MenuItem onClick={() => {
                   setIsRelationshipEditorOpen(true)
                   setContextMenu(null)
