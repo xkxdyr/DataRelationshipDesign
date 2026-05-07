@@ -124,6 +124,11 @@ export const MockDataModal: React.FC<MockDataModalProps> = ({ visible, onClose, 
       width={900}
       footer={null}
     >
+      <div style={{ display: 'none' }}>
+        <Form form={form} layout="vertical">
+          <Form.Item name="count"><InputNumber /></Form.Item>
+        </Form>
+      </div>
       <Tabs activeKey={activeTab} onChange={setActiveTab}>
         <Tabs.TabPane tab="配置规则" key="config">
           <Form form={form} layout="vertical">
