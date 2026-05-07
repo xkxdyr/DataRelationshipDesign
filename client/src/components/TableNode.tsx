@@ -1,7 +1,7 @@
 import React from 'react'
 import { Handle, Position, NodeProps } from 'reactflow'
 import { Table } from '../types'
-import { DeleteOutlined } from '@ant-design/icons'
+import { DeleteOutlined, CommentOutlined } from '@ant-design/icons'
 import { useAppStore } from '../stores/appStore'
 
 interface TableNodeData {
@@ -40,19 +40,33 @@ const TableNode: React.FC<NodeProps<TableNodeData>> = ({ data, selected }) => {
         padding: headerPadding,
         borderRadius: '4px 4px 0 0',
         display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
+        flexDirection: 'column',
         fontWeight: 'bold',
         fontSize: headerFontSize
       }}>
-        <span>{table.name}</span>
-        <DeleteOutlined
-          style={{ cursor: 'pointer', fontSize: tagFontSize }}
-          onClick={(e) => {
-            e.stopPropagation()
-            onDelete(table.id)
-          }}
-        />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>{table.name}</span>
+          <DeleteOutlined
+            style={{ cursor: 'pointer', fontSize: tagFontSize }}
+            onClick={(e) => {
+              e.stopPropagation()
+              onDelete(table.id)
+            }}
+          />
+        </div>
+        {table.comment && (
+          <div style={{
+            fontSize: compactMode ? '9px' : '11px',
+            fontWeight: 'normal',
+            opacity: 0.9,
+            marginTop: '2px',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap'
+          }}>
+            {table.comment}
+          </div>
+        )}
       </div>
 
       <div style={{ maxHeight: maxHeight, overflowY: 'auto' }}>
@@ -62,7 +76,7 @@ const TableNode: React.FC<NodeProps<TableNodeData>> = ({ data, selected }) => {
             alignItems: 'center',
             padding: rowPadding,
             borderBottom: '1px solid #f0f0f0',
-            gap: '8px',
+            gap: '4px',
             fontSize: rowFontSize
           }}>
             {column.primaryKey && (
@@ -96,6 +110,18 @@ const TableNode: React.FC<NodeProps<TableNodeData>> = ({ data, selected }) => {
                 color: '#999',
                 fontSize: tagFontSize
               }}>?</span>
+            )}
+            {column.comment && (
+              <span
+                title={column.comment}
+                style={{
+                  color: '#1890ff',
+                  fontSize: tagFontSize,
+                  cursor: 'pointer'
+                }}
+              >
+                <CommentOutlined />
+              </span>
             )}
           </div>
         ))}

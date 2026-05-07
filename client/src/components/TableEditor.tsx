@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { Form, Input, InputNumber, Button, Space, Tag, Select, Popconfirm, Tabs, Modal, message, Row, Col } from 'antd'
-import { PlusOutlined, DeleteOutlined, SaveOutlined, ArrowUpOutlined, ArrowDownOutlined, DatabaseOutlined, HolderOutlined } from '@ant-design/icons'
+import { Form, Input, InputNumber, Button, Space, Tag, Select, Popconfirm, Tabs, Modal, message, Row, Col, Tooltip } from 'antd'
+import { PlusOutlined, DeleteOutlined, SaveOutlined, ArrowUpOutlined, ArrowDownOutlined, DatabaseOutlined, HolderOutlined, CommentOutlined } from '@ant-design/icons'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -115,7 +115,7 @@ const SortableItem: React.FC<SortableItemProps> = ({
             max={65535}
           />
         </Col>
-        <Col flex="60px">
+        <Col flex="50px">
           <Select
             value={column.nullable ? 'Y' : 'N'}
             onChange={value => onUpdate(id, 'nullable', value === 'Y')}
@@ -127,7 +127,7 @@ const SortableItem: React.FC<SortableItemProps> = ({
             <Option value="N">N</Option>
           </Select>
         </Col>
-        <Col flex="60px">
+        <Col flex="50px">
           <Select
             value={column.primaryKey ? 'Y' : 'N'}
             onChange={value => onUpdate(id, 'primaryKey', value === 'Y')}
@@ -139,7 +139,7 @@ const SortableItem: React.FC<SortableItemProps> = ({
             <Option value="N">-</Option>
           </Select>
         </Col>
-        <Col flex="60px">
+        <Col flex="50px">
           <Select
             value={column.unique ? 'Y' : 'N'}
             onChange={value => onUpdate(id, 'unique', value === 'Y')}
@@ -151,7 +151,7 @@ const SortableItem: React.FC<SortableItemProps> = ({
             <Option value="N">-</Option>
           </Select>
         </Col>
-        <Col flex="60px">
+        <Col flex="50px">
           <Select
             value={column.autoIncrement ? 'Y' : 'N'}
             onChange={value => onUpdate(id, 'autoIncrement', value === 'Y')}
@@ -163,7 +163,19 @@ const SortableItem: React.FC<SortableItemProps> = ({
             <Option value="N">-</Option>
           </Select>
         </Col>
-        <Col flex="40px">
+        <Col flex="100px">
+          <Tooltip title={column.comment || '添加注释'}>
+            <Input
+              value={column.comment}
+              onChange={e => onUpdate(id, 'comment', e.target.value)}
+              onBlur={() => onSave(id)}
+              placeholder="注释"
+              size="small"
+              suffix={<CommentOutlined style={{ color: column.comment ? '#1890ff' : '#ccc' }} />}
+            />
+          </Tooltip>
+        </Col>
+        <Col flex="32px">
           <Button
             type="text"
             size="small"
@@ -172,7 +184,7 @@ const SortableItem: React.FC<SortableItemProps> = ({
             disabled={isFirst}
           />
         </Col>
-        <Col flex="40px">
+        <Col flex="32px">
           <Button
             type="text"
             size="small"
@@ -181,7 +193,7 @@ const SortableItem: React.FC<SortableItemProps> = ({
             disabled={isLast}
           />
         </Col>
-        <Col flex="40px">
+        <Col flex="32px">
           <Popconfirm
             title="确定删除?"
             onConfirm={() => onDelete(id)}

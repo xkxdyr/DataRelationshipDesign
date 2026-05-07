@@ -13,6 +13,32 @@ export interface UpdateChange {
 export const updateLogs: UpdateLog[] = [
   {
     date: '2026-05-07',
+    version: 'v1.1.2',
+    changes: [
+      {
+        type: 'feature',
+        title: '表注释显示增强',
+        description: 'Canvas节点表头区域显示表注释，注释过长时自动省略，紧凑模式下字体缩小'
+      },
+      {
+        type: 'feature',
+        title: '字段注释快速编辑',
+        description: '表编辑器列管理中添加注释列，支持快速输入和编辑字段注释'
+      },
+      {
+        type: 'feature',
+        title: '字段注释图标提示',
+        description: 'Canvas节点字段行显示注释图标，鼠标悬停显示完整注释内容'
+      },
+      {
+        type: 'ui',
+        title: '注释输入框优化',
+        description: '字段注释输入框添加Tooltip提示，图标颜色区分有无注释状态'
+      }
+    ]
+  },
+  {
+    date: '2026-05-07',
     version: 'v1.1.1',
     changes: [
       {
