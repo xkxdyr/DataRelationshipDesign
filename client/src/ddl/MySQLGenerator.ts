@@ -130,6 +130,78 @@ export class MySQLDDLGenerator extends BaseDDLGenerator {
     return `DROP INDEX ${this.escapeIdentifier(indexName)} ON ${this.escapeIdentifier(tableName)};`
   }
 
+  generateAlterTableAddColumn(tableName: string, column: Column, options: DDLOptions): string {
+    const line = `ALTER TABLE ${this.escapeIdentifier(tableName)} ADD COLUMN ${this.escapeIdentifier(column.name)} ${this.mapDataType(column)}`
+    let result = line
+
+    if (!column.nullable) {
+      result += ' NOT NULL'
+    }
+
+    if (column.autoIncrement) {
+      result += ' AUTO_INCREMENT'
+    }
+
+    if (column.defaultValue !== undefined && column.defaultValue !== null) {
+      result += ` DEFAULT ${this.formatDefaultValue(column)}`
+    }
+
+    if (column.unique && !column.primaryKey) {
+      result += ' UNIQUE'
+    }
+
+    if (options.includeComments && column.comment) {
+      result += ` COMMENT '${this.escapeString(column.comment)}'`
+    }
+
+    result += ';'
+    return result
+  }
+
+  generateAlterTableModifyColumn(tableName: string, oldColumn: Column, newColumn: Column, options: DDLOptions): string {
+    const lines: string[] = []
+    const table = this.escapeIdentifier(tableName)
+
+    if (oldColumn.dataType !== newColumn.dataType || oldColumn.length !== newColumn.length) {
+      lines.push(`ALTER TABLE ${table} MODIFY COLUMN ${this.escapeIdentifier(newColumn.name)} ${this.mapDataType(newColumn)}${newColumn.nullable ? '' : ' NOT NULL'};`)
+    }
+
+    if (oldColumn.defaultValue !== newColumn.defaultValue) {
+      const defaultClause = newColumn.defaultValue ? ` DEFAULT ${this.formatDefaultValue(newColumn)}` : ' DROP DEFAULT'
+      lines.push(`ALTER TABLE ${table} ALTER COLUMN ${this.escapeIdentifier(newColumn.name)}${defaultClause};`)
+    }
+
+    if (oldColumn.nullable !== newColumn.nullable) {
+      lines.push(`ALTER TABLE ${table} MODIFY COLUMN ${this.escapeIdentifier(newColumn.name)} ${this.mapDataType(newColumn)}${newColumn.nullable ? ' NULL' : ' NOT NULL'};`)
+    }
+
+    if (oldColumn.comment !== newColumn.comment && options.includeComments) {
+      lines.push(`ALTER TABLE ${table} MODIFY COLUMN ${this.escapeIdentifier(newColumn.name)} ${this.mapDataType(newColumn)} COMMENT '${this.escapeString(newColumn.comment || '')}';`)
+    }
+
+    return lines.join('\n')
+  }
+
+  generateAlterTableDropColumn(tableName: string, columnName: string, options: DDLOptions): string {
+    return `ALTER TABLE ${this.escapeIdentifier(tableName)} DROP COLUMN ${this.escapeIdentifier(columnName)};`
+  }
+
+  generateAlterTableAddIndex(tableName: string, index: Index, options: DDLOptions): string {
+    const columns = index.columns.map((c: string) => this.escapeIdentifier(c)).join(', ')
+    const table = this.escapeIdentifier(tableName)
+
+    if (index.unique) {
+      return `ALTER TABLE ${table} ADD UNIQUE INDEX ${this.escapeIdentifier(index.name)} (${columns});`
+    }
+
+    const type = index.type === 'FULLTEXT' ? 'FULLTEXT' : index.type === 'HASH' ? 'HASH' : ''
+    return `ALTER TABLE ${table} ADD ${type} INDEX ${this.escapeIdentifier(index.name)} (${columns});`.trim()
+  }
+
+  generateAlterTableDropIndex(indexName: string, tableName: string, options: DDLOptions): string {
+    return `ALTER TABLE ${this.escapeIdentifier(tableName)} DROP INDEX ${this.escapeIdentifier(indexName)};`
+  }
+
   generateCreateRelationship(
     rel: Relationship, 
     tableMap: Map<string, Table>, 

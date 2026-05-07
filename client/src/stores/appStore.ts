@@ -80,9 +80,11 @@ interface AppState {
   snapToGrid: boolean
   gridSize: number
   showGuides: boolean
+  clipboardTables: Table[]
 }
 
 interface AppStore extends AppState {
+  clipboardTables: Table[]
   loadProjects: () => Promise<void>
   selectProject: (id: string) => Promise<void>
   createProject: (data: Partial<Project>) => Promise<void>
@@ -100,6 +102,8 @@ interface AppStore extends AppState {
   removeFromSelection: (id: string) => void
   clearSelection: () => void
   deleteSelectedTables: () => Promise<void>
+  copySelectedTables: () => void
+  pasteTables: (offsetX?: number, offsetY?: number) => Promise<void>
 
   loadColumns: (tableId: string) => Promise<void>
   createColumn: (tableId: string, data: Partial<Column>) => Promise<void>
@@ -202,7 +206,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
     autoAddIdColumn: true,
     snapToGrid: true,
     gridSize: 20,
-    showGuides: true
+    showGuides: true,
+    clipboardTables: []
   }],
   future: [],
   isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
@@ -224,7 +229,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   snapToGrid: true,
   gridSize: 20,
   showGuides: true,
-
+  clipboardTables: [],
   setOnline: (online: boolean) => set({ isOnline: online }),
   setLocalMode: (localMode: boolean) => {
     set({ isLocalMode: localMode })
@@ -621,7 +626,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
       autoAddIdColumn: get().autoAddIdColumn,
       snapToGrid: get().snapToGrid,
       gridSize: get().gridSize,
-      showGuides: get().showGuides
+      showGuides: get().showGuides,
+      clipboardTables: get().clipboardTables
     }
 
     set({
@@ -641,7 +647,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
       showMiniMap: nextState.showMiniMap,
       autoSaveInterval: nextState.autoSaveInterval,
       edgeStyle: nextState.edgeStyle,
-      showEdgeLabels: nextState.showEdgeLabels
+      showEdgeLabels: nextState.showEdgeLabels,
+      clipboardTables: nextState.clipboardTables
     })
     get().saveToLocal()
   },
@@ -680,7 +687,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
       autoAddIdColumn: get().autoAddIdColumn,
       snapToGrid: get().snapToGrid,
       gridSize: get().gridSize,
-      showGuides: get().showGuides
+      showGuides: get().showGuides,
+      clipboardTables: get().clipboardTables
     }
     set(state => ({
       past: [...state.past.slice(-19), currentState],
@@ -1077,6 +1085,126 @@ export const useAppStore = create<AppStore>((set, get) => ({
       tables: state.tables.filter(t => !selectedTableIds.includes(t.id)),
       selectedTableId: null,
       selectedTableIds: []
+    }))
+  },
+
+  copySelectedTables: () => {
+    const { selectedTableIds, tables } = get()
+    if (selectedTableIds.length === 0) return
+
+    const copiedTables = tables.filter(t => selectedTableIds.includes(t.id))
+    set({ clipboardTables: copiedTables })
+  },
+
+  pasteTables: async (offsetX: number = 50, offsetY: number = 50) => {
+    const { clipboardTables, currentProject, isOnline } = get()
+    if (clipboardTables.length === 0 || !currentProject) return
+
+    get().pushHistory()
+
+    const newTables: Table[] = []
+    const columnIdMap = new Map<string, string>()
+    const oldToNewTableId = new Map<string, string>()
+
+    for (const table of clipboardTables) {
+      const newTableId = `copy_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      oldToNewTableId.set(table.id, newTableId)
+
+      const tableData = {
+        name: table.name + '_copy',
+        comment: table.comment,
+        positionX: table.positionX + offsetX,
+        positionY: table.positionY + offsetY
+      }
+
+      let newTable: Table
+      if (isOnline) {
+        const response = await tableApi.create(currentProject.id, tableData)
+        if (!response.success || !response.data) continue
+        newTable = { ...response.data, columns: [], indexes: [] }
+      } else {
+        newTable = {
+          id: newTableId,
+          projectId: currentProject.id,
+          name: tableData.name,
+          comment: tableData.comment,
+          positionX: tableData.positionX,
+          positionY: tableData.positionY,
+          columns: [],
+          indexes: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          lastModified: Date.now()
+        } as Table
+      }
+
+      for (const column of table.columns || []) {
+        const newColumnId = `copy_col_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        columnIdMap.set(column.id, newColumnId)
+
+        const columnData = {
+          name: column.name,
+          dataType: column.dataType,
+          length: column.length,
+          precision: column.precision,
+          scale: column.scale,
+          nullable: column.nullable,
+          defaultValue: column.defaultValue,
+          autoIncrement: column.autoIncrement,
+          primaryKey: column.primaryKey,
+          unique: column.unique,
+          comment: column.comment,
+          order: column.order
+        }
+
+        if (isOnline) {
+          const response = await columnApi.create(newTable.id, columnData)
+          if (response.success && response.data) {
+            newTable.columns.push(response.data)
+          }
+        } else {
+          const localColumn: LocalColumn = {
+            id: newColumnId,
+            tableId: newTable.id,
+            ...columnData,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          }
+          newTable.columns.push(localColumn)
+        }
+      }
+
+      for (const index of table.indexes || []) {
+        const indexColumnIds = (index.columns || []).map(oldId => columnIdMap.get(oldId) || oldId)
+        const indexData = {
+          name: index.name,
+          columns: indexColumnIds,
+          unique: index.unique,
+          type: (index as any).indexType || index.type || 'BTREE'
+        }
+
+        if (isOnline) {
+          const response = await indexApi.create(newTable.id, indexData)
+          if (response.success && response.data) {
+            newTable.indexes.push(response.data)
+          }
+        } else {
+          const localIndex: LocalIndex = {
+            id: `copy_idx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            tableId: newTable.id,
+            ...indexData
+          }
+          newTable.indexes.push(localIndex)
+        }
+      }
+
+      newTables.push(newTable)
+      await localStorageService.saveTable(newTable as LocalTable)
+    }
+
+    set(state => ({
+      tables: [...state.tables, ...newTables],
+      selectedTableIds: newTables.map(t => t.id)
     }))
   },
 

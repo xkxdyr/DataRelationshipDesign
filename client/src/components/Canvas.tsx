@@ -266,13 +266,17 @@ const CanvasContent: React.FC = () => {
           searchInput.select()
         }
       }
+      if ((e.ctrlKey || e.metaKey) && e.key === '0') {
+        e.preventDefault()
+        setCanvasZoom(1)
+      }
       if (e.key === 'Escape' && highlightedTableId) {
         handleClearSearch()
       }
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [highlightedTableId])
+  }, [highlightedTableId, setCanvasZoom])
 
   const searchOptions = useMemo(() => {
     const tableOptions = tables.map(table => ({
@@ -999,7 +1003,22 @@ const CanvasContent: React.FC = () => {
               ]
             }}
           >
-            <span style={{ cursor: 'pointer', fontWeight: 500, color: '#1890ff' }}>
+            <span
+              style={{
+                cursor: 'pointer',
+                fontWeight: canvasZoom === 1 ? 600 : 500,
+                color: canvasZoom === 1 ? '#52c41a' : '#1890ff',
+                padding: '2px 8px',
+                borderRadius: 4,
+                background: canvasZoom === 1 ? 'rgba(82, 196, 26, 0.1)' : 'transparent',
+                transition: 'all 0.2s ease'
+              }}
+              title="点击重置为100% (Ctrl+0)"
+              onClick={(e) => {
+                e.stopPropagation()
+                setCanvasZoom(1)
+              }}
+            >
               {(canvasZoom * 100).toFixed(0)}%
             </span>
           </Dropdown>

@@ -13,6 +13,42 @@ export interface UpdateChange {
 export const updateLogs: UpdateLog[] = [
   {
     date: '2026-05-07',
+    version: 'v1.1.6',
+    changes: [
+      {
+        type: 'feature',
+        title: '增量DDL生成功能',
+        description: '支持生成ALTER TABLE语句（添加/修改/删除列、添加/删除索引），用于数据库增量同步'
+      },
+      {
+        type: 'feature',
+        title: '复制粘贴表功能',
+        description: '支持Ctrl+C复制选中表、Ctrl+V粘贴表，粘贴时自动偏移位置，支持复制字段和索引'
+      },
+      {
+        type: 'ui',
+        title: '画布缩放级别指示器增强',
+        description: '缩放指示器添加绿色高亮样式，100%时显示醒目标识，提升视觉反馈'
+      },
+      {
+        type: 'ui',
+        title: '缩放指示器点击重置功能',
+        description: '点击缩放百分比数字可快速重置为100%，添加手型光标和悬停效果'
+      },
+      {
+        type: 'feature',
+        title: 'Ctrl+0 快捷键重置缩放',
+        description: '添加键盘快捷键 Ctrl+0/Cmd+0 快速将画布缩放重置为100%'
+      },
+      {
+        type: 'ui',
+        title: '缩放提示信息优化',
+        description: '缩放指示器添加工具提示，显示"点击重置为100% (Ctrl+0)"操作引导'
+      }
+    ]
+  },
+  {
+    date: '2026-05-07',
     version: 'v1.1.5',
     changes: [
       {

@@ -21,7 +21,7 @@ const { Header } = Layout
 const { Title } = Typography
 
 function App() {
-  const { currentProject, projects, loadProjects, selectedTableId, tables, selectTable, undo, redo, canUndo, canRedo, isOnline, isSyncing, lastSaved, fontSize, setFontSize, themeColor, loadSettings, createTable, createColumn, createIndex, createRelationship, saveToLocal, deleteTable, setCanvasZoom, canvasZoom } = useAppStore()
+  const { currentProject, projects, loadProjects, selectedTableId, tables, selectTable, undo, redo, canUndo, canRedo, isOnline, isSyncing, lastSaved, fontSize, setFontSize, themeColor, loadSettings, createTable, createColumn, createIndex, createRelationship, saveToLocal, deleteTable, setCanvasZoom, canvasZoom, copySelectedTables, pasteTables } = useAppStore()
   const { colors } = useTheme()
   const [leftWidth, setLeftWidth] = useState(350)
   const [rightWidth, setRightWidth] = useState(900)
@@ -127,12 +127,14 @@ function App() {
         } else if (e.key === 'c') {
           e.preventDefault()
           if (!isInput && selectedTableId) {
-            message.info('复制表')
+            useAppStore.getState().copySelectedTables()
+            message.success('已复制 ' + (useAppStore.getState().selectedTableIds?.length || 0) + ' 个表')
           }
         } else if (e.key === 'v') {
           e.preventDefault()
           if (!isInput && currentProject) {
-            message.info('粘贴表')
+            useAppStore.getState().pasteTables()
+            message.success('已粘贴表')
           }
         } else if (e.key === 'f') {
           e.preventDefault()

@@ -8,6 +8,7 @@ export interface DDLOptions {
   formatSql: boolean
   uppercaseKeywords: boolean
   includeDropTable: boolean
+  incrementalMode?: boolean
 }
 
 export interface IDDLGenerator {
@@ -16,6 +17,11 @@ export interface IDDLGenerator {
   generateCreateIndex(index: Index, tableName: string, options: DDLOptions): string
   generateCreateRelationship(rel: Relationship, tableMap: Map<string, Table>, options: DDLOptions): string
   generateDropIndex(indexName: string, tableName: string, options: DDLOptions): string
+  generateAlterTableAddColumn(tableName: string, column: Column, options: DDLOptions): string
+  generateAlterTableModifyColumn(tableName: string, oldColumn: Column, newColumn: Column, options: DDLOptions): string
+  generateAlterTableDropColumn(tableName: string, columnName: string, options: DDLOptions): string
+  generateAlterTableAddIndex(tableName: string, index: Index, options: DDLOptions): string
+  generateAlterTableDropIndex(indexName: string, tableName: string, options: DDLOptions): string
 }
 
 export abstract class BaseDDLGenerator implements IDDLGenerator {
@@ -50,6 +56,26 @@ export abstract class BaseDDLGenerator implements IDDLGenerator {
   }
 
   generateDropIndex(indexName: string, tableName: string, options: DDLOptions): string {
+    throw new Error('Method not implemented.')
+  }
+
+  generateAlterTableAddColumn(tableName: string, column: Column, options: DDLOptions): string {
+    throw new Error('Method not implemented.')
+  }
+
+  generateAlterTableModifyColumn(tableName: string, oldColumn: Column, newColumn: Column, options: DDLOptions): string {
+    throw new Error('Method not implemented.')
+  }
+
+  generateAlterTableDropColumn(tableName: string, columnName: string, options: DDLOptions): string {
+    throw new Error('Method not implemented.')
+  }
+
+  generateAlterTableAddIndex(tableName: string, index: Index, options: DDLOptions): string {
+    throw new Error('Method not implemented.')
+  }
+
+  generateAlterTableDropIndex(indexName: string, tableName: string, options: DDLOptions): string {
     throw new Error('Method not implemented.')
   }
 }
