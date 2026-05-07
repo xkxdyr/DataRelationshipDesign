@@ -1,9 +1,10 @@
 import React, { useState } from 'react'
-import { Modal, Slider, Button, Space, Typography, Tag, Switch, Card, Row, Col, Input, Tree, TreeDataNode, Select } from 'antd'
+import { Modal, Slider, Button, Space, Typography, Tag, Switch, Card, Row, Col, Input, Tree, TreeDataNode, Select, Timeline, Badge } from 'antd'
 import type { Key } from 'react'
-import { SettingOutlined, FontSizeOutlined, BgColorsOutlined, CompressOutlined, AimOutlined, ThunderboltOutlined, LinkOutlined, SaveOutlined, SwapOutlined, RobotOutlined, AppstoreOutlined, EyeOutlined, DatabaseOutlined, KeyOutlined, StarOutlined, PlusOutlined } from '@ant-design/icons'
+import { SettingOutlined, FontSizeOutlined, BgColorsOutlined, CompressOutlined, AimOutlined, ThunderboltOutlined, LinkOutlined, SaveOutlined, SwapOutlined, RobotOutlined, AppstoreOutlined, EyeOutlined, DatabaseOutlined, KeyOutlined, StarOutlined, PlusOutlined, HistoryOutlined, BugOutlined, LockOutlined, PictureOutlined, RocketOutlined, ToolOutlined } from '@ant-design/icons'
 import { useAppStore } from '../stores/appStore'
 import { useTheme } from '../theme/useTheme'
+import { updateLogs, getChangeTypeLabel, getChangeTypeColor } from '../data/updateLogs'
 
 const { Title, Text } = Typography
 
@@ -86,6 +87,11 @@ const treeData: TreeDataNode[] = [
       { title: '表前缀', key: 'table-prefix', icon: <DatabaseOutlined style={{ fontSize: 12 }} /> },
       { title: '自动添加id列', key: 'auto-add-id', icon: <DatabaseOutlined style={{ fontSize: 12 }} /> },
     ],
+  },
+  {
+    title: '更新日志',
+    key: 'changelog',
+    icon: <HistoryOutlined style={{ fontSize: 14 }} />,
   },
 ]
 
@@ -625,6 +631,64 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onClose, 
             <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
               当前状态：<strong>{autoAddIdColumn ? '已开启' : '已关闭'}</strong>
             </Text>
+          </div>
+        )
+
+      case 'changelog':
+        return (
+          <div style={{ padding: '16px' }}>
+            <Title level={4} style={{ marginBottom: 16 }}>
+              <Space>
+                <HistoryOutlined />
+                更新日志
+              </Space>
+            </Title>
+            <Text type="secondary" style={{ display: 'block', marginBottom: 24 }}>
+              记录每一次功能更新和修复
+            </Text>
+            
+            <Timeline mode="left">
+              {updateLogs.map((log) => (
+                <Timeline.Item 
+                  key={log.date}
+                  label={
+                    <Space direction="vertical" style={{ minWidth: 100 }}>
+                      <Badge color="blue" text={log.version} />
+                      <Text type="secondary" style={{ fontSize: 12 }}>{log.date}</Text>
+                    </Space>
+                  }
+                >
+                  <Card size="small" style={{ marginBottom: 8 }}>
+                    <Space direction="vertical" style={{ width: '100%' }}>
+                      {log.changes.map((change, index) => (
+                        <div key={index} style={{ display: 'flex', gap: 12 }}>
+                          <div style={{ flexShrink: 0 }}>
+                            {change.type === 'feature' && <RocketOutlined style={{ color: '#52c41a', fontSize: 16 }} />}
+                            {change.type === 'improvement' && <ToolOutlined style={{ color: '#1890ff', fontSize: 16 }} />}
+                            {change.type === 'bugfix' && <BugOutlined style={{ color: '#f5222d', fontSize: 16 }} />}
+                            {change.type === 'security' && <LockOutlined style={{ color: '#722ed1', fontSize: 16 }} />}
+                            {change.type === 'ui' && <PictureOutlined style={{ color: '#faad14', fontSize: 16 }} />}
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                              <Text strong>{change.title}</Text>
+                              <Tag color={getChangeTypeColor(change.type)} style={{ fontSize: 10 }}>
+                                {getChangeTypeLabel(change.type)}
+                              </Tag>
+                            </div>
+                            {change.description && (
+                              <Text type="secondary" style={{ fontSize: 12, marginTop: 4, display: 'block' }}>
+                                {change.description}
+                              </Text>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </Space>
+                  </Card>
+                </Timeline.Item>
+              ))}
+            </Timeline>
           </div>
         )
 
