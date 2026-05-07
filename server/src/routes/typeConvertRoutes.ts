@@ -3,7 +3,7 @@ import { TypeConverter, DatabaseType, databaseTypeLabels } from '../generators/t
 
 const router = Router()
 
-router.post('/api/type-convert/convert', (req, res) => {
+router.post('/type-convert/convert', (req, res) => {
   try {
     const { dataType, sourceDb, targetDb } = req.body
 
@@ -42,7 +42,7 @@ router.post('/api/type-convert/convert', (req, res) => {
   }
 })
 
-router.post('/api/type-convert/table', (req, res) => {
+router.post('/type-convert/table', (req, res) => {
   try {
     const { table, sourceDb, targetDb } = req.body
 
@@ -86,7 +86,7 @@ router.post('/api/type-convert/table', (req, res) => {
   }
 })
 
-router.get('/api/type-convert/mappings', (req, res) => {
+router.get('/type-convert/mappings', (req, res) => {
   try {
     const { sourceDb, targetDb } = req.query
 
@@ -124,7 +124,7 @@ router.get('/api/type-convert/mappings', (req, res) => {
   }
 })
 
-router.get('/api/type-convert/database-types', (req, res) => {
+router.get('/type-convert/database-types', (req, res) => {
   res.json({
     success: true,
     result: Object.entries(databaseTypeLabels).map(([value, label]) => ({

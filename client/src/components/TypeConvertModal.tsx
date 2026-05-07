@@ -38,6 +38,8 @@ export const TypeConvertModal: React.FC<TypeConvertModalProps> = ({ visible, onC
       const response = await typeConvertApi.getMappings(sourceDb, targetDb)
       if (response.success && response.result) {
         setMappings(response.result.mappings)
+      } else if (response.data && response.data.result) {
+        setMappings(response.data.result.mappings)
       }
     } catch (error) {
       console.error('加载类型映射失败:', error)
@@ -163,7 +165,7 @@ export const TypeConvertModal: React.FC<TypeConvertModalProps> = ({ visible, onC
             pagination={false}
             size="small"
             scroll={{ y: 300 }}
-            rowKey={(record, index) => `${index}-${record.source}`}
+            rowKey={(record) => record.source}
           />
         </Card>
       </Space>

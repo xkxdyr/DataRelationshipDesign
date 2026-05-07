@@ -4,7 +4,7 @@ import { Table } from '../generators/ddlGenerator'
 
 const router = Router()
 
-router.post('/api/llm/config', (req, res) => {
+router.post('/llm/config', (req, res) => {
   try {
     const { apiKey, endpoint, model } = req.body
 
@@ -30,7 +30,7 @@ router.post('/api/llm/config', (req, res) => {
   }
 })
 
-router.get('/api/llm/config', (req, res) => {
+router.get('/llm/config', (req, res) => {
   const config = llmService.getConfig()
   res.json({
     success: true,
@@ -43,7 +43,7 @@ router.get('/api/llm/config', (req, res) => {
   })
 })
 
-router.post('/api/llm/generate-tables', async (req, res) => {
+router.post('/llm/generate-tables', async (req, res) => {
   try {
     const { description, databaseType } = req.body
 
@@ -69,7 +69,7 @@ router.post('/api/llm/generate-tables', async (req, res) => {
   }
 })
 
-router.post('/api/llm/analyze-columns', async (req, res) => {
+router.post('/llm/analyze-columns', async (req, res) => {
   try {
     const { tableName, columns, databaseType } = req.body
 
@@ -95,7 +95,7 @@ router.post('/api/llm/analyze-columns', async (req, res) => {
   }
 })
 
-router.post('/api/llm/suggest-relationships', async (req, res) => {
+router.post('/llm/suggest-relationships', async (req, res) => {
   try {
     const { tables } = req.body
 

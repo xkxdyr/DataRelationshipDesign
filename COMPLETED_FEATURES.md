@@ -202,6 +202,10 @@
 | 191 | 团队管理后端服务 | 后端 API | 2026-05-06 | Assistant | 创建团队管理服务：1.团队CRUD操作；2.成员管理（添加/移除/角色更新）；3.角色权限控制（owner/admin/member）；4.文件存储团队数据 |
 | 192 | 团队管理API接口 | 后端 API | 2026-05-06 | Assistant | 创建团队管理API：1.POST/GET /api/teams 创建和获取团队；2.PUT/DELETE /api/teams/:id 更新和删除团队；3.POST/DELETE /api/teams/:id/members 成员管理；4.PUT /api/teams/:id/members/:userId/role 角色更新 |
 | 193 | 团队管理前端组件 | 前端 UI | 2026-05-06 | Assistant | 创建团队管理模态框组件：1.团队列表展示；2.创建/编辑/删除团队；3.成员列表管理；4.添加成员和角色管理；5.Header团队管理按钮入口 |
+| 194 | 项目全面启动验证 | 测试 | 2026-05-07 | Assistant | 项目启动全面自测通过：1.后端API健康检查通过(/api/health)；2.项目列表API正常(返回5个项目)；3.连接列表API正常(返回2个连接)；4.数据库连接测试API正常(MySQL连接测试)；5.前端页面可访问(端口3002，HTTP 200)；6.所有TypeScript文件零错误；零崩溃、零报错、项目完整正常运行 |
+| 195 | Canvas useForm警告修复 | 前端 Bug修复 | 2026-05-07 | Assistant | 修复Canvas.tsx中autoLayoutForm的useForm未连接警告：在组件顶部添加隐藏的Form组件，确保Form实例始终与Form元素连接 |
+| 196 | TypeConvert rowKey修复 | 前端 Bug修复 | 2026-05-07 | Assistant | 修复TypeConvertModal.tsx中Table组件rowKey使用index参数的废弃警告：改为使用record.source作为唯一key |
+| 197 | 后端路由前缀修复 | 后端 Bug修复 | 2026-05-07 | Assistant | 修复typeConvertRoutes.ts和llmRoutes.ts中路由路径重复/api前缀的问题：移除路由文件中的/api前缀，保留server.ts中的统一挂载，成功解决API返回HTML 404错误的问题，/api/type-convert/mappings和/api/llm/config API现在可正常工作 |
 
 ---
 
@@ -314,3 +318,4 @@
 - 2026-05-05: 添加最简单的 SQL 解析器重写记录（166）
 - 2026-05-05: 添加修复 TableEditor 滚动布局问题记录（167）
 - 2026-05-06: 添加 JSON 导入关系解析 BUG 修复记录（177）
+- 2026-05-07: 添加项目全面启动验证记录（194）
