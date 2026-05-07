@@ -1,7 +1,7 @@
 import React from 'react'
 import { Handle, Position, NodeProps } from 'reactflow'
 import { Table } from '../types'
-import { DeleteOutlined, CommentOutlined } from '@ant-design/icons'
+import { DeleteOutlined, CommentOutlined, DatabaseOutlined, KeyOutlined, LinkOutlined } from '@ant-design/icons'
 import { useAppStore } from '../stores/appStore'
 
 interface TableNodeData {
@@ -9,10 +9,11 @@ interface TableNodeData {
   onEdit: (tableId: string | null) => void
   onDelete: (tableId: string) => void
   highlighted?: boolean
+  relationshipCount?: number
 }
 
 const TableNode: React.FC<NodeProps<TableNodeData>> = ({ data, selected }) => {
-  const { table, onEdit, onDelete, highlighted } = data
+  const { table, onEdit, onDelete, highlighted, relationshipCount = 0 } = data
   const compactMode = useAppStore(state => state.compactMode)
   const themeColor = useAppStore(state => state.themeColor)
 
@@ -24,6 +25,10 @@ const TableNode: React.FC<NodeProps<TableNodeData>> = ({ data, selected }) => {
   const tagFontSize = compactMode ? '10px' : '12px'
   const dataTypeFontSize = compactMode ? '10px' : '12px'
   const maxHeight = compactMode ? '200px' : '300px'
+
+  const columnCount = table.columns?.length || 0
+  const pkCount = table.columns?.filter(c => c.primaryKey).length || 0
+  const indexCount = table.indexes?.length || 0
 
   return (
     <div style={{
@@ -137,6 +142,33 @@ const TableNode: React.FC<NodeProps<TableNodeData>> = ({ data, selected }) => {
             暂无列
           </div>
         )}
+      </div>
+
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-around',
+        padding: compactMode ? '3px 8px' : '4px 12px',
+        background: '#fafafa',
+        borderTop: '1px solid #f0f0f0',
+        fontSize: compactMode ? '10px' : '11px',
+        color: '#666'
+      }}>
+        <span title="字段数量" style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+          <DatabaseOutlined style={{ color: '#1890ff' }} />
+          {columnCount}
+        </span>
+        <span title="主键数量" style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+          <KeyOutlined style={{ color: '#52c41a' }} />
+          {pkCount}
+        </span>
+        <span title="索引数量" style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+          <span style={{ fontWeight: 'bold' }}>#</span>
+          {indexCount}
+        </span>
+        <span title="关系数量" style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+          <LinkOutlined style={{ color: '#722ed1' }} />
+          {relationshipCount}
+        </span>
       </div>
 
       <Handle type="source" position={Position.Bottom} />

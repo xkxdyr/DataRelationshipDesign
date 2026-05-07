@@ -79,6 +79,14 @@ const CanvasContent: React.FC = () => {
   }, [currentProject?.id])
 
   useEffect(() => {
+    if (reactFlow && tables.length > 0) {
+      setTimeout(() => {
+        reactFlow.fitView({ padding: 0.2, duration: 300 })
+      }, 100)
+    }
+  }, [reactFlow, tables.length])
+
+  useEffect(() => {
     if (reactFlow) {
       reactFlow.zoomTo(canvasZoom)
     }
@@ -99,19 +107,26 @@ const CanvasContent: React.FC = () => {
 
   const nodes: Node[] = useMemo(() => {
     if (!tables || !Array.isArray(tables)) return []
-    return tables.map(table => ({
-      id: table.id,
-      type: 'tableNode',
-      position: { x: table.positionX || 0, y: table.positionY || 0 },
-      data: {
-        table,
-        onEdit: selectTable,
-        onDelete: deleteTable,
-        highlighted: highlightedTableId === table.id
-      },
-      selected: selectedTableIds.includes(table.id)
-    }))
-  }, [tables, selectedTableIds, selectTable, deleteTable, highlightedTableId])
+    return tables.map(table => {
+      const tableRelationshipCount = relationships.filter(
+        r => r.sourceTableId === table.id || r.targetTableId === table.id
+      ).length
+
+      return {
+        id: table.id,
+        type: 'tableNode',
+        position: { x: table.positionX || 0, y: table.positionY || 0 },
+        data: {
+          table,
+          onEdit: selectTable,
+          onDelete: deleteTable,
+          highlighted: highlightedTableId === table.id,
+          relationshipCount: tableRelationshipCount
+        },
+        selected: selectedTableIds.includes(table.id)
+      }
+    })
+  }, [tables, selectedTableIds, selectTable, deleteTable, highlightedTableId, relationships])
 
   const edges: Edge[] = useMemo(() => {
     if (!relationships || !Array.isArray(relationships)) return []
@@ -825,6 +840,7 @@ const CanvasContent: React.FC = () => {
           onSelectionChange={onSelectionChange}
           nodeTypes={nodeTypes}
           fitView
+          fitViewOptions={{ padding: 0.2 }}
           style={{ background: '#fafafa', width: '100%', height: '100%' }}
           nodesDraggable={!isLocked}
           panOnDrag={true}

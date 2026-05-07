@@ -17,6 +17,21 @@ export const updateLogs: UpdateLog[] = [
     changes: [
       {
         type: 'feature',
+        title: '自动适应视图功能',
+        description: '切换项目或表数量变化时自动调整视图，使所有表节点可见，避免表被遮挡'
+      },
+      {
+        type: 'feature',
+        title: '全选功能完善',
+        description: 'Ctrl+A快捷键可全选画布上所有表，方便批量操作，配合Ctrl+C复制和Delete删除实现高效管理'
+      },
+      {
+        type: 'ui',
+        title: '表节点统计信息增强',
+        description: 'Canvas表节点底部显示统计信息：字段数量、主键数量、索引数量、关系数量，直观展示表元数据'
+      },
+      {
+        type: 'feature',
         title: '增量DDL生成功能',
         description: '支持生成ALTER TABLE语句（添加/修改/删除列、添加/删除索引），用于数据库增量同步'
       },

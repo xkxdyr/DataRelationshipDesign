@@ -121,8 +121,9 @@ function App() {
           }
         } else if (e.key === 'a') {
           e.preventDefault()
-          if (!isInput) {
-            message.info('全选功能')
+          if (!isInput && tables.length > 0) {
+            useAppStore.getState().selectTables(tables.map(t => t.id))
+            message.success(`已选中 ${tables.length} 个表`)
           }
         } else if (e.key === 'c') {
           e.preventDefault()
