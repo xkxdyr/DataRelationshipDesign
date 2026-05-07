@@ -351,10 +351,9 @@ export const importService = {
         status: 'active',
         createdAt: now,
         updatedAt: now,
-        x: 100 + (idx % 4) * 300,
-        y: 100 + Math.floor(idx / 4) * 250,
-        width: 250,
-        height: 200
+        positionX: 100 + (idx % 4) * 300,
+        positionY: 100 + Math.floor(idx / 4) * 250,
+        width: '280px'
       }))
       
       const columns: Partial<Column>[] = []

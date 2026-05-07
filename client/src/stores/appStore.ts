@@ -80,6 +80,7 @@ interface AppState {
   snapToGrid: boolean
   gridSize: number
   showGuides: boolean
+  canvasBackground: string
   clipboardTables: Table[]
   highlightedRelationshipId: string | null
   hoveredRelationshipId: string | null
@@ -154,6 +155,7 @@ interface AppStore extends AppState {
   setSnapToGrid: (snap: boolean) => void
   setGridSize: (size: number) => void
   setShowGuides: (show: boolean) => void
+  setCanvasBackground: (color: string) => void
   setHighlightedRelationship: (id: string | null) => void
   setHoveredRelationship: (id: string | null) => void
   loadSettings: () => Promise<void>
@@ -212,6 +214,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     snapToGrid: true,
     gridSize: 20,
     showGuides: true,
+    canvasBackground: '#fafafa',
     clipboardTables: [],
     highlightedRelationshipId: null,
     hoveredRelationshipId: null
@@ -236,6 +239,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   snapToGrid: true,
   gridSize: 20,
   showGuides: true,
+  canvasBackground: '#fafafa',
   clipboardTables: [],
   highlightedRelationshipId: null,
   hoveredRelationshipId: null,
@@ -320,6 +324,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setShowGuides: (show: boolean) => {
     set({ showGuides: show })
     localStorageService.setMeta('showGuides', show)
+  },
+  setCanvasBackground: (color: string) => {
+    set({ canvasBackground: color })
+    localStorageService.setMeta('canvasBackground', color)
   },
   setHighlightedRelationship: (id: string | null) => {
     set({ highlightedRelationshipId: id })
@@ -406,6 +414,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const savedShowGuides = await localStorageService.getMeta<boolean>('showGuides')
     if (savedShowGuides !== undefined) {
       set({ showGuides: savedShowGuides })
+    }
+
+    const savedCanvasBackground = await localStorageService.getMeta<string>('canvasBackground')
+    if (savedCanvasBackground !== undefined) {
+      set({ canvasBackground: savedCanvasBackground })
     }
   },
 
@@ -642,6 +655,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       snapToGrid: get().snapToGrid,
       gridSize: get().gridSize,
       showGuides: get().showGuides,
+      canvasBackground: get().canvasBackground,
       clipboardTables: get().clipboardTables,
       highlightedRelationshipId: get().highlightedRelationshipId,
       hoveredRelationshipId: get().hoveredRelationshipId
@@ -707,6 +721,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       snapToGrid: get().snapToGrid,
       gridSize: get().gridSize,
       showGuides: get().showGuides,
+      canvasBackground: get().canvasBackground,
       clipboardTables: get().clipboardTables,
       highlightedRelationshipId: get().highlightedRelationshipId,
       hoveredRelationshipId: get().hoveredRelationshipId

@@ -13,6 +13,28 @@ export interface UpdateChange {
 export const updateLogs: UpdateLog[] = [
   {
     date: '2026-05-07',
+    version: 'v1.3.2',
+    changes: [
+      {
+        type: 'feature',
+        title: '画布背景颜色切换',
+        description: '支持在设置面板切换画布背景颜色，提供浅灰、白色、深灰、深色主题四种预设颜色'
+      }
+    ]
+  },
+  {
+    date: '2026-05-07',
+    version: 'v1.3.0',
+    changes: [
+      {
+        type: 'feature',
+        title: '表节点宽度调整功能',
+        description: '支持右键菜单调整表节点宽度，提供紧凑(200px)、标准(280px)、宽松(360px)三种预设宽度'
+      }
+    ]
+  },
+  {
+    date: '2026-05-07',
     version: 'v1.2.9',
     changes: [
       {

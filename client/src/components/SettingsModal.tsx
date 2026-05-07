@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Modal, Slider, Button, Space, Typography, Tag, Switch, Card, Row, Col, Input, Tree, TreeDataNode, Select, Timeline, Badge } from 'antd'
+import { Modal, Slider, Button, Space, Typography, Tag, Switch, Card, Row, Col, Input, Tree, TreeDataNode, Select, Timeline, Badge, Tooltip } from 'antd'
 import type { Key } from 'react'
 import { SettingOutlined, FontSizeOutlined, BgColorsOutlined, CompressOutlined, AimOutlined, ThunderboltOutlined, LinkOutlined, SaveOutlined, SwapOutlined, RobotOutlined, AppstoreOutlined, EyeOutlined, DatabaseOutlined, KeyOutlined, StarOutlined, PlusOutlined, HistoryOutlined, BugOutlined, LockOutlined, PictureOutlined, RocketOutlined, ToolOutlined, TableOutlined, AlignLeftOutlined } from '@ant-design/icons'
 import { useAppStore } from '../stores/appStore'
@@ -131,6 +131,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onClose, 
   const setGridSize = useAppStore(state => state.setGridSize)
   const showGuides = useAppStore(state => state.showGuides)
   const setShowGuides = useAppStore(state => state.setShowGuides)
+  const canvasBackground = useAppStore(state => state.canvasBackground)
+  const setCanvasBackground = useAppStore(state => state.setCanvasBackground)
 
   const handleReset = () => {
     setFontSize(14)
@@ -415,6 +417,48 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onClose, 
                 <strong>提示：</strong>较小的网格适合精细调整，较大的网格适合快速布局。
               </Text>
             </Card>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 24 }}>
+              <div>
+                <Text strong>画布背景颜色</Text>
+                <br />
+                <Text type="secondary" style={{ fontSize: 12 }}>选择画布背景颜色</Text>
+              </div>
+              <Space>
+                <Tooltip title="浅灰色">
+                  <Button
+                    shape="circle"
+                    size="small"
+                    style={{ background: '#fafafa', border: canvasBackground === '#fafafa' ? '2px solid #1890ff' : '1px solid #d9d9d9' }}
+                    onClick={() => setCanvasBackground('#fafafa')}
+                  />
+                </Tooltip>
+                <Tooltip title="白色">
+                  <Button
+                    shape="circle"
+                    size="small"
+                    style={{ background: '#ffffff', border: canvasBackground === '#ffffff' ? '2px solid #1890ff' : '1px solid #d9d9d9' }}
+                    onClick={() => setCanvasBackground('#ffffff')}
+                  />
+                </Tooltip>
+                <Tooltip title="深灰色">
+                  <Button
+                    shape="circle"
+                    size="small"
+                    style={{ background: '#2d2d2d', border: canvasBackground === '#2d2d2d' ? '2px solid #1890ff' : '1px solid #d9d9d9' }}
+                    onClick={() => setCanvasBackground('#2d2d2d')}
+                  />
+                </Tooltip>
+                <Tooltip title="深色主题">
+                  <Button
+                    shape="circle"
+                    size="small"
+                    style={{ background: '#1a1a2e', border: canvasBackground === '#1a1a2e' ? '2px solid #1890ff' : '1px solid #d9d9d9' }}
+                    onClick={() => setCanvasBackground('#1a1a2e')}
+                  />
+                </Tooltip>
+              </Space>
+            </div>
           </div>
         )
 

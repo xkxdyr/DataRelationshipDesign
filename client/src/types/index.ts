@@ -33,6 +33,7 @@ export interface Table {
   comment?: string
   positionX: number
   positionY: number
+  width?: string
   columns: Column[]
   indexes: Index[]
   createdAt: string

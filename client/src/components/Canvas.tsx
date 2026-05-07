@@ -16,7 +16,8 @@ import { Table, Relationship } from '../types'
 import TableNode from './TableNode'
 import RelationshipEditor from './RelationshipEditor'
 import { useAppStore } from '../stores/appStore'
-import { Button, Space, Dropdown, message, Modal, Form, Card, Radio, Slider, Select, Input, Popconfirm, AutoComplete, Tooltip } from 'antd'
+import { Button, Space, Dropdown, message, Modal, Form, Card, Radio, Slider, Select, Input, Popconfirm, AutoComplete, Tooltip, Menu } from 'antd'
+const { SubMenu } = Menu
 import { PlusOutlined, MinusOutlined, CodeOutlined, LinkOutlined, ExportOutlined, PictureOutlined, FileImageOutlined, SettingOutlined, ZoomInOutlined, ZoomOutOutlined, RotateLeftOutlined, CompressOutlined, AimOutlined, LockOutlined, DeleteOutlined, CheckSquareOutlined, BorderOutlined, SearchOutlined, CloseCircleFilled, CopyOutlined, AlignLeftOutlined, AlignRightOutlined, AlignCenterOutlined, VerticalAlignTopOutlined, VerticalAlignBottomOutlined, UndoOutlined, RedoOutlined, FileTextOutlined, ColumnWidthOutlined, FullscreenOutlined, FullscreenExitOutlined } from '@ant-design/icons'
 import CreateTableModal from './CreateTableModal'
 import { projectApi } from '../services/api'
@@ -75,7 +76,7 @@ const MenuDivider = () => (
 )
 
 const CanvasContent: React.FC = () => {
-  const { tables, currentProject, updateTablePosition, selectTable, selectedTableId, selectedTableIds, selectTables, selectAllTables, addToSelection, removeFromSelection, clearSelection, deleteSelectedTables, deleteTable, createTable, loadTables, relationships, loadRelationships, canvasZoom, setCanvasZoom, showMiniMap, setShowMiniMap, edgeStyle, showEdgeLabels, updateTable, snapToGrid, gridSize, showGuides, highlightedRelationshipId, hoveredRelationshipId, setHighlightedRelationship, setHoveredRelationship, themeColor, copySelectedTables, pasteTables, undo, redo, canUndo, canRedo } = useAppStore()
+  const { tables, currentProject, updateTablePosition, selectTable, selectedTableId, selectedTableIds, selectTables, selectAllTables, addToSelection, removeFromSelection, clearSelection, deleteSelectedTables, deleteTable, createTable, loadTables, relationships, loadRelationships, canvasZoom, setCanvasZoom, showMiniMap, setShowMiniMap, edgeStyle, showEdgeLabels, updateTable, snapToGrid, gridSize, showGuides, canvasBackground, highlightedRelationshipId, hoveredRelationshipId, setHighlightedRelationship, setHoveredRelationship, themeColor, copySelectedTables, pasteTables, undo, redo, canUndo, canRedo } = useAppStore()
   const reactFlow = useReactFlow()
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -1118,7 +1119,7 @@ const CanvasContent: React.FC = () => {
           nodeTypes={nodeTypes}
           fitView
           fitViewOptions={{ padding: 0.2 }}
-          style={{ background: '#fafafa', width: '100%', height: '100%' }}
+          style={{ background: canvasBackground, width: '100%', height: '100%' }}
           nodesDraggable={!isLocked}
           panOnDrag={true}
           selectNodesOnDrag={false}
@@ -1316,6 +1317,23 @@ const CanvasContent: React.FC = () => {
                   handleDuplicateSelected()
                   setContextMenu(null)
                 }}><CopyOutlined style={{marginRight: 8}}/>快速复制 (Ctrl+D)</MenuItem>
+                <SubMenu icon={<ColumnWidthOutlined style={{marginRight: 8}}/>} title="调整宽度">
+                  <MenuItem onClick={() => {
+                    updateTable(selectedTableIds[0], { width: '200px' })
+                    message.success('已调整为紧凑宽度')
+                    setContextMenu(null)
+                  }}>紧凑 (200px)</MenuItem>
+                  <MenuItem onClick={() => {
+                    updateTable(selectedTableIds[0], { width: '280px' })
+                    message.success('已调整为标准宽度')
+                    setContextMenu(null)
+                  }}>标准 (280px)</MenuItem>
+                  <MenuItem onClick={() => {
+                    updateTable(selectedTableIds[0], { width: '360px' })
+                    message.success('已调整为宽松宽度')
+                    setContextMenu(null)
+                  }}>宽松 (360px)</MenuItem>
+                </SubMenu>
                 {selectedTableIds.length > 1 && (
                   <MenuItem onClick={() => {
                     handleAutoArrange()

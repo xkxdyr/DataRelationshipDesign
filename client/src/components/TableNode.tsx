@@ -20,7 +20,7 @@ const TableNode: React.FC<NodeProps<TableNodeData>> = ({ data, selected }) => {
   const themeColor = useAppStore(state => state.themeColor)
   const [isHovered, setIsHovered] = useState(false)
 
-  const nodeWidth = compactMode ? '220px' : '280px'
+  const nodeWidth = (table as any).width || (compactMode ? '220px' : '280px')
   const headerPadding = compactMode ? '4px 8px' : '8px 12px'
   const headerFontSize = compactMode ? '12px' : '14px'
   const rowPadding = compactMode ? '3px 8px' : '6px 12px'
