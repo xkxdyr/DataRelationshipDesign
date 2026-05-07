@@ -81,6 +81,8 @@ interface AppState {
   gridSize: number
   showGuides: boolean
   clipboardTables: Table[]
+  highlightedRelationshipId: string | null
+  hoveredRelationshipId: string | null
 }
 
 interface AppStore extends AppState {
@@ -151,6 +153,8 @@ interface AppStore extends AppState {
   setSnapToGrid: (snap: boolean) => void
   setGridSize: (size: number) => void
   setShowGuides: (show: boolean) => void
+  setHighlightedRelationship: (id: string | null) => void
+  setHoveredRelationship: (id: string | null) => void
   loadSettings: () => Promise<void>
   syncToLocal: () => Promise<void>
   loadFromLocal: (projectId: string) => Promise<void>
@@ -207,7 +211,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
     snapToGrid: true,
     gridSize: 20,
     showGuides: true,
-    clipboardTables: []
+    clipboardTables: [],
+    highlightedRelationshipId: null,
+    hoveredRelationshipId: null
   }],
   future: [],
   isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
@@ -230,6 +236,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   gridSize: 20,
   showGuides: true,
   clipboardTables: [],
+  highlightedRelationshipId: null,
+  hoveredRelationshipId: null,
   setOnline: (online: boolean) => set({ isOnline: online }),
   setLocalMode: (localMode: boolean) => {
     set({ isLocalMode: localMode })
@@ -311,6 +319,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setShowGuides: (show: boolean) => {
     set({ showGuides: show })
     localStorageService.setMeta('showGuides', show)
+  },
+  setHighlightedRelationship: (id: string | null) => {
+    set({ highlightedRelationshipId: id })
+  },
+  setHoveredRelationship: (id: string | null) => {
+    set({ hoveredRelationshipId: id })
   },
   loadSettings: async () => {
     const savedLocalMode = await localStorageService.getMeta<boolean>('localMode')
@@ -627,7 +641,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
       snapToGrid: get().snapToGrid,
       gridSize: get().gridSize,
       showGuides: get().showGuides,
-      clipboardTables: get().clipboardTables
+      clipboardTables: get().clipboardTables,
+      highlightedRelationshipId: get().highlightedRelationshipId,
+      hoveredRelationshipId: get().hoveredRelationshipId
     }
 
     set({
@@ -648,7 +664,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
       autoSaveInterval: nextState.autoSaveInterval,
       edgeStyle: nextState.edgeStyle,
       showEdgeLabels: nextState.showEdgeLabels,
-      clipboardTables: nextState.clipboardTables
+      clipboardTables: nextState.clipboardTables,
+      highlightedRelationshipId: nextState.highlightedRelationshipId,
+      hoveredRelationshipId: nextState.hoveredRelationshipId
     })
     get().saveToLocal()
   },
@@ -688,7 +706,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
       snapToGrid: get().snapToGrid,
       gridSize: get().gridSize,
       showGuides: get().showGuides,
-      clipboardTables: get().clipboardTables
+      clipboardTables: get().clipboardTables,
+      highlightedRelationshipId: get().highlightedRelationshipId,
+      hoveredRelationshipId: get().hoveredRelationshipId
     }
     set(state => ({
       past: [...state.past.slice(-19), currentState],

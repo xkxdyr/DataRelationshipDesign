@@ -13,8 +13,44 @@ export interface UpdateChange {
 export const updateLogs: UpdateLog[] = [
   {
     date: '2026-05-07',
-    version: 'v1.1.6',
+    version: 'v1.1.8',
     changes: [
+      {
+        type: 'ui',
+        title: '关系线智能高亮显示',
+        description: '鼠标悬停或点击表节点时，高亮相关关系线（黄色），未关联的关系线淡化显示，提升关系可视化效果'
+      },
+      {
+        type: 'ui',
+        title: '关系线悬停交互增强',
+        description: '鼠标悬停在关系线上时显示绿色高亮和流动动画效果，增强交互反馈'
+      },
+      {
+        type: 'ui',
+        title: '选中表关联关系线智能显示',
+        description: '当选中表时，与选中表关联的关系线保持高亮，非关联关系线淡化，提升关系识别效率'
+      }
+    ]
+  },
+  {
+    date: '2026-05-07',
+    version: 'v1.1.7',
+    changes: [
+      {
+        type: 'ui',
+        title: '右键菜单交互体验优化',
+        description: '右键菜单项添加鼠标悬停高亮效果，选中表时显示编辑表、创建关系等快捷操作'
+      },
+      {
+        type: 'ui',
+        title: '表节点悬停效果增强',
+        description: '鼠标悬停在表节点上时显示蓝色边框和阴影效果，提升视觉反馈'
+      },
+      {
+        type: 'feature',
+        title: '表节点双击编辑功能',
+        description: '双击Canvas上的表节点可快速打开表编辑器，提升编辑效率'
+      },
       {
         type: 'feature',
         title: 'Canvas右键上下文菜单',

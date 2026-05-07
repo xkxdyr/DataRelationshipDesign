@@ -49,8 +49,33 @@ const nodeTypes = {
   tableNode: TableNode
 }
 
+const MenuItem: React.FC<{ children: React.ReactNode; onClick: () => void; danger?: boolean }> = ({ children, onClick, danger }) => {
+  const [isHovered, setIsHovered] = useState(false)
+  return (
+    <div
+      style={{
+        padding: '8px 12px',
+        cursor: 'pointer',
+        fontSize: 13,
+        color: danger ? '#ff4d4f' : isHovered ? '#1890ff' : 'inherit',
+        background: isHovered ? '#f0f7ff' : 'transparent',
+        transition: 'all 0.15s ease'
+      }}
+      onClick={onClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      {children}
+    </div>
+  )
+}
+
+const MenuDivider = () => (
+  <div style={{ height: 1, background: '#f0f0f0', margin: '4px 0' }} />
+)
+
 const CanvasContent: React.FC = () => {
-  const { tables, currentProject, updateTablePosition, selectTable, selectedTableId, selectedTableIds, selectTables, addToSelection, removeFromSelection, clearSelection, deleteSelectedTables, deleteTable, createTable, loadTables, relationships, loadRelationships, canvasZoom, setCanvasZoom, showMiniMap, setShowMiniMap, edgeStyle, showEdgeLabels, updateTable, snapToGrid, gridSize, showGuides } = useAppStore()
+  const { tables, currentProject, updateTablePosition, selectTable, selectedTableId, selectedTableIds, selectTables, addToSelection, removeFromSelection, clearSelection, deleteSelectedTables, deleteTable, createTable, loadTables, relationships, loadRelationships, canvasZoom, setCanvasZoom, showMiniMap, setShowMiniMap, edgeStyle, showEdgeLabels, updateTable, snapToGrid, gridSize, showGuides, highlightedRelationshipId, hoveredRelationshipId, setHighlightedRelationship, setHoveredRelationship, themeColor } = useAppStore()
   const reactFlow = useReactFlow()
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -112,6 +137,19 @@ const CanvasContent: React.FC = () => {
     return null
   }
 
+  const handleNodeMouseEnter = useCallback((tableId: string) => {
+    const relatedRelationships = relationships.filter(
+      r => r.sourceTableId === tableId || r.targetTableId === tableId
+    )
+    if (relatedRelationships.length > 0) {
+      setHighlightedRelationship(relatedRelationships[0].id)
+    }
+  }, [relationships, setHighlightedRelationship])
+
+  const handleNodeMouseLeave = useCallback(() => {
+    setHighlightedRelationship(null)
+  }, [setHighlightedRelationship])
+
   const nodes: Node[] = useMemo(() => {
     if (!tables || !Array.isArray(tables)) return []
     return tables.map(table => {
@@ -128,12 +166,14 @@ const CanvasContent: React.FC = () => {
           onEdit: selectTable,
           onDelete: deleteTable,
           highlighted: highlightedTableId === table.id,
-          relationshipCount: tableRelationshipCount
+          relationshipCount: tableRelationshipCount,
+          onMouseEnter: handleNodeMouseEnter,
+          onMouseLeave: handleNodeMouseLeave
         },
         selected: selectedTableIds.includes(table.id)
       }
     })
-  }, [tables, selectedTableIds, selectTable, deleteTable, highlightedTableId, relationships])
+  }, [tables, selectedTableIds, selectTable, deleteTable, highlightedTableId, relationships, handleNodeMouseEnter, handleNodeMouseLeave])
 
   const edges: Edge[] = useMemo(() => {
     if (!relationships || !Array.isArray(relationships)) return []
@@ -149,12 +189,31 @@ const CanvasContent: React.FC = () => {
         const cardinalityLabel = showEdgeLabels ? `${sourceCard} → ${targetCard}` : undefined
         const fieldLabel = `${sourceTable.name}.${sourceColumn?.name || ''} → ${targetTable.name}.${targetColumn?.name || ''}`
         const label = showEdgeLabels ? `${cardinalityLabel}\n${fieldLabel}` : undefined
+        
+        const isHighlighted = highlightedRelationshipId === rel.id
+        const isHovered = hoveredRelationshipId === rel.id
+        const isRelatedToSelected = selectedTableIds.length > 0 && 
+          (selectedTableIds.includes(rel.sourceTableId) || selectedTableIds.includes(rel.targetTableId))
+        
+        let strokeColor = themeColor
+        let strokeWidth = 2
+        let opacity = 1
+        
+        if (isHighlighted) {
+          strokeColor = '#faad14'
+          strokeWidth = 3
+        } else if (isHovered) {
+          strokeColor = '#52c41a'
+          strokeWidth = 3
+        } else if (selectedTableIds.length > 0 && !isRelatedToSelected) {
+          opacity = 0.3
+        }
 
         return {
           id: rel.id,
           source: rel.sourceTableId,
           target: rel.targetTableId,
-          animated: true,
+          animated: isHighlighted || isHovered,
           label,
           labelStyle: {
             fontSize: 10,
@@ -166,15 +225,18 @@ const CanvasContent: React.FC = () => {
             rx: 4
           },
           style: {
-            stroke: '#1890ff',
-            strokeWidth: 2
+            stroke: strokeColor,
+            strokeWidth,
+            opacity
           },
-          type: edgeStyle
+          type: edgeStyle,
+          onMouseEnter: () => setHoveredRelationship(rel.id),
+          onMouseLeave: () => setHoveredRelationship(null)
         }
       }
       return null
     }).filter(Boolean) as Edge[]
-  }, [relationships, tables, edgeStyle, showEdgeLabels])
+  }, [relationships, tables, edgeStyle, showEdgeLabels, highlightedRelationshipId, hoveredRelationshipId, selectedTableIds, setHoveredRelationship, themeColor])
 
   const [nodeState, setNodeState, onNodeChange] = useNodesState(nodes)
   const [edgeState, setEdgeState, onEdgeChange] = useEdgesState(edges)
@@ -199,7 +261,16 @@ const CanvasContent: React.FC = () => {
     } else {
       selectTable(node.id)
     }
-  }, [tables, selectTable, selectedTableIds, addToSelection, removeFromSelection])
+    
+    const relatedRelationships = relationships.filter(
+      r => r.sourceTableId === node.id || r.targetTableId === node.id
+    )
+    if (relatedRelationships.length > 0) {
+      setHighlightedRelationship(relatedRelationships[0].id)
+    } else {
+      setHighlightedRelationship(null)
+    }
+  }, [tables, selectTable, selectedTableIds, addToSelection, removeFromSelection, relationships, setHighlightedRelationship])
 
   const onSelectionChange = useCallback((params: OnSelectionChangeParams) => {
     const ids = params.nodes.map(n => n.id)
@@ -211,7 +282,8 @@ const CanvasContent: React.FC = () => {
   const onPaneClick = useCallback(() => {
     selectTable(null)
     clearSelection()
-  }, [selectTable, clearSelection])
+    setHighlightedRelationship(null)
+  }, [selectTable, clearSelection, setHighlightedRelationship])
 
   const handleDeleteSelected = async () => {
     if (selectedTableIds.length === 0) {
@@ -1002,62 +1074,45 @@ const CanvasContent: React.FC = () => {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div
-              style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13 }}
-              onClick={() => {
-                if (currentProject) {
-                  const rect = reactFlowWrapper.current?.getBoundingClientRect()
-                  if (rect) {
-                    const x = contextMenu.x - rect.left
-                    const y = contextMenu.y - rect.top
-                    createTable(currentProject.id, { name: '新表', positionX: x, positionY: y })
-                  }
+            <MenuItem onClick={() => {
+              if (currentProject) {
+                const rect = reactFlowWrapper.current?.getBoundingClientRect()
+                if (rect) {
+                  const x = contextMenu.x - rect.left
+                  const y = contextMenu.y - rect.top
+                  createTable(currentProject.id, { name: '新表', positionX: x, positionY: y })
                 }
-                setContextMenu(null)
-              }}
-            >
-              新建表
-            </div>
-            <div
-              style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13 }}
-              onClick={() => {
-                reactFlow?.fitView({ padding: 0.2, duration: 300 })
-                setContextMenu(null)
-              }}
-            >
-              适应视图
-            </div>
-            <div style={{ height: 1, background: '#f0f0f0', margin: '4px 0' }} />
-            <div
-              style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13 }}
-              onClick={() => {
-                handleSelectAll()
-                setContextMenu(null)
-              }}
-            >
-              全选 (Ctrl+A)
-            </div>
-            <div
-              style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13 }}
-              onClick={() => {
-                handleClearSelection()
-                setContextMenu(null)
-              }}
-            >
-              取消选择
-            </div>
+              }
+              setContextMenu(null)
+            }}>新建表</MenuItem>
+            <MenuItem onClick={() => {
+              reactFlow?.fitView({ padding: 0.2, duration: 300 })
+              setContextMenu(null)
+            }}>适应视图</MenuItem>
+            <MenuDivider />
+            <MenuItem onClick={() => {
+              handleSelectAll()
+              setContextMenu(null)
+            }}>全选 (Ctrl+A)</MenuItem>
+            <MenuItem onClick={() => {
+              handleClearSelection()
+              setContextMenu(null)
+            }}>取消选择</MenuItem>
             {selectedTableIds.length > 0 && (
               <>
-                <div style={{ height: 1, background: '#f0f0f0', margin: '4px 0' }} />
-                <div
-                  style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, color: '#ff4d4f' }}
-                  onClick={() => {
-                    handleDeleteSelected()
-                    setContextMenu(null)
-                  }}
-                >
-                  删除选中 ({selectedTableIds.length})
-                </div>
+                <MenuDivider />
+                <MenuItem onClick={() => {
+                  selectTable(selectedTableIds[0])
+                  setContextMenu(null)
+                }}>编辑表</MenuItem>
+                <MenuItem onClick={() => {
+                  setIsRelationshipEditorOpen(true)
+                  setContextMenu(null)
+                }}>创建关系</MenuItem>
+                <MenuItem danger onClick={() => {
+                  handleDeleteSelected()
+                  setContextMenu(null)
+                }}>删除选中 ({selectedTableIds.length})</MenuItem>
               </>
             )}
           </div>

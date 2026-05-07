@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { Handle, Position, NodeProps } from 'reactflow'
 import { Table } from '../types'
 import { DeleteOutlined, CommentOutlined, DatabaseOutlined, KeyOutlined, LinkOutlined } from '@ant-design/icons'
@@ -10,12 +10,15 @@ interface TableNodeData {
   onDelete: (tableId: string) => void
   highlighted?: boolean
   relationshipCount?: number
+  onMouseEnter?: (tableId: string) => void
+  onMouseLeave?: () => void
 }
 
 const TableNode: React.FC<NodeProps<TableNodeData>> = ({ data, selected }) => {
-  const { table, onEdit, onDelete, highlighted, relationshipCount = 0 } = data
+  const { table, onEdit, onDelete, highlighted, relationshipCount = 0, onMouseEnter, onMouseLeave } = data
   const compactMode = useAppStore(state => state.compactMode)
   const themeColor = useAppStore(state => state.themeColor)
+  const [isHovered, setIsHovered] = useState(false)
 
   const nodeWidth = compactMode ? '220px' : '280px'
   const headerPadding = compactMode ? '4px 8px' : '8px 12px'
@@ -32,13 +35,28 @@ const TableNode: React.FC<NodeProps<TableNodeData>> = ({ data, selected }) => {
 
   return (
     <div style={{
-      border: selected ? `2px solid ${themeColor}` : highlighted ? '2px solid #faad14' : '1px solid #ddd',
+      border: selected ? `2px solid ${themeColor}` : highlighted ? '2px solid #faad14' : isHovered ? '2px solid #1890ff' : '1px solid #ddd',
       borderRadius: '4px',
       background: '#fff',
       width: nodeWidth,
-      boxShadow: selected ? `0 2px 8px rgba(24,144,255,0.2)` : highlighted ? '0 4px 16px rgba(250,173,20,0.4)' : '0 2px 4px rgba(0,0,0,0.1)',
-      transition: 'all 0.3s ease'
-    }}>
+      boxShadow: selected ? `0 2px 8px rgba(24,144,255,0.2)` : highlighted ? `0 4px 16px rgba(250,173,20,0.4)` : isHovered ? `0 4px 12px rgba(24,144,255,0.2)` : '0 2px 4px rgba(0,0,0,0.1)',
+      transition: 'all 0.2s ease',
+      cursor: 'pointer'
+    }}
+    onDoubleClick={() => onEdit(table.id)}
+    onMouseEnter={() => {
+      setIsHovered(true)
+      if (onMouseEnter) {
+        onMouseEnter(table.id)
+      }
+    }}
+    onMouseLeave={() => {
+      setIsHovered(false)
+      if (onMouseLeave) {
+        onMouseLeave()
+      }
+    }}
+    >
       <Handle type="target" position={Position.Top} />
 
       <div style={{
