@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { Form, Input, InputNumber, Button, Space, Tag, Select, Popconfirm, Tabs, Modal, message, Row, Col } from 'antd'
-import { PlusOutlined, DeleteOutlined, SaveOutlined, ArrowUpOutlined, ArrowDownOutlined, DatabaseOutlined } from '@ant-design/icons'
+import { PlusOutlined, DeleteOutlined, SaveOutlined, ArrowUpOutlined, ArrowDownOutlined, DatabaseOutlined, HolderOutlined } from '@ant-design/icons'
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { Column as ColumnType, Table as TableType, Index } from '../types'
 import { useAppStore } from '../stores/appStore'
 import { MockDataModal } from './MockDataModal'
@@ -33,6 +36,166 @@ interface ColumnEditData {
   autoIncrement: boolean
 }
 
+interface SortableItemProps {
+  id: string
+  column: ColumnEditData
+  onUpdate: (id: string, field: keyof ColumnEditData, value: any) => void
+  onDelete: (id: string) => void
+  onMove: (id: string, direction: 'up' | 'down') => void
+  onSave: (id: string) => void
+  isFirst: boolean
+  isLast: boolean
+}
+
+const SortableItem: React.FC<SortableItemProps> = ({
+  id,
+  column,
+  onUpdate,
+  onDelete,
+  onMove,
+  onSave,
+  isFirst,
+  isLast
+}) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    background: isDragging ? '#f0f0f0' : 'white',
+    borderRadius: 4,
+    marginBottom: 8
+  }
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <Row gutter={8} align="middle" style={{ padding: '8px 0' }}>
+        <Col style={{ cursor: 'grab' }} {...attributes} {...listeners}>
+          <HolderOutlined style={{ color: '#999', fontSize: 14 }} />
+        </Col>
+        <Col flex="80px">
+          <Input
+            value={column.name}
+            onChange={e => onUpdate(id, 'name', e.target.value)}
+            onBlur={() => onSave(id)}
+            placeholder="字段名"
+            size="small"
+          />
+        </Col>
+        <Col flex="100px">
+          <Select
+            value={column.dataType}
+            onChange={value => onUpdate(id, 'dataType', value)}
+            onBlur={() => onSave(id)}
+            size="small"
+            style={{ width: '100%' }}
+          >
+            {DATA_TYPES.map(type => (
+              <Option key={type} value={type}>{type}</Option>
+            ))}
+          </Select>
+        </Col>
+        <Col flex="60px">
+          <InputNumber
+            value={column.length}
+            onChange={value => onUpdate(id, 'length', value)}
+            onBlur={() => onSave(id)}
+            placeholder="长度"
+            size="small"
+            style={{ width: '100%' }}
+            min={1}
+            max={65535}
+          />
+        </Col>
+        <Col flex="60px">
+          <Select
+            value={column.nullable ? 'Y' : 'N'}
+            onChange={value => onUpdate(id, 'nullable', value === 'Y')}
+            onBlur={() => onSave(id)}
+            size="small"
+            style={{ width: '100%' }}
+          >
+            <Option value="Y">Y</Option>
+            <Option value="N">N</Option>
+          </Select>
+        </Col>
+        <Col flex="60px">
+          <Select
+            value={column.primaryKey ? 'Y' : 'N'}
+            onChange={value => onUpdate(id, 'primaryKey', value === 'Y')}
+            onBlur={() => onSave(id)}
+            size="small"
+            style={{ width: '100%' }}
+          >
+            <Option value="Y">PK</Option>
+            <Option value="N">-</Option>
+          </Select>
+        </Col>
+        <Col flex="60px">
+          <Select
+            value={column.unique ? 'Y' : 'N'}
+            onChange={value => onUpdate(id, 'unique', value === 'Y')}
+            onBlur={() => onSave(id)}
+            size="small"
+            style={{ width: '100%' }}
+          >
+            <Option value="Y">UQ</Option>
+            <Option value="N">-</Option>
+          </Select>
+        </Col>
+        <Col flex="60px">
+          <Select
+            value={column.autoIncrement ? 'Y' : 'N'}
+            onChange={value => onUpdate(id, 'autoIncrement', value === 'Y')}
+            onBlur={() => onSave(id)}
+            size="small"
+            style={{ width: '100%' }}
+          >
+            <Option value="Y">AI</Option>
+            <Option value="N">-</Option>
+          </Select>
+        </Col>
+        <Col flex="40px">
+          <Button
+            type="text"
+            size="small"
+            icon={<ArrowUpOutlined />}
+            onClick={() => onMove(id, 'up')}
+            disabled={isFirst}
+          />
+        </Col>
+        <Col flex="40px">
+          <Button
+            type="text"
+            size="small"
+            icon={<ArrowDownOutlined />}
+            onClick={() => onMove(id, 'down')}
+            disabled={isLast}
+          />
+        </Col>
+        <Col flex="40px">
+          <Popconfirm
+            title="确定删除?"
+            onConfirm={() => onDelete(id)}
+            okText="是"
+            cancelText="否"
+          >
+            <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+          </Popconfirm>
+        </Col>
+      </Row>
+    </div>
+  )
+}
+
 const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
   const {
     updateTable, loadColumns, createColumn, updateColumn, deleteColumn,
@@ -46,6 +209,13 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
   const [editingColumns, setEditingColumns] = useState<ColumnEditData[]>([])
   const [isMockDataModalOpen, setIsMockDataModalOpen] = useState(false)
 
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
+
   useEffect(() => {
     loadColumns(table.id)
     loadIndexes(table.id)
@@ -55,7 +225,6 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
     })
   }, [table.id])
 
-  // 初始化编辑列数据
   useEffect(() => {
     setEditingColumns(
       (table.columns || []).map(col => ({
@@ -153,6 +322,22 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
     await updateColumnOrder(table.id, newOrder)
   }, [editingColumns, table.id, updateColumnOrder])
 
+  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
+    const { active, over } = event
+    if (over && active.id !== over.id) {
+      const oldIndex = editingColumns.findIndex(c => c.id === active.id)
+      const newIndex = editingColumns.findIndex(c => c.id === over.id)
+      if (oldIndex !== -1 && newIndex !== -1) {
+        const newOrder = arrayMove(
+          editingColumns.map(c => c.id),
+          oldIndex,
+          newIndex
+        )
+        await updateColumnOrder(table.id, newOrder)
+      }
+    }
+  }, [editingColumns, table.id, updateColumnOrder])
+
   const handleOpenIndexModal = useCallback((index?: Index) => {
     setEditingIndex(index || null)
     if (index) {
@@ -231,133 +416,32 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
                 </Button>
               </div>
               <div>
-                <Space direction="vertical" style={{ width: '100%' }}>
-                  {editingColumns.map((col, index) => (
-                    <div key={col.id} style={{ 
-                      background: '#fafafa', 
-                      border: '1px solid #e8e8e8', 
-                      borderRadius: '8px', 
-                      padding: '16px' 
-                    }}>
-                      <Row gutter={12} align="middle">
-                        <Col span={2} style={{ textAlign: 'center' }}>
-                          <Space direction="vertical">
-                            <Button 
-                              icon={<ArrowUpOutlined />} 
-                              size="small" 
-                              disabled={index === 0}
-                              onClick={() => handleMoveColumn(col.id, 'up')}
-                            />
-                            <Button 
-                              icon={<ArrowDownOutlined />} 
-                              size="small" 
-                              disabled={index === editingColumns.length - 1}
-                              onClick={() => handleMoveColumn(col.id, 'down')}
-                            />
-                          </Space>
-                        </Col>
-                        <Col span={3}>
-                          <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>列名</div>
-                          <Input
-                            value={col.name}
-                            onChange={(e) => handleUpdateColumnField(col.id, 'name', e.target.value)}
-                            onBlur={() => handleSaveColumn(col.id)}
-                            placeholder="列名"
-                          />
-                        </Col>
-                        <Col span={2}>
-                          <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>类型</div>
-                          <Select
-                            value={col.dataType}
-                            onChange={(val) => {
-                              handleUpdateColumnField(col.id, 'dataType', val)
-                              handleSaveColumn(col.id)
-                            }}
-                            style={{ width: '100%' }}
-                          >
-                            {DATA_TYPES.map(type => (
-                              <Option key={type} value={type}>{type}</Option>
-                            ))}
-                          </Select>
-                        </Col>
-                        <Col span={2}>
-                          <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>长度</div>
-                          <InputNumber
-                            value={col.length}
-                            onChange={(val) => handleUpdateColumnField(col.id, 'length', val)}
-                            onBlur={() => handleSaveColumn(col.id)}
-                            style={{ width: '100%' }}
-                          />
-                        </Col>
-                        <Col span={5}>
-                          <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>约束</div>
-                          <Space size="small">
-                            <Tag
-                              color={col.primaryKey ? 'green' : 'default'}
-                              onClick={() => {
-                                handleUpdateColumnField(col.id, 'primaryKey', !col.primaryKey)
-                                handleSaveColumn(col.id)
-                              }}
-                              style={{ cursor: 'pointer' }}
-                            >PK</Tag>
-                            <Tag
-                              color={col.unique ? 'orange' : 'default'}
-                              onClick={() => {
-                                handleUpdateColumnField(col.id, 'unique', !col.unique)
-                                handleSaveColumn(col.id)
-                              }}
-                              style={{ cursor: 'pointer' }}
-                            >UQ</Tag>
-                            <Tag
-                              color={!col.nullable ? 'red' : 'default'}
-                              onClick={() => {
-                                handleUpdateColumnField(col.id, 'nullable', !col.nullable)
-                                handleSaveColumn(col.id)
-                              }}
-                              style={{ cursor: 'pointer' }}
-                            >{col.nullable ? 'NULL' : 'NOT NULL'}</Tag>
-                            <Tag
-                              color={col.autoIncrement ? 'blue' : 'default'}
-                              onClick={() => {
-                                handleUpdateColumnField(col.id, 'autoIncrement', !col.autoIncrement)
-                                handleSaveColumn(col.id)
-                              }}
-                              style={{ cursor: 'pointer' }}
-                            >AI</Tag>
-                          </Space>
-                        </Col>
-                        <Col span={3}>
-                          <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>默认值</div>
-                          <Input
-                            value={col.defaultValue || ''}
-                            onChange={(e) => handleUpdateColumnField(col.id, 'defaultValue', e.target.value)}
-                            onBlur={() => handleSaveColumn(col.id)}
-                            placeholder="默认值"
-                          />
-                        </Col>
-                        <Col span={4}>
-                          <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>注释</div>
-                          <Input
-                            value={col.comment || ''}
-                            onChange={(e) => handleUpdateColumnField(col.id, 'comment', e.target.value)}
-                            onBlur={() => handleSaveColumn(col.id)}
-                            placeholder="注释"
-                          />
-                        </Col>
-                        <Col span={1}>
-                          <Popconfirm
-                            title="确定删除这个列吗？"
-                            onConfirm={() => handleDeleteColumn(col.id)}
-                            okText="确定"
-                            cancelText="取消"
-                          >
-                            <Button type="text" danger icon={<DeleteOutlined />} />
-                          </Popconfirm>
-                        </Col>
-                      </Row>
-                    </div>
-                  ))}
-                </Space>
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext
+                    items={editingColumns.map(c => c.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <Space direction="vertical" style={{ width: '100%' }}>
+                      {editingColumns.map((col, index) => (
+                        <SortableItem
+                          key={col.id}
+                          id={col.id}
+                          column={col}
+                          onUpdate={handleUpdateColumnField}
+                          onDelete={handleDeleteColumn}
+                          onMove={handleMoveColumn}
+                          onSave={handleSaveColumn}
+                          isFirst={index === 0}
+                          isLast={index === editingColumns.length - 1}
+                        />
+                      ))}
+                    </Space>
+                  </SortableContext>
+                </DndContext>
               </div>
             </div>
           )

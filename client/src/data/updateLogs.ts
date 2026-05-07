@@ -13,6 +13,22 @@ export interface UpdateChange {
 export const updateLogs: UpdateLog[] = [
   {
     date: '2026-05-07',
+    version: 'v1.1.0',
+    changes: [
+      {
+        type: 'feature',
+        title: '字段拖拽排序功能',
+        description: '使用@dnd-kit实现字段拖拽排序，支持拖拽手柄快速调整字段顺序'
+      },
+      {
+        type: 'improvement',
+        title: '表编辑器重构',
+        description: '使用SortableItem组件封装字段编辑，添加拖拽视觉反馈'
+      }
+    ]
+  },
+  {
+    date: '2026-05-07',
     version: 'v1.0.9',
     changes: [
       {
