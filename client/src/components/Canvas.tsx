@@ -50,7 +50,7 @@ const nodeTypes = {
 }
 
 const CanvasContent: React.FC = () => {
-  const { tables, currentProject, updateTablePosition, selectTable, selectedTableId, selectedTableIds, selectTables, addToSelection, removeFromSelection, clearSelection, deleteSelectedTables, deleteTable, createTable, loadTables, relationships, loadRelationships, canvasZoom, setCanvasZoom, showMiniMap, setShowMiniMap, edgeStyle, showEdgeLabels, updateTable } = useAppStore()
+  const { tables, currentProject, updateTablePosition, selectTable, selectedTableId, selectedTableIds, selectTables, addToSelection, removeFromSelection, clearSelection, deleteSelectedTables, deleteTable, createTable, loadTables, relationships, loadRelationships, canvasZoom, setCanvasZoom, showMiniMap, setShowMiniMap, edgeStyle, showEdgeLabels, updateTable, snapToGrid, gridSize, showGuides } = useAppStore()
   const reactFlow = useReactFlow()
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -643,7 +643,12 @@ const CanvasContent: React.FC = () => {
           panOnDrag={true}
           selectNodesOnDrag={false}
         >
-          <Background color="#eee" gap={16} size={2} />
+          <Background
+            color={showGuides ? "#1890ff" : "#eee"}
+            gap={gridSize}
+            size={1}
+            style={{ opacity: showGuides ? 0.3 : 1 }}
+          />
           <div style={{ 
             position: 'absolute', 
             top: 10, 

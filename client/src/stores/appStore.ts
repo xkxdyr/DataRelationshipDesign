@@ -31,6 +31,9 @@ interface AppState {
   tablePrefix: string
   tablePrefixPresets: string[]
   autoAddIdColumn: boolean
+  snapToGrid: boolean
+  gridSize: number
+  showGuides: boolean
 }
 
 interface AppStore extends AppState {
@@ -95,6 +98,9 @@ interface AppStore extends AppState {
   addTablePrefixPreset: (prefix: string) => void
   removeTablePrefixPreset: (prefix: string) => void
   setAutoAddIdColumn: (autoAdd: boolean) => void
+  setSnapToGrid: (snap: boolean) => void
+  setGridSize: (size: number) => void
+  setShowGuides: (show: boolean) => void
   loadSettings: () => Promise<void>
   syncToLocal: () => Promise<void>
   loadFromLocal: (projectId: string) => Promise<void>
@@ -147,7 +153,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
     showEdgeLabels: true,
     tablePrefix: '',
     tablePrefixPresets: ['', 'tbl_', 't_', 'sys_', 'app_', 'wp_', 'xmy_'],
-    autoAddIdColumn: true
+    autoAddIdColumn: true,
+    snapToGrid: true,
+    gridSize: 20,
+    showGuides: true
   }],
   future: [],
   isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
@@ -166,6 +175,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
   tablePrefix: '',
   tablePrefixPresets: ['', 'tbl_', 't_', 'sys_', 'app_', 'wp_', 'xmy_'],
   autoAddIdColumn: true,
+  snapToGrid: true,
+  gridSize: 20,
+  showGuides: true,
 
   setOnline: (online: boolean) => set({ isOnline: online }),
   setLocalMode: (localMode: boolean) => {
@@ -237,6 +249,18 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({ autoAddIdColumn: autoAdd })
     localStorageService.setMeta('autoAddIdColumn', autoAdd)
   },
+  setSnapToGrid: (snap: boolean) => {
+    set({ snapToGrid: snap })
+    localStorageService.setMeta('snapToGrid', snap)
+  },
+  setGridSize: (size: number) => {
+    set({ gridSize: size })
+    localStorageService.setMeta('gridSize', size)
+  },
+  setShowGuides: (show: boolean) => {
+    set({ showGuides: show })
+    localStorageService.setMeta('showGuides', show)
+  },
   loadSettings: async () => {
     const savedLocalMode = await localStorageService.getMeta<boolean>('localMode')
     if (savedLocalMode !== undefined) {
@@ -301,6 +325,21 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const savedAutoAddIdColumn = await localStorageService.getMeta<boolean>('autoAddIdColumn')
     if (savedAutoAddIdColumn !== undefined) {
       set({ autoAddIdColumn: savedAutoAddIdColumn })
+    }
+
+    const savedSnapToGrid = await localStorageService.getMeta<boolean>('snapToGrid')
+    if (savedSnapToGrid !== undefined) {
+      set({ snapToGrid: savedSnapToGrid })
+    }
+
+    const savedGridSize = await localStorageService.getMeta<number>('gridSize')
+    if (savedGridSize !== undefined) {
+      set({ gridSize: savedGridSize })
+    }
+
+    const savedShowGuides = await localStorageService.getMeta<boolean>('showGuides')
+    if (savedShowGuides !== undefined) {
+      set({ showGuides: savedShowGuides })
     }
   },
 
@@ -533,7 +572,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
       showEdgeLabels: get().showEdgeLabels,
       tablePrefix: get().tablePrefix,
       tablePrefixPresets: get().tablePrefixPresets,
-      autoAddIdColumn: get().autoAddIdColumn
+      autoAddIdColumn: get().autoAddIdColumn,
+      snapToGrid: get().snapToGrid,
+      gridSize: get().gridSize,
+      showGuides: get().showGuides
     }
 
     set({
@@ -589,7 +631,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
       showEdgeLabels: get().showEdgeLabels,
       tablePrefix: get().tablePrefix,
       tablePrefixPresets: get().tablePrefixPresets,
-      autoAddIdColumn: get().autoAddIdColumn
+      autoAddIdColumn: get().autoAddIdColumn,
+      snapToGrid: get().snapToGrid,
+      gridSize: get().gridSize,
+      showGuides: get().showGuides
     }
     set(state => ({
       past: [...state.past.slice(-19), currentState],

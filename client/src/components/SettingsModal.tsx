@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Modal, Slider, Button, Space, Typography, Tag, Switch, Card, Row, Col, Input, Tree, TreeDataNode, Select, Timeline, Badge } from 'antd'
 import type { Key } from 'react'
-import { SettingOutlined, FontSizeOutlined, BgColorsOutlined, CompressOutlined, AimOutlined, ThunderboltOutlined, LinkOutlined, SaveOutlined, SwapOutlined, RobotOutlined, AppstoreOutlined, EyeOutlined, DatabaseOutlined, KeyOutlined, StarOutlined, PlusOutlined, HistoryOutlined, BugOutlined, LockOutlined, PictureOutlined, RocketOutlined, ToolOutlined } from '@ant-design/icons'
+import { SettingOutlined, FontSizeOutlined, BgColorsOutlined, CompressOutlined, AimOutlined, ThunderboltOutlined, LinkOutlined, SaveOutlined, SwapOutlined, RobotOutlined, AppstoreOutlined, EyeOutlined, DatabaseOutlined, KeyOutlined, StarOutlined, PlusOutlined, HistoryOutlined, BugOutlined, LockOutlined, PictureOutlined, RocketOutlined, ToolOutlined, TableOutlined, AlignLeftOutlined } from '@ant-design/icons'
 import { useAppStore } from '../stores/appStore'
 import { useTheme } from '../theme/useTheme'
 import { updateLogs, getChangeTypeLabel, getChangeTypeColor } from '../data/updateLogs'
@@ -61,6 +61,7 @@ const treeData: TreeDataNode[] = [
       { title: '缩放级别', key: 'zoom-level', icon: <AimOutlined style={{ fontSize: 12 }} /> },
       { title: '小地图', key: 'minimap', icon: <StarOutlined style={{ fontSize: 12 }} /> },
       { title: '关系线', key: 'edges', icon: <LinkOutlined style={{ fontSize: 12 }} /> },
+      { title: '网格对齐', key: 'grid-align', icon: <TableOutlined style={{ fontSize: 12 }} /> },
     ],
   },
   {
@@ -124,6 +125,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onClose, 
   const removeTablePrefixPreset = useAppStore(state => state.removeTablePrefixPreset)
   const autoAddIdColumn = useAppStore(state => state.autoAddIdColumn)
   const setAutoAddIdColumn = useAppStore(state => state.setAutoAddIdColumn)
+  const snapToGrid = useAppStore(state => state.snapToGrid)
+  const setSnapToGrid = useAppStore(state => state.setSnapToGrid)
+  const gridSize = useAppStore(state => state.gridSize)
+  const setGridSize = useAppStore(state => state.setGridSize)
+  const showGuides = useAppStore(state => state.showGuides)
+  const setShowGuides = useAppStore(state => state.setShowGuides)
 
   const handleReset = () => {
     setFontSize(14)
@@ -136,6 +143,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onClose, 
     setEdgeStyle('smooth')
     setShowEdgeLabels(true)
     setTablePrefix('')
+    setSnapToGrid(true)
+    setGridSize(20)
+    setShowGuides(true)
     setAutoAddIdColumn(true)
   }
 
@@ -346,6 +356,65 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onClose, 
             <div style={{ marginTop: 16 }}>
               <Text type="secondary">当前: 每 {formatInterval(autoSaveInterval)}</Text>
             </div>
+          </div>
+        )
+
+      case 'grid-align':
+        return (
+          <div style={{ padding: '16px' }}>
+            <Title level={4} style={{ marginBottom: 16 }}>
+              <Space>
+                <TableOutlined />
+                网格对齐
+              </Space>
+            </Title>
+            <Text type="secondary" style={{ display: 'block', marginBottom: 24 }}>
+              拖拽表节点时自动对齐到网格
+            </Text>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+              <div>
+                <Text strong>启用网格对齐</Text>
+                <br />
+                <Text type="secondary" style={{ fontSize: 12 }}>拖拽时自动对齐到网格点</Text>
+              </div>
+              <Switch checked={snapToGrid} onChange={setSnapToGrid} />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+              <div>
+                <Text strong>显示辅助线</Text>
+                <br />
+                <Text type="secondary" style={{ fontSize: 12 }}>在画布上显示网格辅助线</Text>
+              </div>
+              <Switch checked={showGuides} onChange={setShowGuides} />
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <Text strong style={{ display: 'block', marginBottom: 12 }}>网格大小</Text>
+              <Slider
+                min={10}
+                max={50}
+                value={gridSize}
+                onChange={setGridSize}
+                marks={{
+                  10: '10px',
+                  20: '20px',
+                  30: '30px',
+                  50: '50px'
+                }}
+                disabled={!snapToGrid && !showGuides}
+              />
+              <div style={{ textAlign: 'center', marginTop: 8 }}>
+                <Tag color="blue">{gridSize}px</Tag>
+              </div>
+            </div>
+
+            <Card size="small" style={{ marginTop: 16, background: '#fafafa' }}>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                <strong>提示：</strong>较小的网格适合精细调整，较大的网格适合快速布局。
+              </Text>
+            </Card>
           </div>
         )
 

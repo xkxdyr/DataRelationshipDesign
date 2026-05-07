@@ -13,6 +13,17 @@ export interface UpdateChange {
 export const updateLogs: UpdateLog[] = [
   {
     date: '2026-05-07',
+    version: 'v1.0.9',
+    changes: [
+      {
+        type: 'feature',
+        title: '网格对齐和辅助线功能',
+        description: '支持网格对齐开关、辅助线显示开关、网格大小可调节(10-50px)'
+      }
+    ]
+  },
+  {
+    date: '2026-05-07',
     version: 'v1.0.8',
     changes: [
       {
