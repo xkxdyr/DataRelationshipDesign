@@ -1,7 +1,6 @@
 import React from 'react'
 import { Form, Input, Select, Switch, Button, Space, Typography, Card, Divider, message } from 'antd'
 import { PlusOutlined, EditOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, LinkOutlined, DatabaseOutlined, GlobalOutlined, UserOutlined, LockOutlined } from '@ant-design/icons'
-import { ConnectionConfig } from '../services/api'
 import { useTheme } from '../theme/useTheme'
 
 const { Title, Text } = Typography
@@ -22,9 +21,24 @@ const defaultPortMap: Record<string, number> = {
   ORACLE: 1521,
 }
 
+interface ConnectionFormData {
+  id: string
+  name: string
+  databaseType: string
+  host: string
+  port: number
+  databaseName: string
+  username: string
+  password: string
+  sslEnabled: boolean
+  description?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
 interface ConnectionFormProps {
   isEditing: boolean
-  initialData?: ConnectionConfig | null
+  initialData?: ConnectionFormData | null
   onSubmit: (data: any) => void
   onTestConnection: (data?: any) => void
   onCancel: () => void

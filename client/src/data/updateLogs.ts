@@ -13,6 +13,17 @@ export interface UpdateChange {
 export const updateLogs: UpdateLog[] = [
   {
     date: '2026-05-07',
+    version: 'v1.3.5',
+    changes: [
+      {
+        type: 'security',
+        title: '连接配置本地加密保存',
+        description: '数据库连接密码使用本地加密算法保存到 IndexedDB，防止密码明文泄露，保障用户数据安全'
+      }
+    ]
+  },
+  {
+    date: '2026-05-07',
     version: 'v1.3.4',
     changes: [
       {

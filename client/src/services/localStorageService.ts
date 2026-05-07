@@ -27,6 +27,22 @@ export interface LocalVersion extends Version {
   lastModified?: number
 }
 
+export interface LocalConnection {
+  id: string
+  name: string
+  databaseType: string
+  host: string
+  port: number
+  databaseName: string
+  username: string
+  encryptedPassword: string
+  sslEnabled: boolean
+  description?: string
+  createdAt: string
+  updatedAt: string
+  lastModified?: number
+}
+
 export interface SyncQueueItem {
   id?: number
   type: 'create' | 'update' | 'delete'
@@ -36,6 +52,44 @@ export interface SyncQueueItem {
   timestamp: number
 }
 
+const ENCRYPTION_KEY = 'DataVisualizationDesignTool_v1'
+
+function generateKey(password: string, salt: string): string {
+  let key = password
+  for (let i = 0; i < 1000; i++) {
+    key = btoa(key + salt)
+  }
+  return key
+}
+
+function encryptPassword(password: string): string {
+  if (!password) return ''
+  const salt = Date.now().toString(36)
+  const key = generateKey(ENCRYPTION_KEY, salt)
+  let encrypted = ''
+  for (let i = 0; i < password.length; i++) {
+    const charCode = password.charCodeAt(i) ^ key.charCodeAt(i % key.length)
+    encrypted += charCode.toString(16).padStart(2, '0')
+  }
+  return salt + ':' + encrypted
+}
+
+function decryptPassword(encrypted: string): string {
+  if (!encrypted || !encrypted.includes(':')) return ''
+  try {
+    const [salt, data] = encrypted.split(':')
+    const key = generateKey(ENCRYPTION_KEY, salt)
+    let decrypted = ''
+    for (let i = 0; i < data.length; i += 2) {
+      const charCode = parseInt(data.substr(i, 2), 16) ^ key.charCodeAt(Math.floor(i / 2) % key.length)
+      decrypted += String.fromCharCode(charCode)
+    }
+    return decrypted
+  } catch {
+    return ''
+  }
+}
+
 class LocalDatabase extends Dexie {
   projects!: DexieTable<LocalProject, string>
   localTables!: DexieTable<LocalTable, string>
@@ -43,6 +97,7 @@ class LocalDatabase extends Dexie {
   relationships!: DexieTable<LocalRelationship, string>
   indexes!: DexieTable<LocalIndex, string>
   versions!: DexieTable<LocalVersion, string>
+  connections!: DexieTable<LocalConnection, string>
   syncQueue!: DexieTable<SyncQueueItem, number>
   meta!: DexieTable<{ key: string; value: any }, string>
 
@@ -55,6 +110,17 @@ class LocalDatabase extends Dexie {
       relationships: 'id, projectId, sourceTableId, targetTableId, lastModified',
       indexes: 'id, tableId, name, lastModified',
       versions: 'id, projectId, version, lastModified',
+      syncQueue: '++id, entity, entityId, timestamp',
+      meta: 'key'
+    })
+    this.version(2).stores({
+      projects: 'id, name, databaseType, createdAt, lastModified',
+      localTables: 'id, projectId, name, positionX, positionY, lastModified',
+      columns: 'id, tableId, name, lastModified',
+      relationships: 'id, projectId, sourceTableId, targetTableId, lastModified',
+      indexes: 'id, tableId, name, lastModified',
+      versions: 'id, projectId, version, lastModified',
+      connections: 'id, name, databaseType, host, lastModified',
       syncQueue: '++id, entity, entityId, timestamp',
       meta: 'key'
     })
@@ -271,7 +337,92 @@ export const localStorageService = {
       await localDb.indexes.bulkPut(indexes)
       await localDb.versions.bulkPut(versions)
     })
-  }
+  },
+
+  async saveConnection(connection: Omit<LocalConnection, 'lastModified'>): Promise<void> {
+    await localDb.connections.put({
+      ...connection,
+      lastModified: Date.now()
+    })
+  },
+
+  async getConnection(id: string): Promise<LocalConnection | undefined> {
+    return localDb.connections.get(id)
+  },
+
+  async getAllConnections(): Promise<LocalConnection[]> {
+    return localDb.connections.toArray()
+  },
+
+  async getDecryptedConnection(id: string): Promise<{
+    id: string
+    name: string
+    databaseType: string
+    host: string
+    port: number
+    databaseName: string
+    username: string
+    password: string
+    sslEnabled: boolean
+    description?: string
+    createdAt: string
+    updatedAt: string
+  } | undefined> {
+    const connection = await localDb.connections.get(id)
+    if (!connection) return undefined
+    return {
+      id: connection.id,
+      name: connection.name,
+      databaseType: connection.databaseType,
+      host: connection.host,
+      port: connection.port,
+      databaseName: connection.databaseName,
+      username: connection.username,
+      sslEnabled: connection.sslEnabled,
+      description: connection.description,
+      createdAt: connection.createdAt,
+      updatedAt: connection.updatedAt,
+      password: decryptPassword(connection.encryptedPassword)
+    }
+  },
+
+  async getDecryptedAllConnections(): Promise<Array<{
+    id: string
+    name: string
+    databaseType: string
+    host: string
+    port: number
+    databaseName: string
+    username: string
+    password: string
+    sslEnabled: boolean
+    description?: string
+    createdAt: string
+    updatedAt: string
+  }>> {
+    const connections = await localDb.connections.toArray()
+    return connections.map(conn => ({
+      id: conn.id,
+      name: conn.name,
+      databaseType: conn.databaseType,
+      host: conn.host,
+      port: conn.port,
+      databaseName: conn.databaseName,
+      username: conn.username,
+      sslEnabled: conn.sslEnabled,
+      description: conn.description,
+      createdAt: conn.createdAt,
+      updatedAt: conn.updatedAt,
+      password: decryptPassword(conn.encryptedPassword)
+    }))
+  },
+
+  async deleteConnection(id: string): Promise<void> {
+    await localDb.connections.delete(id)
+  },
+
+  encryptPassword,
+  decryptPassword
 }
 
 export default localStorageService
