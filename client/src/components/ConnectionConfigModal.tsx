@@ -1,11 +1,16 @@
-import React, { useState, useEffect } from 'react'
-import { Modal, Button, Card, Space, Typography, Tag, message, Tooltip, Spin } from 'antd'
-import { PlusOutlined, EditOutlined, DeleteOutlined, DatabaseOutlined, CloudServerOutlined, EnvironmentOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons'
+import React, { useState, useEffect, useMemo } from 'react'
+import { Modal, Button, Card, Space, Typography, Tag, message, Tooltip, Spin, Input, Empty } from 'antd'
+import { PlusOutlined, EditOutlined, DeleteOutlined, DatabaseOutlined, CloudServerOutlined, EnvironmentOutlined, CheckCircleOutlined, CloseCircleOutlined, SearchOutlined, ClockCircleOutlined, LockOutlined } from '@ant-design/icons'
 import { connectionApi, ConnectionConfig } from '../services/api'
 import { ConnectionForm } from './ConnectionForm'
 import { useTheme } from '../theme/useTheme'
 
 const { Title, Text } = Typography
+
+interface ConnectionWithStatus extends ConnectionConfig {
+  lastTestTime?: string
+  lastTestSuccess?: boolean
+}
 
 interface ConnectionConfigModalProps {
   visible: boolean
@@ -13,13 +18,25 @@ interface ConnectionConfigModalProps {
 }
 
 export const ConnectionConfigModal: React.FC<ConnectionConfigModalProps> = ({ visible, onClose }) => {
-  const [connections, setConnections] = useState<ConnectionConfig[]>([])
-  const [selectedConnection, setSelectedConnection] = useState<ConnectionConfig | null>(null)
+  const [connections, setConnections] = useState<ConnectionWithStatus[]>([])
+  const [selectedConnection, setSelectedConnection] = useState<ConnectionWithStatus | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [testLoading, setTestLoading] = useState(false)
   const [testResult, setTestResult] = useState<{ success: boolean; message: string; responseTime?: number } | null>(null)
   const [loading, setLoading] = useState(false)
+  const [searchText, setSearchText] = useState('')
   const { colors } = useTheme()
+
+  const filteredConnections = useMemo(() => {
+    if (!searchText) return connections
+    const lowerSearch = searchText.toLowerCase()
+    return connections.filter(c => 
+      c.name.toLowerCase().includes(lowerSearch) ||
+      c.host.toLowerCase().includes(lowerSearch) ||
+      c.databaseName.toLowerCase().includes(lowerSearch) ||
+      c.databaseType.toLowerCase().includes(lowerSearch)
+    )
+  }, [connections, searchText])
 
   useEffect(() => {
     if (visible) {
@@ -179,7 +196,7 @@ export const ConnectionConfigModal: React.FC<ConnectionConfigModalProps> = ({ vi
       <div style={{ display: 'flex', height: 'calc(75vh - 80px)', gap: 20 }}>
         {/* 左侧 - 连接列表 */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <Title level={4} style={{ margin: 0 }}>连接列表</Title>
             <Button
               type="primary"
@@ -189,6 +206,14 @@ export const ConnectionConfigModal: React.FC<ConnectionConfigModalProps> = ({ vi
               新建连接
             </Button>
           </div>
+          
+          <Input
+            placeholder="搜索连接名称、主机、数据库..."
+            prefix={<SearchOutlined style={{ color: colors.textSecondary }} />}
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            style={{ marginBottom: 12 }}
+          />
           
           <div style={{ 
             flex: 1, 
@@ -204,7 +229,7 @@ export const ConnectionConfigModal: React.FC<ConnectionConfigModalProps> = ({ vi
               }}>
                 <Spin size="large" />
               </div>
-            ) : connections.length === 0 ? (
+            ) : filteredConnections.length === 0 ? (
               <div style={{ 
                 textAlign: 'center', 
                 padding: '48px 24px',
@@ -223,7 +248,7 @@ export const ConnectionConfigModal: React.FC<ConnectionConfigModalProps> = ({ vi
               </div>
             ) : (
               <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-                {connections.map((connection) => (
+                {filteredConnections.map((connection) => (
                   <Card
                     key={connection.id}
                     size="small"
@@ -279,10 +304,28 @@ export const ConnectionConfigModal: React.FC<ConnectionConfigModalProps> = ({ vi
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-                          <Text strong style={{ fontSize: 16 }}>{connection.name}</Text>
-                          <Tag color={getDatabaseTypeColor(connection.databaseType)}>
-                            {connection.databaseType}
-                          </Tag>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <Text strong style={{ fontSize: 16 }}>{connection.name}</Text>
+                            {connection.lastTestSuccess !== undefined && (
+                              <Tooltip title={connection.lastTestSuccess ? '连接测试成功' : '连接测试失败'}>
+                                {connection.lastTestSuccess ? (
+                                  <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 16 }} />
+                                ) : (
+                                  <CloseCircleOutlined style={{ color: '#f5222d', fontSize: 16 }} />
+                                )}
+                              </Tooltip>
+                            )}
+                          </div>
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            {connection.sslEnabled && (
+                              <Tooltip title="SSL已启用">
+                                <LockOutlined style={{ color: '#1890ff', fontSize: 14 }} />
+                              </Tooltip>
+                            )}
+                            <Tag color={getDatabaseTypeColor(connection.databaseType)}>
+                              {connection.databaseType}
+                            </Tag>
+                          </div>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: colors.textSecondary, fontSize: 12, marginBottom: 2 }}>
                           <EnvironmentOutlined style={{ fontSize: 12 }} />
@@ -291,6 +334,19 @@ export const ConnectionConfigModal: React.FC<ConnectionConfigModalProps> = ({ vi
                         <div style={{ color: colors.textSecondary, fontSize: 12 }}>
                           {connection.databaseName}
                         </div>
+                        {connection.lastTestTime && (
+                          <div style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: 4, 
+                            color: colors.textSecondary, 
+                            fontSize: 12, 
+                            marginTop: 4 
+                          }}>
+                            <ClockCircleOutlined style={{ fontSize: 12 }} />
+                            <span>上次测试: {connection.lastTestTime}</span>
+                          </div>
+                        )}
                         {connection.description && (
                           <div style={{ 
                             color: colors.textSecondary, 
