@@ -13,6 +13,88 @@ export interface UpdateChange {
 export const updateLogs: UpdateLog[] = [
   {
     date: '2026-05-07',
+    version: 'v1.2.9',
+    changes: [
+      {
+        type: 'feature',
+        title: '画布缩放滑块可视化控制',
+        description: '在画布底部添加可视化缩放滑块，支持拖拽滑块或点击+/-按钮快速调整缩放比例，带工具提示显示当前百分比'
+      }
+    ]
+  },
+  {
+    date: '2026-05-07',
+    version: 'v1.2.8',
+    changes: [
+      {
+        type: 'feature',
+        title: '画布全屏模式',
+        description: '支持一键切换画布为全屏展示模式，工具栏左侧和右键菜单均可触发，ESC退出全屏'
+      }
+    ]
+  },
+  {
+    date: '2026-05-07',
+    version: 'v1.2.7',
+    changes: [
+      {
+        type: 'feature',
+        title: '批量表节点自动排列功能',
+        description: '选中多个表后可一键自动整齐排列成网格布局，支持工具栏对齐菜单和右键菜单触发'
+      }
+    ]
+  },
+  {
+    date: '2026-05-07',
+    version: 'v1.2.6',
+    changes: [
+      {
+        type: 'feature',
+        title: '画布网格吸附功能',
+        description: '拖拽表节点时自动对齐到网格，保持布局整齐，设置面板可开关网格吸附和调整网格大小'
+      }
+    ]
+  },
+  {
+    date: '2026-05-07',
+    version: 'v1.2.5',
+    changes: [
+      {
+        type: 'feature',
+        title: '右键菜单复制/粘贴功能',
+        description: '在画布空白处右键显示粘贴选项，在选中表上右键显示复制和编辑表选项'
+      },
+      {
+        type: 'feature',
+        title: 'Ctrl+C/Ctrl+V 键盘快捷键',
+        description: '支持Ctrl+C复制选中表，Ctrl+V粘贴剪贴板中的表到画布'
+      }
+    ]
+  },
+  {
+    date: '2026-05-07',
+    version: 'v1.2.4',
+    changes: [
+      {
+        type: 'feature',
+        title: 'ESC键取消选择功能',
+        description: '按ESC键可取消当前表的选中状态和清空多选，支持搜索时清空搜索高亮'
+      }
+    ]
+  },
+  {
+    date: '2026-05-07',
+    version: 'v1.2.3',
+    changes: [
+      {
+        type: 'feature',
+        title: '画布缩放快捷键 (+/-键)',
+        description: '按+或=键放大画布，按-键缩小画布，每次调整10%，支持Ctrl+0重置缩放'
+      }
+    ]
+  },
+  {
+    date: '2026-05-07',
     version: 'v1.2.2',
     changes: [
       {

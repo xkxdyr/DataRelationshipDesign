@@ -17,7 +17,7 @@ import TableNode from './TableNode'
 import RelationshipEditor from './RelationshipEditor'
 import { useAppStore } from '../stores/appStore'
 import { Button, Space, Dropdown, message, Modal, Form, Card, Radio, Slider, Select, Input, Popconfirm, AutoComplete, Tooltip } from 'antd'
-import { PlusOutlined, CodeOutlined, LinkOutlined, ExportOutlined, PictureOutlined, FileImageOutlined, SettingOutlined, ZoomInOutlined, ZoomOutOutlined, RotateLeftOutlined, CompressOutlined, AimOutlined, LockOutlined, DeleteOutlined, CheckSquareOutlined, BorderOutlined, SearchOutlined, CloseCircleFilled, CopyOutlined, AlignLeftOutlined, AlignRightOutlined, AlignCenterOutlined, VerticalAlignTopOutlined, VerticalAlignBottomOutlined, UndoOutlined, RedoOutlined } from '@ant-design/icons'
+import { PlusOutlined, MinusOutlined, CodeOutlined, LinkOutlined, ExportOutlined, PictureOutlined, FileImageOutlined, SettingOutlined, ZoomInOutlined, ZoomOutOutlined, RotateLeftOutlined, CompressOutlined, AimOutlined, LockOutlined, DeleteOutlined, CheckSquareOutlined, BorderOutlined, SearchOutlined, CloseCircleFilled, CopyOutlined, AlignLeftOutlined, AlignRightOutlined, AlignCenterOutlined, VerticalAlignTopOutlined, VerticalAlignBottomOutlined, UndoOutlined, RedoOutlined, FileTextOutlined, ColumnWidthOutlined, FullscreenOutlined, FullscreenExitOutlined } from '@ant-design/icons'
 import CreateTableModal from './CreateTableModal'
 import { projectApi } from '../services/api'
 
@@ -96,6 +96,7 @@ const CanvasContent: React.FC = () => {
     }
   })
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; tableId?: string } | null>(null)
+  const [isFullscreen, setIsFullscreen] = useState(false)
 
   useEffect(() => {
     if (currentProject) {
@@ -364,6 +365,14 @@ const CanvasContent: React.FC = () => {
         e.preventDefault()
         setCanvasZoom(1)
       }
+      if (e.key === '=' || e.key === '+') {
+        e.preventDefault()
+        setCanvasZoom(Math.min((canvasZoom || 1) + 0.1, 2))
+      }
+      if (e.key === '-') {
+        e.preventDefault()
+        setCanvasZoom(Math.max((canvasZoom || 1) - 0.1, 0.1))
+      }
       if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
         e.preventDefault()
         handleDuplicateSelected()
@@ -379,13 +388,30 @@ const CanvasContent: React.FC = () => {
       if (e.key === 'Delete' && selectedTableIds.length > 0) {
         handleDeleteSelected()
       }
-      if (e.key === 'Escape' && highlightedTableId) {
-        handleClearSearch()
+      if (e.key === 'Escape') {
+        if (highlightedTableId) {
+          handleClearSearch()
+        } else if (selectedTableIds.length > 0 || selectedTableId) {
+          selectTable(null)
+          clearSelection()
+        }
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+        e.preventDefault()
+        if (selectedTableIds.length > 0) {
+          copySelectedTables()
+          message.success('已复制到剪贴板')
+        }
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+        e.preventDefault()
+        pasteTables(50, 50)
+        message.success('已粘贴')
       }
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [selectedTableIds, canRedo, redo, handleDeleteSelected, selectAllTables])
+  }, [selectedTableIds, selectedTableId, canRedo, redo, handleDeleteSelected, selectAllTables, canvasZoom, setCanvasZoom, highlightedTableId, selectTable, clearSelection, copySelectedTables, pasteTables])
 
   const handleDuplicateSelected = async () => {
     if (selectedTableIds.length === 0) {
@@ -463,6 +489,44 @@ const CanvasContent: React.FC = () => {
     })
     message.success('已底对齐')
   }
+
+  const handleAutoArrange = () => {
+    if (selectedTableIds.length < 2) {
+      message.warning('请选择至少2个表进行自动排列')
+      return
+    }
+    const selectedTables = tables.filter(t => selectedTableIds.includes(t.id))
+    const cols = Math.ceil(Math.sqrt(selectedTableIds.length))
+    const spacingX = 80
+    const spacingY = 100
+    const startX = 100
+    const startY = 100
+    
+    selectedTables.forEach((table, index) => {
+      const col = index % cols
+      const row = Math.floor(index / cols)
+      updateTablePosition(table.id, startX + col * (250 + spacingX), startY + row * (150 + spacingY))
+    })
+    message.success(`已将 ${selectedTableIds.length} 个表自动排列`)
+  }
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen()
+      setIsFullscreen(true)
+    } else {
+      document.exitFullscreen()
+      setIsFullscreen(false)
+    }
+  }
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement)
+    }
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
+  }, [])
 
   const searchOptions = useMemo(() => {
     const tableOptions = tables.map(table => ({
@@ -888,6 +952,8 @@ const CanvasContent: React.FC = () => {
             {selectedTableIds.length > 1 && (
               <Dropdown menu={{
                 items: [
+                  { key: 'auto', icon: <ColumnWidthOutlined />, label: '自动排列', onClick: handleAutoArrange },
+                  { key: 'divider0', type: 'divider' },
                   { key: 'left', icon: <AlignLeftOutlined />, label: '左对齐', onClick: handleAlignLeft },
                   { key: 'center', icon: <AlignCenterOutlined />, label: '水平居中', onClick: handleAlignCenter },
                   { key: 'right', icon: <AlignRightOutlined />, label: '右对齐', onClick: handleAlignRight },
@@ -903,6 +969,19 @@ const CanvasContent: React.FC = () => {
             )}
           </Space>
         </div>
+
+        <Tooltip title={isFullscreen ? "退出全屏" : "全屏模式"}>
+          <Button
+            icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
+            onClick={toggleFullscreen}
+            style={{
+              position: 'absolute',
+              top: 16,
+              left: 16,
+              zIndex: 10
+            }}
+          />
+        </Tooltip>
 
         <div style={{ 
           position: 'absolute', 
@@ -1043,6 +1122,8 @@ const CanvasContent: React.FC = () => {
           nodesDraggable={!isLocked}
           panOnDrag={true}
           selectNodesOnDrag={false}
+          snapToGrid={snapToGrid}
+          snapGrid={[gridSize, gridSize]}
         >
           <Background
             color={showGuides ? "#1890ff" : "#eee"}
@@ -1222,9 +1303,26 @@ const CanvasContent: React.FC = () => {
                   setContextMenu(null)
                 }}><CopyOutlined style={{marginRight: 8}}/>编辑表</MenuItem>
                 <MenuItem onClick={() => {
+                  copySelectedTables()
+                  message.success('已复制到剪贴板')
+                  setContextMenu(null)
+                }}><CopyOutlined style={{marginRight: 8}}/>复制 (Ctrl+C)</MenuItem>
+                <MenuItem onClick={() => {
+                  pasteTables(50, 50)
+                  message.success('已粘贴')
+                  setContextMenu(null)
+                }}><FileTextOutlined style={{marginRight: 8}}/>粘贴 (Ctrl+V)</MenuItem>
+                <MenuItem onClick={() => {
                   handleDuplicateSelected()
                   setContextMenu(null)
                 }}><CopyOutlined style={{marginRight: 8}}/>快速复制 (Ctrl+D)</MenuItem>
+                {selectedTableIds.length > 1 && (
+                  <MenuItem onClick={() => {
+                    handleAutoArrange()
+                    setContextMenu(null)
+                  }}><ColumnWidthOutlined style={{marginRight: 8}}/>自动排列</MenuItem>
+                )}
+                <MenuDivider />
                 <MenuItem onClick={() => {
                   setIsRelationshipEditorOpen(true)
                   setContextMenu(null)
@@ -1233,6 +1331,21 @@ const CanvasContent: React.FC = () => {
                   handleDeleteSelected()
                   setContextMenu(null)
                 }}>删除选中 ({selectedTableIds.length})</MenuItem>
+              </>
+            )}
+            {selectedTableIds.length === 0 && (
+              <>
+                <MenuDivider />
+                <MenuItem onClick={() => {
+                  toggleFullscreen()
+                  setContextMenu(null)
+                }}><FullscreenOutlined style={{marginRight: 8}}/>{isFullscreen ? "退出全屏" : "全屏模式"}</MenuItem>
+                <MenuDivider />
+                <MenuItem onClick={() => {
+                  pasteTables(50, 50)
+                  message.success('已粘贴')
+                  setContextMenu(null)
+                }}><FileTextOutlined style={{marginRight: 8}}/>粘贴 (Ctrl+V)</MenuItem>
               </>
             )}
           </div>
@@ -1244,14 +1357,29 @@ const CanvasContent: React.FC = () => {
           right: 10,
           background: 'rgba(255, 255, 255, 0.95)',
           borderRadius: 8,
-          padding: '6px 12px',
+          padding: '12px 16px',
           boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
           fontSize: 12,
           display: 'flex',
           alignItems: 'center',
-          gap: 8,
+          gap: 12,
           zIndex: 100
         }}>
+          <Tooltip title="缩小 (- 或 =)">
+            <Button size="small" icon={<MinusOutlined />} onClick={() => setCanvasZoom(Math.max((canvasZoom || 1) - 0.1, 0.5))} />
+          </Tooltip>
+          <Slider
+            min={0.5}
+            max={2}
+            step={0.05}
+            value={canvasZoom || 1}
+            onChange={(value) => setCanvasZoom(value)}
+            style={{ width: 120, margin: 0 }}
+            tooltip={{ formatter: (value) => `${((value || 1) * 100).toFixed(0)}%` }}
+          />
+          <Tooltip title="放大 (+ 或 =)">
+            <Button size="small" icon={<PlusOutlined />} onClick={() => setCanvasZoom(Math.min((canvasZoom || 1) + 0.1, 2))} />
+          </Tooltip>
           <Dropdown
             menu={{
               items: [
