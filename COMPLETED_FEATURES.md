@@ -208,6 +208,7 @@
 | 197 | 后端路由前缀修复 | 后端 Bug修复 | 2026-05-07 | Assistant | 修复typeConvertRoutes.ts和llmRoutes.ts中路由路径重复/api前缀的问题：移除路由文件中的/api前缀，保留server.ts中的统一挂载，成功解决API返回HTML 404错误的问题，/api/type-convert/mappings和/api/llm/config API现在可正常工作 |
 | 198 | 项目启动全流程验证（对比分支） | 项目启动 | 2026-05-07 | Assistant | 完整执行查文档→校前置→开发编码→自测校验→分类归档流程：1.查阅README/DESIGN_DOC等文档；2.校验依赖安装；3.初始化Prisma数据库；4.启动后端服务(http://0.0.0.0:3001)；5.启动前端服务(http://localhost:3002)；6.自测通过：健康检查API✓、项目列表API✓、连接列表API✓、前端页面HTTP 200✓；零崩溃、零报错、项目完整正常运行 |
 | 199 | TypeScript编译错误修复 | 前端 Bug修复 | 2026-05-07 | Assistant | 修复前端编译的6个TypeScript错误：1.App.tsx移除未使用的columns变量；2.Canvas.tsx移除6处'&:hover'无效CSS属性；3.DatabaseImportModal.tsx修复Project类型导入路径；4.TypeConvertModal.tsx修复response.data.result类型访问错误；前端构建成功✓ |
+| 200 | 数据模拟功能 | 测试辅助 | 2026-05-07 | Assistant | 根据表结构自动生成模拟数据：1.创建mockDataService.ts服务，支持9种数据生成规则（随机值/序列号/固定值/姓名/邮箱/手机号/地址/日期/UUID）；2.根据字段名智能推断规则（如name字段自动使用姓名规则）；3.支持SQL/JSON/CSV三种格式导出；4.在TableEditor添加数据模拟Tab和弹窗；5.前端构建成功✓ |
 
 ---
 

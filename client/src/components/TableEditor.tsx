@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { Form, Input, InputNumber, Button, Space, Tag, Select, Popconfirm, Tabs, Modal, message, Row, Col } from 'antd'
-import { PlusOutlined, DeleteOutlined, SaveOutlined, ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons'
+import { PlusOutlined, DeleteOutlined, SaveOutlined, ArrowUpOutlined, ArrowDownOutlined, DatabaseOutlined } from '@ant-design/icons'
 import { Column as ColumnType, Table as TableType, Index } from '../types'
 import { useAppStore } from '../stores/appStore'
+import { MockDataModal } from './MockDataModal'
 
 const { Option } = Select
 
@@ -43,6 +44,7 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
   const [isIndexModalOpen, setIsIndexModalOpen] = useState(false)
   const [editingIndex, setEditingIndex] = useState<Index | null>(null)
   const [editingColumns, setEditingColumns] = useState<ColumnEditData[]>([])
+  const [isMockDataModalOpen, setIsMockDataModalOpen] = useState(false)
 
   useEffect(() => {
     loadColumns(table.id)
@@ -435,6 +437,30 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
               </div>
             </div>
           )
+        },
+        {
+          key: '3',
+          label: '数据模拟',
+          children: (
+            <div style={{ padding: '20px', textAlign: 'center' }}>
+              <div style={{ marginBottom: '24px' }}>
+                <DatabaseOutlined style={{ fontSize: '48px', color: '#1890ff' }} />
+                <h3 style={{ marginTop: '16px', marginBottom: '8px' }}>数据模拟生成</h3>
+                <p style={{ color: '#666', maxWidth: '400px', margin: '0 auto' }}>
+                  根据当前表结构自动生成模拟数据，支持姓名、邮箱、手机号、地址等多种数据类型，
+                  可导出为 SQL、JSON、CSV 格式。
+                </p>
+              </div>
+              <Button 
+                type="primary" 
+                size="large"
+                icon={<DatabaseOutlined />}
+                onClick={() => setIsMockDataModalOpen(true)}
+              >
+                打开数据模拟生成器
+              </Button>
+            </div>
+          )
         }
       ]} />
 
@@ -505,6 +531,12 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
           </Form>
         )}
       </Modal>
+
+      <MockDataModal
+        visible={isMockDataModalOpen}
+        onClose={() => setIsMockDataModalOpen(false)}
+        table={table}
+      />
     </div>
   )
 }
