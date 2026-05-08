@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { Modal, Tabs, Button, Upload, message, Alert, Space, Typography, Select, Switch, Form, Card, Input, Tag, Descriptions, Badge } from 'antd'
-import { DownloadOutlined, UploadOutlined, FileTextOutlined, DatabaseOutlined, CheckCircleOutlined, SettingOutlined, PlusOutlined, FileWordOutlined, SafetyCertificateOutlined, InfoCircleOutlined } from '@ant-design/icons'
+import { DownloadOutlined, UploadOutlined, FileTextOutlined, DatabaseOutlined, CheckCircleOutlined, SettingOutlined, PlusOutlined, FileWordOutlined, SafetyCertificateOutlined, InfoCircleOutlined, FileExcelOutlined } from '@ant-design/icons'
 import { useAppStore } from '../stores/appStore'
 import { exportService } from '../services/exportService'
 import { importService, ImportResult } from '../services/importService'
@@ -89,6 +89,25 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({ open, onCl
       const filename = `${currentProject.name.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '_')}_${dbTypeLabel.toLowerCase()}_${new Date().toISOString().slice(0, 10)}.sql`
       exportService.downloadSQL(sql, filename)
       message.success(`${dbTypeLabel} DDL 导出成功`)
+    } catch (e) {
+      message.error(`导出失败: ${e instanceof Error ? e.message : '未知错误'}`)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const handleExportCSV = () => {
+    if (!currentProject) {
+      message.warning('请先选择一个项目')
+      return
+    }
+
+    setExporting(true)
+    try {
+      const csv = exportService.exportToCSV(currentProject, tables)
+      const filename = `${currentProject.name.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '_')}_columns_${new Date().toISOString().slice(0, 10)}.csv`
+      exportService.downloadCSV(csv, filename)
+      message.success('CSV 导出成功')
     } catch (e) {
       message.error(`导出失败: ${e instanceof Error ? e.message : '未知错误'}`)
     } finally {
@@ -502,7 +521,7 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({ open, onCl
             </div>
           </Card>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
             <Card
               size="small"
               style={{ borderRadius: 12, border: '1px solid #e8e8e8' }}
@@ -534,6 +553,40 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({ open, onCl
                   style={{ borderRadius: 8, height: 44 }}
                 >
                   导出 JSON
+                </Button>
+              </div>
+            </Card>
+
+            <Card
+              size="small"
+              style={{ borderRadius: 12, border: '1px solid #e8e8e8' }}
+              styles={{ body: { padding: 0 } }}
+            >
+              <div style={{ padding: '20px 20px 16px 20px', borderBottom: '1px solid #f0f0f0' }}>
+                <Space>
+                  <div style={{
+                    width: 40, height: 40, borderRadius: 10,
+                    background: 'linear-gradient(135deg, #52c41a 0%, #389e0d 100%)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                  }}>
+                    <FileExcelOutlined style={{ fontSize: 20, color: '#fff' }} />
+                  </div>
+                  <div>
+                    <Text strong style={{ fontSize: 14, display: 'block' }}>CSV 格式</Text>
+                    <Text type="secondary" style={{ fontSize: 12 }}>表结构表格</Text>
+                  </div>
+                </Space>
+              </div>
+              <div style={{ padding: '16px 20px' }}>
+                <Button
+                  icon={<DownloadOutlined />}
+                  onClick={handleExportCSV}
+                  loading={exporting}
+                  block
+                  size="large"
+                  style={{ borderRadius: 8, height: 44 }}
+                >
+                  导出 CSV
                 </Button>
               </div>
             </Card>

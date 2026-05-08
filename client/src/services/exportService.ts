@@ -172,6 +172,86 @@ export const exportService = {
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
+  },
+
+  exportToCSV(project: Project, tables: Table[]): string {
+    const headers = ['表名', '列名', '数据类型', '长度', '精度', '小数位', '可为空', '默认值', '自增', '主键', '唯一', '注释', '排序']
+    const rows: string[][] = []
+
+    tables.forEach(table => {
+      table.columns?.forEach((col, idx) => {
+        rows.push([
+          table.name,
+          col.name,
+          col.dataType,
+          String(col.length || ''),
+          String(col.precision || ''),
+          String(col.scale || ''),
+          col.nullable ? '是' : '否',
+          col.defaultValue || '',
+          col.autoIncrement ? '是' : '否',
+          col.primaryKey ? '是' : '否',
+          col.unique ? '是' : '否',
+          col.comment || '',
+          String(col.order ?? idx)
+        ])
+      })
+    })
+
+    const escapeCSV = (value: string) => {
+      if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+        return `"${value.replace(/"/g, '""')}"`
+      }
+      return value
+    }
+
+    return [headers.join(','), ...rows.map(row => row.map(escapeCSV).join(','))].join('\n')
+  },
+
+  downloadCSV(csv: string, filename: string): void {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  },
+
+  exportToExcelCompatible(project: Project, tables: Table[]): { filename: string; data: any[][] } {
+    const data: any[][] = [
+      [project.name + ' - 表结构导出'],
+      ['导出时间: ' + new Date().toLocaleString()],
+      [],
+      ['表名', '列名', '数据类型', '长度', '精度', '小数位', '可为空', '默认值', '自增', '主键', '唯一', '注释', '排序']
+    ]
+
+    tables.forEach(table => {
+      table.columns?.forEach((col, idx) => {
+        data.push([
+          table.name,
+          col.name,
+          col.dataType,
+          col.length || '',
+          col.precision || '',
+          col.scale || '',
+          col.nullable ? '是' : '否',
+          col.defaultValue || '',
+          col.autoIncrement ? '是' : '否',
+          col.primaryKey ? '是' : '否',
+          col.unique ? '是' : '否',
+          col.comment || '',
+          col.order ?? idx
+        ])
+      })
+    })
+
+    return {
+      filename: `${project.name.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '_')}_columns_${new Date().toISOString().slice(0, 10)}.csv`,
+      data
+    }
   }
 }
 

@@ -13,6 +13,44 @@ export interface UpdateChange {
 export const updateLogs: UpdateLog[] = [
   {
     date: '2026-05-08',
+    version: 'v1.3.10',
+    changes: [
+      {
+        type: 'feature',
+        title: '增强数据导入导出功能',
+        description: '新增CSV格式导出功能，支持将表结构导出为CSV表格格式，包含表名、列名、数据类型、长度、精度、可为空、主键、唯一、注释等完整字段信息'
+      }
+    ]
+  },
+  {
+    date: '2026-05-08',
+    version: 'v1.3.9',
+    changes: [
+      {
+        type: 'feature',
+        title: '自定义可拖拽折叠布局',
+        description: '新增布局设置面板，支持自定义左右面板宽度、折叠状态、画布小地图开关、网格吸附开关及网格大小调整，提供多种预设布局方案（默认、专注、均衡等）'
+      }
+    ]
+  },
+  {
+    date: '2026-05-08',
+    version: 'v1.3.8',
+    changes: [
+      {
+        type: 'feature',
+        title: '数据在线表格编辑',
+        description: '新增数据表格编辑器组件，支持选择数据表、在线编辑单元格数据、添加/删除行、搜索过滤、保存更改等功能'
+      },
+      {
+        type: 'ui',
+        title: '标签页快捷菜单增强',
+        description: 'TabBar新增下拉菜单，支持快速创建新项目、SQL查询、数据表格、设置等不同类型标签页'
+      }
+    ]
+  },
+  {
+    date: '2026-05-08',
     version: 'v1.3.7',
     changes: [
       {

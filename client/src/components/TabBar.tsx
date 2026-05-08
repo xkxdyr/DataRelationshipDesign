@@ -47,7 +47,7 @@ const TabBar: React.FC = () => {
     const titles: Record<TabType, string> = {
       project: '新项目',
       sql: 'SQL查询',
-      table: '数据表',
+      table: '数据表格',
       settings: '设置'
     }
     openTab({

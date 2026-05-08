@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Modal, Slider, Button, Space, Typography, Tag, Switch, Card, Row, Col, Input, Tree, TreeDataNode, Select, Timeline, Badge, Tooltip } from 'antd'
 import type { Key } from 'react'
-import { SettingOutlined, FontSizeOutlined, BgColorsOutlined, CompressOutlined, AimOutlined, ThunderboltOutlined, LinkOutlined, SaveOutlined, SwapOutlined, RobotOutlined, AppstoreOutlined, EyeOutlined, DatabaseOutlined, KeyOutlined, StarOutlined, PlusOutlined, HistoryOutlined, BugOutlined, LockOutlined, PictureOutlined, RocketOutlined, ToolOutlined, TableOutlined, AlignLeftOutlined } from '@ant-design/icons'
+import { SettingOutlined, FontSizeOutlined, BgColorsOutlined, CompressOutlined, AimOutlined, ThunderboltOutlined, LinkOutlined, SaveOutlined, SwapOutlined, RobotOutlined, AppstoreOutlined, EyeOutlined, DatabaseOutlined, KeyOutlined, StarOutlined, PlusOutlined, HistoryOutlined, BugOutlined, LockOutlined, PictureOutlined, RocketOutlined, ToolOutlined, TableOutlined, AlignLeftOutlined, LayoutOutlined } from '@ant-design/icons'
 import { useAppStore } from '../stores/appStore'
 import { useTheme } from '../theme/useTheme'
 import { updateLogs, getChangeTypeLabel, getChangeTypeColor } from '../data/updateLogs'
@@ -14,6 +14,7 @@ interface SettingsModalProps {
   onOpenTypeConvert?: () => void
   onOpenLLM?: () => void
   onOpenConnections?: () => void
+  onOpenLayoutSettings?: () => void
 }
 
 const themeColors = [
@@ -87,6 +88,7 @@ const treeData: TreeDataNode[] = [
       { title: 'AI 助手', key: 'ai-assistant', icon: <RobotOutlined style={{ fontSize: 12 }} /> },
       { title: '表前缀', key: 'table-prefix', icon: <DatabaseOutlined style={{ fontSize: 12 }} /> },
       { title: '自动添加id列', key: 'auto-add-id', icon: <DatabaseOutlined style={{ fontSize: 12 }} /> },
+      { title: '布局设置', key: 'layout-settings', icon: <LayoutOutlined style={{ fontSize: 12 }} /> },
     ],
   },
   {
@@ -96,7 +98,7 @@ const treeData: TreeDataNode[] = [
   },
 ]
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onClose, onOpenTypeConvert, onOpenLLM, onOpenConnections }) => {
+export const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onClose, onOpenTypeConvert, onOpenLLM, onOpenConnections, onOpenLayoutSettings }) => {
   const [selectedKey, setSelectedKey] = useState('appearance')
   const [searchValue, setSearchValue] = useState('')
 
@@ -772,6 +774,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onClose, 
             <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
               当前状态：<strong>{autoAddIdColumn ? '已开启' : '已关闭'}</strong>
             </Text>
+          </div>
+        )
+
+      case 'layout-settings':
+        return (
+          <div style={{ padding: '16px' }}>
+            <Title level={4} style={{ marginBottom: 16 }}>布局设置</Title>
+            <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
+              自定义左右面板宽度、折叠状态，以及画布小地图和网格吸附设置
+            </Text>
+            <Button
+              type="primary"
+              icon={<LayoutOutlined />}
+              onClick={onOpenLayoutSettings}
+            >
+              打开布局设置面板
+            </Button>
           </div>
         )
 

@@ -9,6 +9,8 @@ import TableEditor from './components/TableEditor'
 import ModeSwitch from './components/ModeSwitch'
 import TabBar from './components/TabBar'
 import SQLEditor from './components/SQLEditor'
+import DataTableEditor from './components/DataTableEditor'
+import LayoutSettingsModal from './components/LayoutSettingsModal'
 import { SettingsModal } from './components/SettingsModal'
 import { TypeConvertModal } from './components/TypeConvertModal'
 import { LLMModal } from './components/LLMModal'
@@ -39,6 +41,7 @@ function App() {
   const [showTeamManagement, setShowTeamManagement] = useState(false)
   const [leftCollapsed, setLeftCollapsed] = useState(false)
   const [rightCollapsed, setRightCollapsed] = useState(false)
+  const [showLayoutSettings, setShowLayoutSettings] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const startXRef = useRef(0)
   const startLeftWidthRef = useRef(0)
@@ -383,6 +386,24 @@ function App() {
     }
   }
 
+  const handleApplyLayout = useCallback((config: any) => {
+    setLeftWidth(config.leftPanelWidth)
+    setRightWidth(config.rightPanelWidth)
+    setLeftCollapsed(config.leftPanelCollapsed)
+    setRightCollapsed(config.rightPanelCollapsed)
+  }, [])
+
+  const getCurrentLayoutConfig = useCallback(() => ({
+    leftPanelWidth: leftWidth,
+    rightPanelWidth: rightWidth,
+    leftPanelCollapsed: leftCollapsed,
+    rightPanelCollapsed: rightCollapsed,
+    showMiniMap: true,
+    snapToGrid: true,
+    gridSize: 20,
+    autoSaveInterval: 30000
+  }), [leftWidth, rightWidth, leftCollapsed, rightCollapsed])
+
   return (
     <div style={{ height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontSize: `${fontSize}px`, fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif', backgroundColor: colors.background }}>
       <Header style={{
@@ -485,6 +506,12 @@ function App() {
         </div>
       </Header>
       <TabBar />
+      <LayoutSettingsModal
+        visible={showLayoutSettings}
+        onClose={() => setShowLayoutSettings(false)}
+        onApplyLayout={handleApplyLayout}
+        currentConfig={getCurrentLayoutConfig()}
+      />
       <SettingsModal
         visible={showSettings}
         onClose={() => setShowSettings(false)}
@@ -499,6 +526,10 @@ function App() {
         onOpenConnections={() => {
           setShowSettings(false)
           setShowConnections(true)
+        }}
+        onOpenLayoutSettings={() => {
+          setShowSettings(false)
+          setShowLayoutSettings(true)
         }}
       />
       <TypeConvertModal visible={showTypeConvert} onClose={() => setShowTypeConvert(false)} />
@@ -592,6 +623,9 @@ function App() {
             const activeTab = tabs.find(t => t.id === activeTabId)
             if (activeTab?.type === 'sql') {
               return <SQLEditor />
+            }
+            if (activeTab?.type === 'table') {
+              return <DataTableEditor />
             }
             if (currentProject) {
               return <Canvas />
