@@ -12,6 +12,22 @@ export interface UpdateChange {
 
 export const updateLogs: UpdateLog[] = [
   {
+    date: '2026-05-08',
+    version: 'v1.3.6',
+    changes: [
+      {
+        type: 'feature',
+        title: '多标签工作区功能',
+        description: '新增多标签页工作区支持，可在同一窗口打开多个项目/SQL编辑器/表设计/设置页面，支持右键菜单关闭标签页、关闭其他、关闭全部操作，未保存内容显示提示标记'
+      },
+      {
+        type: 'feature',
+        title: '标签页持久化存储',
+        description: '标签页状态自动保存到本地存储，刷新页面后恢复已打开的标签页，提升用户体验和工作连续性'
+      }
+    ]
+  },
+  {
     date: '2026-05-07',
     version: 'v1.3.5',
     changes: [

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { Project, Table, Column, Relationship, Index, Version } from '../types'
+import { Project, Table, Column, Relationship, Index, Version, Tab, TabType } from '../types'
 import { projectApi, tableApi, columnApi, relationshipApi, indexApi, versionApi } from '../services/api'
 import { localStorageService, LocalProject, LocalTable, LocalColumn, LocalRelationship, LocalIndex, LocalVersion } from '../services/localStorageService'
 import { ThemeMode } from '../theme/types'
@@ -50,7 +50,7 @@ function getTableNameById(tableId: string, tables: Table[]): string {
   return tables.find(t => t.id === tableId)?.name || tableId
 }
 
-interface AppState {
+interface HistorySnapshot {
   projects: Project[]
   currentProject: Project | null
   tables: Table[]
@@ -59,8 +59,6 @@ interface AppState {
   selectedTableIds: string[]
   versions: Version[]
   loading: boolean
-  past: AppState[]
-  future: AppState[]
   isOnline: boolean
   isSyncing: boolean
   lastSaved: number | null
@@ -86,6 +84,48 @@ interface AppState {
   clipboardTables: Table[]
   highlightedRelationshipId: string | null
   hoveredRelationshipId: string | null
+  tabs: Tab[]
+  activeTabId: string | null
+}
+
+interface AppState {
+  projects: Project[]
+  currentProject: Project | null
+  tables: Table[]
+  relationships: Relationship[]
+  selectedTableId: string | null
+  selectedTableIds: string[]
+  versions: Version[]
+  loading: boolean
+  past: HistorySnapshot[]
+  future: HistorySnapshot[]
+  isOnline: boolean
+  isSyncing: boolean
+  lastSaved: number | null
+  isLocalMode: boolean
+  fontSize: number
+  themeColor: string
+  themeMode: ThemeMode
+  compactMode: boolean
+  canvasZoom: number
+  showMiniMap: boolean
+  autoSaveInterval: number
+  edgeStyle: 'straight' | 'step' | 'smooth'
+  showEdgeLabels: boolean
+  tablePrefix: string
+  tablePrefixPresets: string[]
+  autoAddIdColumn: boolean
+  snapToGrid: boolean
+  gridSize: number
+  showGuides: boolean
+  canvasBackground: string
+  panOnScroll: boolean
+  zoomOnScroll: boolean
+  clipboardTables: Table[]
+  highlightedRelationshipId: string | null
+  hoveredRelationshipId: string | null
+  tabs: Tab[]
+  activeTabId: string | null
 }
 
 interface AppStore extends AppState {
@@ -167,6 +207,11 @@ interface AppStore extends AppState {
   loadFromLocal: (projectId: string) => Promise<void>
   saveToLocal: () => Promise<void>
   syncAllToServer: () => Promise<void>
+
+  openTab: (tab: Omit<Tab, 'id'>) => void
+  closeTab: (id: string) => void
+  setActiveTab: (id: string) => void
+  updateTabContent: (id: string, data: Partial<Tab>) => void
 }
 
 let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
@@ -180,25 +225,23 @@ const startAutoSaveTimer = (store: AppStore) => {
 }
 
 export const useAppStore = create<AppStore>((set, get) => ({
-  projects: [],
+  projects: [] as Project[],
   currentProject: null,
-  tables: [],
-  relationships: [],
+  tables: [] as Table[],
+  relationships: [] as Relationship[],
   selectedTableId: null,
-  selectedTableIds: [],
-  versions: [],
+  selectedTableIds: [] as string[],
+  versions: [] as Version[],
   loading: false,
   past: [{
-    projects: [],
+    projects: [] as Project[],
     currentProject: null,
-    tables: [],
-    relationships: [],
+    tables: [] as Table[],
+    relationships: [] as Relationship[],
     selectedTableId: null,
-    selectedTableIds: [],
-    versions: [],
+    selectedTableIds: [] as string[],
+    versions: [] as Version[],
     loading: false,
-    past: [],
-    future: [],
     isOnline: true,
     isLocalMode: false,
     isSyncing: false,
@@ -223,7 +266,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
     zoomOnScroll: true,
     clipboardTables: [],
     highlightedRelationshipId: null,
-    hoveredRelationshipId: null
+    hoveredRelationshipId: null,
+    tabs: [],
+    activeTabId: null
   }],
   future: [],
   isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
@@ -251,6 +296,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   clipboardTables: [],
   highlightedRelationshipId: null,
   hoveredRelationshipId: null,
+  tabs: [] as Tab[],
+  activeTabId: null,
   setOnline: (online: boolean) => set({ isOnline: online }),
   setLocalMode: (localMode: boolean) => {
     set({ isLocalMode: localMode })
@@ -686,7 +733,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
       zoomOnScroll: get().zoomOnScroll,
       clipboardTables: get().clipboardTables,
       highlightedRelationshipId: get().highlightedRelationshipId,
-      hoveredRelationshipId: get().hoveredRelationshipId
+      hoveredRelationshipId: get().hoveredRelationshipId,
+      tabs: get().tabs,
+      activeTabId: get().activeTabId
     }
 
     set({
@@ -709,7 +758,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
       showEdgeLabels: nextState.showEdgeLabels,
       clipboardTables: nextState.clipboardTables,
       highlightedRelationshipId: nextState.highlightedRelationshipId,
-      hoveredRelationshipId: nextState.hoveredRelationshipId
+      hoveredRelationshipId: nextState.hoveredRelationshipId,
+      tabs: nextState.tabs,
+      activeTabId: nextState.activeTabId
     })
     get().saveToLocal()
   },
@@ -754,7 +805,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
       zoomOnScroll: get().zoomOnScroll,
       clipboardTables: get().clipboardTables,
       highlightedRelationshipId: get().highlightedRelationshipId,
-      hoveredRelationshipId: get().hoveredRelationshipId
+      hoveredRelationshipId: get().hoveredRelationshipId,
+      tabs: get().tabs,
+      activeTabId: get().activeTabId
     }
     set(state => ({
       past: [...state.past.slice(-19), currentState],
@@ -1963,6 +2016,48 @@ export const useAppStore = create<AppStore>((set, get) => ({
     } finally {
       set({ loading: false })
     }
+  },
+
+  openTab: (tabData: Omit<Tab, 'id'>) => {
+    const id = `tab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    const newTab: Tab = { ...tabData, id }
+    set(state => ({
+      tabs: [...state.tabs, newTab],
+      activeTabId: id
+    }))
+    localStorageService.setMeta('tabs', [...get().tabs, newTab])
+  },
+
+  closeTab: (id: string) => {
+    const { tabs, activeTabId } = get()
+    const tabIndex = tabs.findIndex(t => t.id === id)
+    if (tabIndex === -1) return
+
+    const newTabs = tabs.filter(t => t.id !== id)
+    let newActiveTabId = activeTabId
+
+    if (activeTabId === id) {
+      if (newTabs.length > 0) {
+        const newIndex = Math.min(tabIndex, newTabs.length - 1)
+        newActiveTabId = newTabs[newIndex].id
+      } else {
+        newActiveTabId = null
+      }
+    }
+
+    set({ tabs: newTabs, activeTabId: newActiveTabId })
+    localStorageService.setMeta('tabs', newTabs)
+  },
+
+  setActiveTab: (id: string) => {
+    set({ activeTabId: id })
+  },
+
+  updateTabContent: (id: string, data: Partial<Tab>) => {
+    set(state => ({
+      tabs: state.tabs.map(t => t.id === id ? { ...t, ...data } : t)
+    }))
+    localStorageService.setMeta('tabs', get().tabs)
   }
 }))
 
@@ -1976,3 +2071,8 @@ if (typeof window !== 'undefined') {
     useAppStore.getState().setOnline(false)
   })
 }
+
+export const openTab = useAppStore.getState().openTab
+export const closeTab = useAppStore.getState().closeTab
+export const setActiveTab = useAppStore.getState().setActiveTab
+export const updateTabContent = useAppStore.getState().updateTabContent

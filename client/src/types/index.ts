@@ -78,6 +78,19 @@ export interface Project {
   createdBy: string
 }
 
+export type TabType = 'project' | 'sql' | 'table' | 'settings'
+
+export interface Tab {
+  id: string
+  type: TabType
+  title: string
+  projectId?: string
+  tableId?: string
+  sqlContent?: string
+  closable: boolean
+  unsaved?: boolean
+}
+
 export interface ApiResponse<T> {
   success: boolean
   result?: T

@@ -7,6 +7,7 @@ import ProjectList from './components/ProjectList'
 import Canvas from './components/Canvas'
 import TableEditor from './components/TableEditor'
 import ModeSwitch from './components/ModeSwitch'
+import TabBar from './components/TabBar'
 import { SettingsModal } from './components/SettingsModal'
 import { TypeConvertModal } from './components/TypeConvertModal'
 import { LLMModal } from './components/LLMModal'
@@ -482,6 +483,7 @@ function App() {
           </Tooltip>
         </div>
       </Header>
+      <TabBar />
       <SettingsModal
         visible={showSettings}
         onClose={() => setShowSettings(false)}
