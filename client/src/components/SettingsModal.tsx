@@ -807,17 +807,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onClose, 
               记录每一次功能更新和修复
             </Text>
             
-            <Timeline mode="left">
-              {updateLogs.map((log) => (
-                <Timeline.Item 
-                  key={log.date}
-                  label={
-                    <Space direction="vertical" style={{ minWidth: 100 }}>
-                      <Badge color="blue" text={log.version} />
-                      <Text type="secondary" style={{ fontSize: 12 }}>{log.date}</Text>
-                    </Space>
-                  }
-                >
+            <Timeline
+              mode="left"
+              items={updateLogs.map((log) => ({
+                label: (
+                  <Space direction="vertical" style={{ minWidth: 100 }}>
+                    <Badge color="blue" text={log.version} />
+                    <Text type="secondary" style={{ fontSize: 12 }}>{log.date}</Text>
+                  </Space>
+                ),
+                children: (
                   <Card size="small" style={{ marginBottom: 8 }}>
                     <Space direction="vertical" style={{ width: '100%' }}>
                       {log.changes.map((change, index) => (
@@ -846,9 +845,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onClose, 
                       ))}
                     </Space>
                   </Card>
-                </Timeline.Item>
-              ))}
-            </Timeline>
+                ),
+              }))}
+            />
           </div>
         )
 
