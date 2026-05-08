@@ -1,6 +1,14 @@
 import React, { useCallback } from 'react'
 import { Tabs, Dropdown, Button, Badge } from 'antd'
-import { CloseOutlined, FileTextOutlined, ConsoleSqlOutlined, TableOutlined, SettingOutlined, PlusOutlined } from '@ant-design/icons'
+import { 
+  CloseOutlined, 
+  FileTextOutlined, 
+  ConsoleSqlOutlined, 
+  TableOutlined, 
+  SettingOutlined, 
+  PlusOutlined,
+  DownOutlined
+} from '@ant-design/icons'
 import { useAppStore } from '../stores/appStore'
 import { TabType } from '../types'
 import type { MenuProps } from 'antd'
@@ -35,11 +43,17 @@ const TabBar: React.FC = () => {
     }
   }, [tabs, closeTab])
 
-  const handleNewTab = useCallback(() => {
+  const handleNewTab = useCallback((type: TabType = 'project') => {
+    const titles: Record<TabType, string> = {
+      project: '新项目',
+      sql: 'SQL查询',
+      table: '数据表',
+      settings: '设置'
+    }
     openTab({
-      type: 'project',
-      title: '新项目',
-      closable: true
+      type,
+      title: titles[type],
+      closable: type !== 'settings'
     })
   }, [openTab])
 
@@ -71,23 +85,51 @@ const TabBar: React.FC = () => {
     { key: 'close-all', label: '关闭全部' },
   ], [])
 
-  const onMenuClick = useCallback((key: string, tabId: string) => {
-    return (_info: { key: string }) => {
-      handleTabMenu(key, tabId)
-    }
-  }, [handleTabMenu])
+  const newTabMenuItems: MenuProps['items'] = [
+    { 
+      key: 'project', 
+      label: '新项目',
+      icon: <FileTextOutlined />
+    },
+    { 
+      key: 'sql', 
+      label: 'SQL查询',
+      icon: <ConsoleSqlOutlined />
+    },
+    { 
+      key: 'table', 
+      label: '数据表',
+      icon: <TableOutlined />
+    },
+    { 
+      key: 'settings', 
+      label: '设置',
+      icon: <SettingOutlined />
+    },
+  ]
+
+  const handleNewTabMenuClick = useCallback(({ key }: { key: string }) => {
+    handleNewTab(key as TabType)
+  }, [handleNewTab])
 
   if (tabs.length === 0) {
     return (
       <div style={styles.emptyContainer}>
-        <Button 
-          type="dashed" 
-          icon={<PlusOutlined />} 
-          onClick={handleNewTab}
-          style={styles.newTabButton}
+        <Dropdown
+          menu={{ 
+            items: newTabMenuItems,
+            onClick: handleNewTabMenuClick
+          }}
+          trigger={['click']}
         >
-          新建标签页
-        </Button>
+          <Button 
+            type="dashed" 
+            icon={<PlusOutlined />} 
+            style={styles.newTabButton}
+          >
+            新建标签页 <DownOutlined style={{ fontSize: 12 }} />
+          </Button>
+        </Dropdown>
       </div>
     )
   }
@@ -147,13 +189,22 @@ const TabBar: React.FC = () => {
           }))}
         />
       </div>
-      <Button
-        type="text"
-        icon={<PlusOutlined />}
-        onClick={handleNewTab}
-        style={styles.addButton}
-        size="small"
-      />
+      <Dropdown
+        menu={{ 
+          items: newTabMenuItems,
+          onClick: handleNewTabMenuClick
+        }}
+        trigger={['click']}
+      >
+        <Button
+          type="text"
+          icon={<PlusOutlined />}
+          style={styles.addButton}
+          size="small"
+        >
+          <DownOutlined style={{ fontSize: 12 }} />
+        </Button>
+      </Dropdown>
     </div>
   )
 }

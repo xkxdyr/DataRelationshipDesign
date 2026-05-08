@@ -66,3 +66,26 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+/* SQL Syntax Highlighting */
+.sql-keyword {
+  color: #569cd6;
+  font-weight: bold;
+}
+
+.sql-function {
+  color: #dcdcaa;
+}
+
+.sql-string {
+  color: #ce9178;
+}
+
+.sql-number {
+  color: #b5cea8;
+}
+
+.sql-comment {
+  color: #6a9955;
+  font-style: italic;
+}

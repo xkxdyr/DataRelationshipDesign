@@ -13,6 +13,22 @@ export interface UpdateChange {
 export const updateLogs: UpdateLog[] = [
   {
     date: '2026-05-08',
+    version: 'v1.3.7',
+    changes: [
+      {
+        type: 'feature',
+        title: '内置SQL代码编辑器',
+        description: '新增SQL代码编辑器组件，支持SQL语法高亮、数据库架构浏览、表名快速插入、多行编辑、代码复制、CSV导出等功能'
+      },
+      {
+        type: 'feature',
+        title: 'SQL执行与结果展示',
+        description: '支持执行SQL查询并展示结果，显示执行时间、分页显示、支持导出查询结果为CSV文件'
+      }
+    ]
+  },
+  {
+    date: '2026-05-08',
     version: 'v1.3.6',
     changes: [
       {

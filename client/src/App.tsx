@@ -8,6 +8,7 @@ import Canvas from './components/Canvas'
 import TableEditor from './components/TableEditor'
 import ModeSwitch from './components/ModeSwitch'
 import TabBar from './components/TabBar'
+import SQLEditor from './components/SQLEditor'
 import { SettingsModal } from './components/SettingsModal'
 import { TypeConvertModal } from './components/TypeConvertModal'
 import { LLMModal } from './components/LLMModal'
@@ -22,7 +23,7 @@ const { Header } = Layout
 const { Title } = Typography
 
 function App() {
-  const { currentProject, projects, loadProjects, selectedTableId, tables, selectTable, undo, redo, canUndo, canRedo, isOnline, isSyncing, lastSaved, fontSize, setFontSize, themeColor, loadSettings, createTable, createColumn, createIndex, createRelationship, saveToLocal, deleteTable, setCanvasZoom, canvasZoom, copySelectedTables, pasteTables } = useAppStore()
+  const { currentProject, projects, loadProjects, selectedTableId, tables, selectTable, undo, redo, canUndo, canRedo, isOnline, isSyncing, lastSaved, fontSize, setFontSize, themeColor, loadSettings, createTable, createColumn, createIndex, createRelationship, saveToLocal, deleteTable, setCanvasZoom, canvasZoom, copySelectedTables, pasteTables, tabs, activeTabId } = useAppStore()
   const { colors } = useTheme()
   const [leftWidth, setLeftWidth] = useState(350)
   const [rightWidth, setRightWidth] = useState(900)
@@ -587,21 +588,28 @@ function App() {
           overflow: 'hidden',
           minWidth: 300
         }}>
-          {currentProject ? (
-            <Canvas />
-          ) : (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: '100%',
-              width: '100%',
-              color: colors.textSecondary,
-              fontSize: 13
-            }}>
-              请选择一个项目开始设计
-            </div>
-          )}
+          {(() => {
+            const activeTab = tabs.find(t => t.id === activeTabId)
+            if (activeTab?.type === 'sql') {
+              return <SQLEditor />
+            }
+            if (currentProject) {
+              return <Canvas />
+            }
+            return (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '100%',
+                width: '100%',
+                color: colors.textSecondary,
+                fontSize: 13
+              }}>
+                请选择一个项目开始设计
+              </div>
+            )
+          })()}
         </div>
 
         {/* 始终渲染一个隐藏的 TableEditor，确保 useForm 不会报警告 */}
