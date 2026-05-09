@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
-import { Modal, Input, Button, Space, Typography, Select, Card, Form, message, List, Tag, Divider, Alert } from 'antd'
-import { RobotOutlined, SettingOutlined, ThunderboltOutlined, CheckCircleOutlined } from '@ant-design/icons'
+import { Modal, Input, Button, Space, Typography, Select, Card, Form, message, List, Tag, Divider, Alert, Popconfirm } from 'antd'
+import { RobotOutlined, SettingOutlined, ThunderboltOutlined, CheckCircleOutlined, ClockCircleOutlined, DeleteOutlined, RotateLeftOutlined } from '@ant-design/icons'
 import { llmApi, TableSuggestion } from '../services/api'
+import localStorageService from '../services/localStorageService'
 
 const { Title, Text } = Typography
 const { TextArea } = Input
@@ -10,6 +11,13 @@ interface LLMModalProps {
   visible: boolean
   onClose: () => void
   onApplyTables?: (tables: TableSuggestion[]) => void
+}
+
+interface CacheEntry {
+  id: string
+  description: string
+  tables: TableSuggestion[]
+  createdAt: number
 }
 
 const modelOptions = [
@@ -25,15 +33,20 @@ export const LLMModal: React.FC<LLMModalProps> = ({ visible, onClose, onApplyTab
   const [model, setModel] = useState('gpt-4')
   const [isConfigured, setIsConfigured] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [testingConnection, setTestingConnection] = useState(false)
+  const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'error'>('idle')
+  const [statusMessage, setStatusMessage] = useState('')
   const [description, setDescription] = useState('')
   const [selectedDbType, setSelectedDbType] = useState<string>('')
   const [generatedTables, setGeneratedTables] = useState<TableSuggestion[]>([])
-  const [activeTab, setActiveTab] = useState<'config' | 'generate'>('config')
+  const [activeTab, setActiveTab] = useState<'config' | 'generate'>('generate')
   const [form] = Form.useForm()
+  const [cacheHistory, setCacheHistory] = useState<CacheEntry[]>([])
 
   useEffect(() => {
     if (visible) {
       loadConfig()
+      loadCacheHistory()
     }
   }, [visible])
 
@@ -47,6 +60,91 @@ export const LLMModal: React.FC<LLMModalProps> = ({ visible, onClose, onApplyTab
       }
     } catch (error) {
       console.error('加载LLM配置失败:', error)
+    }
+  }
+
+  const loadCacheHistory = async () => {
+    try {
+      const cached = await localStorageService.getMeta('llmTableCache')
+      if (cached && Array.isArray(cached)) {
+        setCacheHistory(cached)
+      }
+    } catch (error) {
+      console.error('加载缓存历史失败:', error)
+    }
+  }
+
+  const saveToCache = async (tables: TableSuggestion[]) => {
+    try {
+      const entry: CacheEntry = {
+        id: Date.now().toString(),
+        description: description.trim() || '未命名查询',
+        tables: tables,
+        createdAt: Date.now()
+      }
+      
+      const updated = [entry, ...cacheHistory].slice(0, 10)
+      setCacheHistory(updated)
+      await localStorageService.setMeta('llmTableCache', updated)
+    } catch (error) {
+      console.error('保存到缓存失败:', error)
+    }
+  }
+
+  const deleteFromCache = async (id: string) => {
+    try {
+      const updated = cacheHistory.filter(entry => entry.id !== id)
+      setCacheHistory(updated)
+      await localStorageService.setMeta('llmTableCache', updated)
+      message.success('已删除缓存')
+    } catch (error) {
+      console.error('删除缓存失败:', error)
+    }
+  }
+
+  const useCachedTables = (entry: CacheEntry) => {
+    setGeneratedTables(entry.tables)
+    setDescription(entry.description)
+    message.success('已加载历史记录')
+  }
+
+  const formatTime = (timestamp: number) => {
+    const date = new Date(timestamp)
+    return date.toLocaleString('zh-CN', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+
+  const handleTestConnection = async () => {
+    if (!apiKey.trim()) {
+      message.warning('请先输入API密钥')
+      return
+    }
+
+    setTestingConnection(true)
+    setConnectionStatus('idle')
+    setStatusMessage('')
+
+    try {
+      const response = await llmApi.testConnection(apiKey, endpoint, model)
+      if (response.success) {
+        setConnectionStatus('success')
+        setStatusMessage(`连接成功！模型: ${response.result?.model || model}`)
+        message.success('连接测试成功')
+      } else {
+        setConnectionStatus('error')
+        setStatusMessage(response.error || '连接失败')
+        message.error(response.error || '连接测试失败')
+      }
+    } catch (error) {
+      setConnectionStatus('error')
+      setStatusMessage('连接失败: ' + (error as Error).message)
+      message.error('连接测试失败: ' + (error as Error).message)
+    } finally {
+      setTestingConnection(false)
     }
   }
 
@@ -84,7 +182,8 @@ export const LLMModal: React.FC<LLMModalProps> = ({ visible, onClose, onApplyTab
       const response = await llmApi.generateTables(description, selectedDbType || undefined)
       if (response.success && response.result) {
         setGeneratedTables(response.result)
-        message.success('生成成功，共生成 ' + response.result.length + ' 个表')
+        await saveToCache(response.result)
+        message.success('生成成功，共生成 ' + response.result.length + ' 个表（已自动缓存）')
       } else {
         message.error(response.error || '生成失败')
       }
@@ -141,23 +240,43 @@ export const LLMModal: React.FC<LLMModalProps> = ({ visible, onClose, onApplyTab
           />
         </Form.Item>
 
-        <Form.Item label="模型">
-          <Select
-            value={model}
-            onChange={setModel}
-            options={modelOptions}
+        <Form.Item label="模型" extra="输入模型名称，如 gpt-4o">
+          <Input 
+            placeholder="输入模型名称，如 gpt-4o" 
+            value={model} 
+            onChange={(e) => setModel(e.target.value)}
           />
         </Form.Item>
       </Form>
 
-      <Button
-        type="primary"
-        onClick={handleSaveConfig}
-        loading={loading}
-        icon={<SettingOutlined />}
-      >
-        保存配置
-      </Button>
+      {connectionStatus !== 'idle' && (
+        <Alert
+          message={connectionStatus === 'success' ? '连接成功' : '连接失败'}
+          description={statusMessage}
+          type={connectionStatus === 'success' ? 'success' : 'error'}
+          showIcon
+          closable
+          onClose={() => setConnectionStatus('idle')}
+        />
+      )}
+
+      <Space>
+        <Button
+          onClick={handleTestConnection}
+          loading={testingConnection}
+          icon={<CheckCircleOutlined />}
+        >
+          测试连接
+        </Button>
+        <Button
+          type="primary"
+          onClick={handleSaveConfig}
+          loading={loading}
+          icon={<SettingOutlined />}
+        >
+          保存配置
+        </Button>
+      </Space>
     </Space>
   )
 
@@ -209,6 +328,67 @@ export const LLMModal: React.FC<LLMModalProps> = ({ visible, onClose, onApplyTab
             生成表结构
           </Button>
 
+          {cacheHistory.length > 0 && (
+            <>
+              <Divider style={{ margin: '16px 0' }} />
+              <div>
+                <Space align="center" style={{ marginBottom: 8 }}>
+                  <ClockCircleOutlined style={{ fontSize: 14, color: '#1890ff' }} />
+                  <Text strong>历史记录</Text>
+                  <Text type="secondary" style={{ fontSize: 12 }}>（最多保存10条）</Text>
+                </Space>
+                <List
+                  size="small"
+                  dataSource={cacheHistory}
+                  renderItem={(entry) => (
+                    <List.Item
+                      key={entry.id}
+                      extra={
+                        <Space size="small">
+                          <Button
+                                size="small"
+                                icon={<RotateLeftOutlined />}
+                                onClick={() => useCachedTables(entry)}
+                              >
+                                复用
+                              </Button>
+                          <Popconfirm
+                            title="确定删除这条记录？"
+                            onConfirm={() => deleteFromCache(entry.id)}
+                          >
+                            <Button
+                              size="small"
+                              danger
+                              icon={<DeleteOutlined />}
+                            >
+                              删除
+                            </Button>
+                          </Popconfirm>
+                        </Space>
+                      }
+                    >
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <Text strong>{entry.description}</Text>
+                          <Text type="secondary" style={{ fontSize: 11 }}>
+                            {formatTime(entry.createdAt)}
+                          </Text>
+                        </div>
+                        <div style={{ marginTop: 4 }}>
+                          {entry.tables.map((table, idx) => (
+                            <Tag key={idx} color="blue" style={{ marginRight: 4 }}>
+                              {table.tableName}
+                            </Tag>
+                          ))}
+                        </div>
+                      </div>
+                    </List.Item>
+                  )}
+                />
+              </div>
+            </>
+          )}
+
           {generatedTables.length > 0 && (
             <>
               <Divider style={{ margin: '16px 0' }} />
@@ -254,19 +434,27 @@ export const LLMModal: React.FC<LLMModalProps> = ({ visible, onClose, onApplyTab
   )
 
   return (
-    <Modal
-      title={
-        <Space>
-          <RobotOutlined />
-          <span>AI 助手</span>
-        </Space>
-      }
-      open={visible}
-      onCancel={onClose}
-      footer={null}
-      width={600}
-    >
-      <Space direction="vertical" size="middle" style={{ width: '100%', padding: '16px 0' }}>
+    <>
+      <div style={{ display: 'none' }}>
+        <Form form={form} layout="vertical">
+          <Form.Item name="apiKey"><Input /></Form.Item>
+          <Form.Item name="endpoint"><Input /></Form.Item>
+          <Form.Item name="model"><Input /></Form.Item>
+        </Form>
+      </div>
+      <Modal
+        title={
+          <Space>
+            <RobotOutlined />
+            <span>AI 助手</span>
+          </Space>
+        }
+        open={visible}
+        onCancel={onClose}
+        footer={null}
+        width={600}
+      >
+        <Space direction="vertical" size="middle" style={{ width: '100%', padding: '16px 0' }}>
         <div style={{ display: 'flex', gap: 8 }}>
           <Button
             type={activeTab === 'config' ? 'primary' : 'default'}
@@ -294,5 +482,6 @@ export const LLMModal: React.FC<LLMModalProps> = ({ visible, onClose, onApplyTab
         {activeTab === 'config' ? renderConfigTab() : renderGenerateTab()}
       </Space>
     </Modal>
+    </>
   )
 }

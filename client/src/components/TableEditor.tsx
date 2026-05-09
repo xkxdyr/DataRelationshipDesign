@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Form, Input, InputNumber, Button, Space, Tag, Select, Popconfirm, Tabs, Modal, message, Row, Col } from 'antd'
 import { PlusOutlined, DeleteOutlined, SaveOutlined, ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons'
 import { Column as ColumnType, Table as TableType, Index } from '../types'
@@ -32,17 +32,38 @@ interface ColumnEditData {
   autoIncrement: boolean
 }
 
+interface ColumnWidths {
+  name: number
+  type: number
+  length: number
+  constraint: number
+  default: number
+  comment: number
+}
+
+const defaultColumnWidths: ColumnWidths = {
+  name: 120,
+  type: 100,
+  length: 80,
+  constraint: 160,
+  default: 100,
+  comment: 140
+}
+
 const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
   const {
     updateTable, loadColumns, createColumn, updateColumn, deleteColumn,
     loadIndexes, createIndex, updateIndex, deleteIndex, updateColumnOrder,
-    autoAddIdColumn
+    autoAddIdColumn, fontConfig
   } = useAppStore()
   const [form] = Form.useForm()
   const [indexForm] = Form.useForm()
   const [isIndexModalOpen, setIsIndexModalOpen] = useState(false)
   const [editingIndex, setEditingIndex] = useState<Index | null>(null)
   const [editingColumns, setEditingColumns] = useState<ColumnEditData[]>([])
+  const [columnWidths, setColumnWidths] = useState<ColumnWidths>(defaultColumnWidths)
+  const [resizingColumn, setResizingColumn] = useState<keyof ColumnWidths | null>(null)
+  const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null)
 
   useEffect(() => {
     loadColumns(table.id)
@@ -99,6 +120,32 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
   const handleDeleteColumn = useCallback(async (columnId: string) => {
     await deleteColumn(columnId)
   }, [deleteColumn])
+
+  const handleStartResize = useCallback((column: keyof ColumnWidths, e: React.MouseEvent) => {
+    setResizingColumn(column)
+    resizeRef.current = {
+      startX: e.clientX,
+      startWidth: columnWidths[column]
+    }
+    document.addEventListener('mousemove', handleResize)
+    document.addEventListener('mouseup', handleEndResize)
+  }, [columnWidths])
+
+  const handleResize = useCallback((e: MouseEvent) => {
+    if (!resizeRef.current || !resizingColumn) return
+    const deltaX = e.clientX - resizeRef.current.startX
+    const minWidth = 60
+    const maxWidth = 300
+    const newWidth = Math.max(minWidth, Math.min(maxWidth, resizeRef.current.startWidth + deltaX))
+    setColumnWidths(prev => ({ ...prev, [resizingColumn]: newWidth }))
+  }, [resizingColumn])
+
+  const handleEndResize = useCallback(() => {
+    setResizingColumn(null)
+    resizeRef.current = null
+    document.removeEventListener('mousemove', handleResize)
+    document.removeEventListener('mouseup', handleEndResize)
+  }, [])
 
   const handleUpdateColumnField = useCallback((columnId: string, field: keyof ColumnEditData, value: any) => {
     setEditingColumns(prev => prev.map(col =>
@@ -222,49 +269,131 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
           label: '列管理',
           children: (
             <div>
-              <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between' }}>
-                <h3 style={{ margin: 0 }}>列列表</h3>
-                <Button type="primary" icon={<PlusOutlined />} onClick={handleAddColumn}>
+              <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ margin: 0, fontSize: `${fontConfig.subtitle}px`, color: 'var(--theme-text)', fontWeight: 600 }}>列列表</h3>
+                <Button type="primary" icon={<PlusOutlined />} onClick={handleAddColumn} size="middle">
                   添加列
                 </Button>
               </div>
-              <div>
-                <Space direction="vertical" style={{ width: '100%' }}>
-                  {editingColumns.map((col, index) => (
-                    <div key={col.id} style={{ 
-                      background: '#fafafa', 
-                      border: '1px solid #e8e8e8', 
-                      borderRadius: '8px', 
-                      padding: '16px' 
-                    }}>
-                      <Row gutter={12} align="middle">
-                        <Col span={2} style={{ textAlign: 'center' }}>
+              <div style={{ overflowX: 'auto', borderRadius: '12px', border: '1px solid var(--theme-border)', background: 'var(--theme-background-secondary)' }}>
+                <div style={{ minWidth: 900 }}>
+                  {/* 表头 */}
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    padding: '14px 16px',
+                    background: 'var(--theme-background)',
+                    borderBottom: '1px solid var(--theme-border)',
+                    fontSize: `${fontConfig.caption}px`,
+                    fontWeight: 600
+                  }}>
+                    <div style={{ width: 48, textAlign: 'center', color: 'var(--theme-text-secondary)' }}>排序</div>
+                    <div style={{ width: columnWidths.name, color: 'var(--theme-text-secondary)' }}>列名</div>
+                    <div 
+                      className="resize-handle"
+                      style={{ 
+                        width: 6, 
+                        cursor: 'col-resize', 
+                        backgroundColor: 'transparent',
+                        '&:hover': { backgroundColor: 'var(--theme-border)' }
+                      }}
+                      onMouseDown={(e) => handleStartResize('name', e)}
+                    />
+                    <div style={{ width: columnWidths.type, color: 'var(--theme-text-secondary)' }}>类型</div>
+                    <div 
+                      className="resize-handle"
+                      style={{ 
+                        width: 6, 
+                        cursor: 'col-resize', 
+                        backgroundColor: 'transparent',
+                        '&:hover': { backgroundColor: 'var(--theme-border)' }
+                      }}
+                      onMouseDown={(e) => handleStartResize('type', e)}
+                    />
+                    <div style={{ width: columnWidths.length, color: 'var(--theme-text-secondary)' }}>长度</div>
+                    <div 
+                      className="resize-handle"
+                      style={{ 
+                        width: 6, 
+                        cursor: 'col-resize', 
+                        backgroundColor: 'transparent',
+                        '&:hover': { backgroundColor: 'var(--theme-border)' }
+                      }}
+                      onMouseDown={(e) => handleStartResize('length', e)}
+                    />
+                    <div style={{ width: columnWidths.constraint, color: 'var(--theme-text-secondary)' }}>约束</div>
+                    <div 
+                      className="resize-handle"
+                      style={{ 
+                        width: 4, 
+                        cursor: 'col-resize', 
+                        backgroundColor: 'var(--theme-border)',
+                        '&:hover': { backgroundColor: 'var(--theme-text-secondary)' }
+                      }}
+                      onMouseDown={(e) => handleStartResize('constraint', e)}
+                    />
+                    <div style={{ width: columnWidths.default, color: 'var(--theme-text-secondary)' }}>默认值</div>
+                    <div 
+                      className="resize-handle"
+                      style={{ 
+                        width: 4, 
+                        cursor: 'col-resize', 
+                        backgroundColor: 'var(--theme-border)',
+                        '&:hover': { backgroundColor: 'var(--theme-text-secondary)' }
+                      }}
+                      onMouseDown={(e) => handleStartResize('default', e)}
+                    />
+                    <div style={{ width: columnWidths.comment, color: 'var(--theme-text-secondary)' }}>注释</div>
+                    <div style={{ width: 48, textAlign: 'center', color: 'var(--theme-text-secondary)' }}>操作</div>
+                  </div>
+                  {/* 数据行 */}
+                  <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                    {editingColumns.map((col, index) => (
+                      <div 
+                        key={col.id} 
+                        style={{ 
+                          display: 'flex',
+                          alignItems: 'center',
+                          background: 'var(--theme-background)', 
+                          borderBottom: '1px solid var(--theme-border)',
+                          padding: '14px 16px',
+                          gap: 6,
+                          transition: 'background-color 0.15s ease',
+                          '&:hover': {
+                            background: 'var(--theme-hover)'
+                          }
+                        }}
+                      >
+                        <div style={{ width: 48, textAlign: 'center' }}>
                           <Space direction="vertical">
                             <Button 
                               icon={<ArrowUpOutlined />} 
                               size="small" 
                               disabled={index === 0}
                               onClick={() => handleMoveColumn(col.id, 'up')}
+                              style={{ padding: '4px' }}
                             />
                             <Button 
                               icon={<ArrowDownOutlined />} 
                               size="small" 
                               disabled={index === editingColumns.length - 1}
                               onClick={() => handleMoveColumn(col.id, 'down')}
+                              style={{ padding: '4px' }}
                             />
                           </Space>
-                        </Col>
-                        <Col span={3}>
-                          <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>列名</div>
+                        </div>
+                        <div style={{ width: columnWidths.name }}>
                           <Input
                             value={col.name}
                             onChange={(e) => handleUpdateColumnField(col.id, 'name', e.target.value)}
                             onBlur={() => handleSaveColumn(col.id)}
                             placeholder="列名"
+                            size="small"
+                            style={{ fontSize: `${fontConfig.body}px`, height: 32 }}
                           />
-                        </Col>
-                        <Col span={2}>
-                          <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>类型</div>
+                        </div>
+                        <div style={{ width: 6 }} />
+                        <div style={{ width: columnWidths.type }}>
                           <Select
                             value={col.dataType}
                             onChange={(val) => {
@@ -272,31 +401,34 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
                               handleSaveColumn(col.id)
                             }}
                             style={{ width: '100%' }}
+                            size="small"
+                            styles={{ popup: { root: { maxHeight: 250 } } }}
                           >
                             {DATA_TYPES.map(type => (
                               <Option key={type} value={type}>{type}</Option>
                             ))}
                           </Select>
-                        </Col>
-                        <Col span={2}>
-                          <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>长度</div>
+                        </div>
+                        <div style={{ width: 4 }} />
+                        <div style={{ width: columnWidths.length }}>
                           <InputNumber
                             value={col.length}
                             onChange={(val) => handleUpdateColumnField(col.id, 'length', val)}
                             onBlur={() => handleSaveColumn(col.id)}
                             style={{ width: '100%' }}
+                            size="small"
                           />
-                        </Col>
-                        <Col span={5}>
-                          <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>约束</div>
-                          <Space size="small">
+                        </div>
+                        <div style={{ width: 4 }} />
+                        <div style={{ width: columnWidths.constraint }}>
+                          <Space size="small" wrap>
                             <Tag
                               color={col.primaryKey ? 'green' : 'default'}
                               onClick={() => {
                                 handleUpdateColumnField(col.id, 'primaryKey', !col.primaryKey)
                                 handleSaveColumn(col.id)
                               }}
-                              style={{ cursor: 'pointer' }}
+                              style={{ cursor: 'pointer', fontSize: `${fontConfig.caption}px`, padding: '2px 8px' }}
                             >PK</Tag>
                             <Tag
                               color={col.unique ? 'orange' : 'default'}
@@ -304,7 +436,7 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
                                 handleUpdateColumnField(col.id, 'unique', !col.unique)
                                 handleSaveColumn(col.id)
                               }}
-                              style={{ cursor: 'pointer' }}
+                              style={{ cursor: 'pointer', fontSize: `${fontConfig.caption}px`, padding: '2px 8px' }}
                             >UQ</Tag>
                             <Tag
                               color={!col.nullable ? 'red' : 'default'}
@@ -312,7 +444,7 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
                                 handleUpdateColumnField(col.id, 'nullable', !col.nullable)
                                 handleSaveColumn(col.id)
                               }}
-                              style={{ cursor: 'pointer' }}
+                              style={{ cursor: 'pointer', fontSize: `${fontConfig.caption}px`, padding: '2px 8px' }}
                             >{col.nullable ? 'NULL' : 'NOT NULL'}</Tag>
                             <Tag
                               color={col.autoIncrement ? 'blue' : 'default'}
@@ -320,42 +452,57 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
                                 handleUpdateColumnField(col.id, 'autoIncrement', !col.autoIncrement)
                                 handleSaveColumn(col.id)
                               }}
-                              style={{ cursor: 'pointer' }}
+                              style={{ cursor: 'pointer', fontSize: `${fontConfig.caption}px`, padding: '2px 8px' }}
                             >AI</Tag>
                           </Space>
-                        </Col>
-                        <Col span={3}>
-                          <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>默认值</div>
+                        </div>
+                        <div style={{ width: 6 }} />
+                        <div style={{ width: columnWidths.default }}>
                           <Input
                             value={col.defaultValue || ''}
                             onChange={(e) => handleUpdateColumnField(col.id, 'defaultValue', e.target.value)}
                             onBlur={() => handleSaveColumn(col.id)}
                             placeholder="默认值"
+                            size="small"
+                            style={{ fontSize: `${fontConfig.body}px`, height: 32 }}
                           />
-                        </Col>
-                        <Col span={4}>
-                          <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>注释</div>
+                        </div>
+                        <div style={{ width: 6 }} />
+                        <div style={{ width: columnWidths.comment }}>
                           <Input
                             value={col.comment || ''}
                             onChange={(e) => handleUpdateColumnField(col.id, 'comment', e.target.value)}
                             onBlur={() => handleSaveColumn(col.id)}
                             placeholder="注释"
+                            size="small"
+                            style={{ fontSize: `${fontConfig.body}px`, height: 32 }}
                           />
-                        </Col>
-                        <Col span={1}>
+                        </div>
+                        <div style={{ width: 48, textAlign: 'center' }}>
                           <Popconfirm
                             title="确定删除这个列吗？"
                             onConfirm={() => handleDeleteColumn(col.id)}
                             okText="确定"
                             cancelText="取消"
                           >
-                            <Button type="text" danger icon={<DeleteOutlined />} />
+                            <Button type="text" danger icon={<DeleteOutlined />} size="small" />
                           </Popconfirm>
-                        </Col>
-                      </Row>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {editingColumns.length === 0 && (
+                    <div style={{ 
+                      padding: '60px 40px', 
+                      textAlign: 'center',
+                      color: 'var(--theme-text-secondary)',
+                      background: 'var(--theme-background)'
+                    }}>
+                      <div style={{ fontSize: `${fontConfig.subtitle}px`, marginBottom: 8 }}>暂无列</div>
+                      <div style={{ fontSize: `${fontConfig.caption}px` }}>请点击上方按钮添加</div>
                     </div>
-                  ))}
-                </Space>
+                  )}
+                </div>
               </div>
             </div>
           )
@@ -375,14 +522,14 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
                 <Space direction="vertical" style={{ width: '100%' }}>
                   {(table.indexes || []).map(idx => (
                     <div key={idx.id} style={{ 
-                      background: '#fafafa', 
-                      border: '1px solid #e8e8e8', 
+                      background: 'var(--theme-background-secondary)', 
+                      border: '1px solid var(--theme-border)', 
                       borderRadius: '8px', 
                       padding: '16px' 
                     }}>
                       <Row gutter={12} align="middle">
                         <Col span={4}>
-                          <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>索引名</div>
+                          <div style={{ fontSize: `${fontConfig.caption}px`, color: '#666', marginBottom: '4px' }}>索引名</div>
                           <Input
                             value={idx.name}
                             onChange={(e) => updateIndex(idx.id, { name: e.target.value })}
@@ -390,11 +537,11 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
                           />
                         </Col>
                         <Col span={6}>
-                          <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>包含列</div>
+                          <div style={{ fontSize: `${fontConfig.caption}px`, color: '#666', marginBottom: '4px' }}>包含列</div>
                           <div>{idx.columns?.join(', ') || '-'}</div>
                         </Col>
                         <Col span={3}>
-                          <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>类型</div>
+                          <div style={{ fontSize: `${fontConfig.caption}px`, color: '#666', marginBottom: '4px' }}>类型</div>
                           <Select
                             value={idx.type}
                             onChange={(val) => updateIndex(idx.id, { type: val })}
@@ -406,7 +553,7 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
                           </Select>
                         </Col>
                         <Col span={4}>
-                          <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>约束</div>
+                          <div style={{ fontSize: `${fontConfig.caption}px`, color: '#666', marginBottom: '4px' }}>约束</div>
                           <Tag
                             color={idx.unique ? 'red' : 'default'}
                             onClick={() => updateIndex(idx.id, { unique: !idx.unique })}

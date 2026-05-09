@@ -4,7 +4,7 @@ import { getThemeById, getThemeOptions } from './themes'
 import { Theme } from './types'
 
 export function useTheme() {
-  const { themeMode, setThemeMode } = useAppStore()
+  const { themeMode, setThemeMode, fontConfig } = useAppStore()
   
   const currentTheme = useMemo((): Theme => {
     return getThemeById(themeMode)
@@ -21,7 +21,8 @@ export function useTheme() {
     themeMode,
     themeOptions,
     setTheme,
-    colors: currentTheme.colors
+    colors: currentTheme.colors,
+    fontConfig
   }
 }
 

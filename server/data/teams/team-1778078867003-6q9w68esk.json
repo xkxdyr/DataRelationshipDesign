@@ -9,8 +9,14 @@
       "userName": "user1",
       "role": "owner",
       "joinedAt": "2026-05-06T14:47:47.003Z"
+    },
+    {
+      "userId": "f",
+      "userName": "f",
+      "role": "member",
+      "joinedAt": "2026-05-08T17:02:51.967Z"
     }
   ],
   "createdAt": "2026-05-06T14:47:47.003Z",
-  "updatedAt": "2026-05-06T14:47:47.003Z"
+  "updatedAt": "2026-05-08T17:02:51.967Z"
 }

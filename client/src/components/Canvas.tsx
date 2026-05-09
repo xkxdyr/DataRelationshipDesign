@@ -16,7 +16,7 @@ import TableNode from './TableNode'
 import RelationshipEditor from './RelationshipEditor'
 import { useAppStore } from '../stores/appStore'
 import { Button, Space, Dropdown, message, Modal, Form, Card, Radio, Slider, Select, Input } from 'antd'
-import { PlusOutlined, CodeOutlined, LinkOutlined, ExportOutlined, PictureOutlined, FileImageOutlined, SettingOutlined, ZoomInOutlined, ZoomOutOutlined, RotateLeftOutlined, CompressOutlined, AimOutlined, LockOutlined } from '@ant-design/icons'
+import { PlusOutlined, CodeOutlined, LinkOutlined, ExportOutlined, PictureOutlined, FileImageOutlined, SettingOutlined, ZoomInOutlined, ZoomOutOutlined, RotateLeftOutlined, CompressOutlined, AimOutlined, LockOutlined, DeleteOutlined } from '@ant-design/icons'
 import CreateTableModal from './CreateTableModal'
 import { projectApi } from '../services/api'
 
@@ -49,7 +49,7 @@ const nodeTypes = {
 }
 
 const CanvasContent: React.FC = () => {
-  const { tables, currentProject, updateTablePosition, selectTable, selectedTableId, deleteTable, createTable, loadTables, relationships, loadRelationships, canvasZoom, setCanvasZoom, showMiniMap, setShowMiniMap, edgeStyle, showEdgeLabels, updateTable } = useAppStore()
+  const { tables, currentProject, updateTablePosition, selectTable, selectedTableId, selectedTableIds, deleteTable, createTable, loadTables, relationships, loadRelationships, canvasZoom, setCanvasZoom, showMiniMap, setShowMiniMap, edgeStyle, showEdgeLabels, updateTable, selectMultipleTables, addSelectedTable, removeSelectedTable, clearSelectedTables } = useAppStore()
   const reactFlow = useReactFlow()
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -58,6 +58,12 @@ const CanvasContent: React.FC = () => {
   const [layoutOptions, setLayoutOptions] = useState<AutoLayoutOptions>(defaultLayoutOptions)
   const [autoLayoutForm] = Form.useForm()
   const [isLocked, setIsLocked] = useState(false)
+  const [showBatchActions, setShowBatchActions] = useState(false)
+  
+  const [marqueeActive, setMarqueeActive] = useState(false)
+  const [marqueeStart, setMarqueeStart] = useState({ x: 0, y: 0 })
+  const [marqueeEnd, setMarqueeEnd] = useState({ x: 0, y: 0 })
+  const [marqueeMode, setMarqueeMode] = useState<'contains' | 'intersect'>('contains')
 
   useEffect(() => {
     if (currentProject) {
@@ -80,12 +86,56 @@ const CanvasContent: React.FC = () => {
     }
   }, [canvasZoom, setCanvasZoom])
 
-  // 没有选择项目时渲染空内容
-  if (!currentProject) {
-    return null
+  // 监听多选状态，显示批量操作提示
+  useEffect(() => {
+    if (selectedTableIds.length > 1) {
+      setShowBatchActions(true)
+      
+      const timer = setTimeout(() => setIsLocked(true), 200)
+      return () => clearTimeout(timer)
+    } else {
+      setIsLocked(false)
+      // 延迟隐藏，给用户一些操作时间
+      const timer = setTimeout(() => setShowBatchActions(false), 200)
+      return () => clearTimeout(timer)
+    }
+  }, [selectedTableIds])
+
+  const handleBatchDelete = () => {
+    if (selectedTableIds.length === 0) return
+    Modal.confirm({
+      title: `确认删除`,
+      content: `您确定要删除选中的 ${selectedTableIds.length} 张表吗？此操作不可撤销。`,
+      okText: '确定删除',
+      cancelText: '取消',
+      okType: 'danger',
+      onOk: async () => {
+        for (const id of selectedTableIds) {
+          await deleteTable(id)
+        }
+        clearSelectedTables()
+        message.success(`成功删除 ${selectedTableIds.length} 张表`)
+      }
+    })
   }
 
-  const nodes: Node[] = useMemo(() => {
+  // 没有选择项目时渲染空内容
+  if (!currentProject) {
+    return (
+      <>
+        <div style={{ display: 'none' }}>
+          <Form form={autoLayoutForm} layout="vertical">
+            <Form.Item name="layoutType"><Input /></Form.Item>
+            <Form.Item name="paddingX"><Input /></Form.Item>
+            <Form.Item name="paddingY"><Input /></Form.Item>
+            <Form.Item name="maxColumns"><Input /></Form.Item>
+          </Form>
+        </div>
+      </>
+    )
+  }
+
+  const initialNodes: Node[] = useMemo(() => {
     if (!tables || !Array.isArray(tables)) return []
     return tables.map(table => ({
       id: table.id,
@@ -96,11 +146,12 @@ const CanvasContent: React.FC = () => {
         onEdit: selectTable,
         onDelete: deleteTable
       },
-      selected: selectedTableId === table.id
+      selected: selectedTableIds.includes(table.id),
+      selectable: true
     }))
-  }, [tables, selectedTableId, selectTable, deleteTable])
+  }, [tables, selectedTableIds, selectTable, deleteTable])
 
-  const edges: Edge[] = useMemo(() => {
+  const initialEdges: Edge[] = useMemo(() => {
     if (!relationships || !Array.isArray(relationships)) return []
     return relationships.map(rel => {
       const sourceTable = tables.find(t => t.id === rel.sourceTableId)
@@ -120,10 +171,10 @@ const CanvasContent: React.FC = () => {
           label: showEdgeLabels ? label : undefined,
           labelStyle: {
             fontSize: 11,
-            fill: '#666'
+            fill: 'var(--theme-text-secondary)'
           },
           style: {
-            stroke: '#1890ff',
+            stroke: 'var(--theme-primary)',
             strokeWidth: 2
           },
           type: edgeStyle
@@ -133,29 +184,151 @@ const CanvasContent: React.FC = () => {
     }).filter(Boolean) as Edge[]
   }, [relationships, tables, edgeStyle, showEdgeLabels])
 
-  const [nodeState, setNodeState, onNodeChange] = useNodesState(nodes)
-  const [edgeState, setEdgeState, onEdgeChange] = useEdgesState(edges)
+  const [nodeState, setNodeState, onNodeChange] = useNodesState(initialNodes)
+  const [edgeState, setEdgeState, onEdgesChange] = useEdgesState(initialEdges)
+  const isDraggingRef = React.useRef(false)
 
-  // 同步更新节点和边状态
+  // 在项目切换时完全重新初始化
   useEffect(() => {
-    setNodeState(nodes)
-    setEdgeState(edges)
-  }, [nodes, edges, setNodeState, setEdgeState])
+    setNodeState(initialNodes)
+    setEdgeState(initialEdges)
+  }, [currentProject?.id])
+
+  // 监听 tables 变化，当表位置更新时同步到 React Flow 节点（但要避免拖动过程中的循环）
+  useEffect(() => {
+    if (isDraggingRef.current) return // 拖动过程中不同步
+    
+    // 检查是否有位置变化
+    const hasPositionChanged = nodeState.some(node => {
+      const table = tables.find(t => t.id === node.id)
+      return table && (table.positionX !== node.position.x || table.positionY !== node.position.y)
+    })
+    
+    // 检查表ID列表是否变化（添加/删除）
+    const tableIds = tables.map(t => t.id).join(',')
+    const nodeIds = nodeState.map(n => n.id).join(',')
+    const hasTableListChanged = tableIds !== nodeIds
+    
+    if (hasPositionChanged || hasTableListChanged) {
+      setNodeState(initialNodes)
+      setEdgeState(initialEdges)
+    }
+  }, [tables])
+
+  const onNodeDragStart = useCallback(() => {
+    isDraggingRef.current = true
+  }, [])
 
   const onNodeDragStop = useCallback((event: any, node: Node) => {
     updateTablePosition(node.id, node.position.x, node.position.y)
+    setTimeout(() => {
+      isDraggingRef.current = false
+    }, 100) // 延长延迟时间，确保 store 更新完成
   }, [updateTablePosition])
 
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
-    const table = tables.find(t => t.id === node.id)
-    if (table) {
-      selectTable(table.id)
-    }
-  }, [tables, selectTable])
+    if (marqueeActive) return
+    if (isDraggingRef.current) return
 
-  const onPaneClick = useCallback(() => {
-    selectTable(null)
-  }, [selectTable])
+    if (event.ctrlKey || event.metaKey) {
+      if (selectedTableIds.includes(node.id)) {
+        removeSelectedTable(node.id)
+      } else {
+        addSelectedTable(node.id)
+      }
+    } else {
+      selectTable(node.id)
+    }
+  }, [tables, selectTable, selectedTableIds, addSelectedTable, removeSelectedTable, marqueeActive])
+
+  const onPaneClick = useCallback((event: React.MouseEvent) => {
+    if (marqueeActive) return
+    
+    if (!(event.target as HTMLElement).closest('.react-flow__node')) {
+      if (event.ctrlKey || event.metaKey) {
+        return
+      }
+      clearSelectedTables()
+    }
+  }, [selectTable, clearSelectedTables, marqueeActive])
+
+  const onSelectionChange = useCallback((params: { nodes: any[]; edges: any[] }) => {
+
+    console.log('[DEBUG] onSelectionChange triggered, nodes:', params.nodes.length)
+    if (params.nodes.length > 0) {
+      const selectedIds = params.nodes.map((node: any) => node.id)
+      console.log('[DEBUG] Selected IDs:', selectedIds)
+      if (selectedIds.length > 0) {
+        selectMultipleTables(selectedIds)
+      }
+    }
+  }, [selectMultipleTables])
+
+  const onPaneMouseDown = useCallback((event: React.MouseEvent) => {
+    
+    if (event.button !== 2) return
+    event.preventDefault()
+    event.stopPropagation()
+    if ((event.target as HTMLElement).closest('.react-flow__node')) return
+
+    const rect = reactFlowWrapper.current?.getBoundingClientRect()
+    if (rect) {
+      const { left, top } = rect
+      setMarqueeStart({ x: event.clientX - left, y: event.clientY - top })
+      setMarqueeEnd({ x: event.clientX - left, y: event.clientY - top })
+      setMarqueeActive(true)
+    }
+  }, [])
+
+  const onPaneMouseMove = useCallback((event: React.MouseEvent) => {
+    if (!marqueeActive) return
+
+    const rect = reactFlowWrapper.current?.getBoundingClientRect()
+    if (rect) {
+      const { left, top } = rect
+      setMarqueeEnd({ x: event.clientX - left, y: event.clientY - top })
+    }
+  }, [marqueeActive])
+
+  const onPaneMouseUp = useCallback(() => {
+    if (!marqueeActive) return
+
+    const startX = Math.min(marqueeStart.x, marqueeEnd.x)
+    const startY = Math.min(marqueeStart.y, marqueeEnd.y)
+    const endX = Math.max(marqueeStart.x, marqueeEnd.x)
+    const endY = Math.max(marqueeStart.y, marqueeEnd.y)
+
+    const marqueeStartFlow = reactFlow.screenToFlowPosition({ x: startX, y: startY })
+    const marqueeEndFlow = reactFlow.screenToFlowPosition({ x: endX, y: endY })
+
+    const mStartX = Math.min(marqueeStartFlow.x, marqueeEndFlow.x)
+    const mStartY = Math.min(marqueeStartFlow.y, marqueeEndFlow.y)
+    const mEndX = Math.max(marqueeStartFlow.x, marqueeEndFlow.x)
+    const mEndY = Math.max(marqueeStartFlow.y, marqueeEndFlow.y)
+
+    const selectedIds = tables
+      .filter(table => {
+        const tableX = table.positionX || 0
+        const tableY = table.positionY || 0
+
+        if (marqueeMode === 'contains') {
+          return tableX >= mStartX && tableX + 280 <= mEndX &&
+                 tableY >= mStartY && tableY + 120 <= mEndY
+        } else {
+          return tableX < mEndX && tableX + 280 > mStartX &&
+                 tableY < mEndY && tableY + 120 > mStartY
+        }
+      })
+      .map(t => t.id)
+
+    if (selectedIds.length > 0) {
+      selectMultipleTables(selectedIds)
+    }
+
+    setMarqueeActive(false)
+    setMarqueeStart({ x: 0, y: 0 })
+    setMarqueeEnd({ x: 0, y: 0 })
+  }, [marqueeActive, marqueeStart, marqueeEnd, marqueeMode, tables, selectMultipleTables])
 
   const onMoveEnd = useCallback((event: any, viewport: any) => {
     if (viewport.zoom !== canvasZoom) {
@@ -520,41 +693,119 @@ const CanvasContent: React.FC = () => {
       </div>
       <div style={{ height: '100%', width: '100%', position: 'relative' }} ref={reactFlowWrapper}>
         <div style={{ position: 'absolute', top: 16, left: 16, zIndex: 10 }}>
-          <Space>
-            <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenModal}>
+          <Space size="middle">
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenModal} size="middle">
               新建表
             </Button>
-            <Button icon={<LinkOutlined />} onClick={() => setIsRelationshipEditorOpen(true)}>
+            <Button icon={<LinkOutlined />} onClick={() => setIsRelationshipEditorOpen(true)} size="middle">
               关系管理
             </Button>
-            <Button icon={<SettingOutlined />} onClick={handleAutoLayout}>
+            <Button icon={<SettingOutlined />} onClick={handleAutoLayout} size="middle">
               自动布局
             </Button>
             <Dropdown menu={{ items: exportMenuItems }} placement="bottomLeft">
-              <Button icon={<ExportOutlined />}>
-                导出 ER 图
+              <Button icon={<ExportOutlined />} size="middle">
+                导出
               </Button>
             </Dropdown>
-            <Button icon={<CodeOutlined />} onClick={handleGenerateDDL}>
+            <Button icon={<CodeOutlined />} onClick={handleGenerateDDL} size="middle">
               导出DDL
             </Button>
+            <Dropdown 
+              menu={{ 
+                items: [
+                  { key: 'contains', label: '包含选择', onClick: () => setMarqueeMode('contains') },
+                  { key: 'intersect', label: '相交选择', onClick: () => setMarqueeMode('intersect') }
+                ],
+                selectedKeys: [marqueeMode]
+              }} 
+              placement="bottomLeft"
+            >
+              <Button size="middle">
+                <LockOutlined style={{ marginRight: 4 }} />
+                {marqueeMode === 'contains' ? '包含' : '相交'}
+              </Button>
+            </Dropdown>
           </Space>
         </div>
+
+        {/* 批量操作提示 */}
+        {showBatchActions && selectedTableIds.length > 1 && (
+          <div style={{ 
+            position: 'absolute', 
+            top: 60, 
+            left: 16, 
+            zIndex: 10,
+            background: 'var(--theme-card)',
+            border: '1px solid var(--theme-border)',
+            borderRadius: 8,
+            padding: '8px 16px',
+            boxShadow: '0 2px 8px var(--theme-shadow)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12
+          }}>
+            <span style={{ fontSize: 12, color: 'var(--theme-text-secondary)' }}>
+              已选择 <strong style={{ color: 'var(--theme-primary)' }}>{selectedTableIds.length}</strong> 张表
+            </span>
+            <div style={{ height: 20, width: 1, background: 'var(--theme-border)' }} />
+            <Button 
+              type="text" 
+              danger 
+              size="small" 
+              icon={<DeleteOutlined />}
+              onClick={handleBatchDelete}
+            >
+              批量删除
+            </Button>
+            <Button 
+              type="text" 
+              size="small" 
+              onClick={clearSelectedTables}
+            >
+              取消选择
+            </Button>
+          </div>
+        )}
+
+        {marqueeActive && (
+          <div
+            style={{
+              position: 'absolute',
+              top: Math.min(marqueeStart.y, marqueeEnd.y),
+              left: Math.min(marqueeStart.x, marqueeEnd.x),
+              width: Math.abs(marqueeEnd.x - marqueeStart.x),
+              height: Math.abs(marqueeEnd.y - marqueeStart.y),
+              border: '2px dashed #1890ff',
+              backgroundColor: 'rgba(24, 144, 255, 0.1)',
+              pointerEvents: 'none',
+              zIndex: 1000,
+            }}
+          />
+        )}
 
         <ReactFlow
           nodes={nodeState}
           edges={edgeState}
           onNodesChange={onNodeChange}
-          onEdgesChange={onEdgeChange}
+          onEdgesChange={onEdgesChange}
+          onNodeDragStart={onNodeDragStart}
           onNodeDragStop={onNodeDragStop}
           onNodeClick={onNodeClick}
           onPaneClick={onPaneClick}
           onMoveEnd={onMoveEnd}
+          onSelectionChange={onSelectionChange}
           nodeTypes={nodeTypes}
           fitView
-          style={{ background: '#fafafa', width: '100%', height: '100%' }}
+          style={{ background: 'var(--theme-background)', width: '100%', height: '100%' }}
           nodesDraggable={!isLocked}
-          panOnDrag={true}
+          onMouseDown={onPaneMouseDown}
+          onMouseMove={onPaneMouseMove}
+          onMouseUp={onPaneMouseUp}
+          onContextMenu={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+          }}
         >
           <Background color="#eee" gap={16} size={2} />
           <div style={{ 

@@ -69,6 +69,52 @@ class LLMService {
     return !!this.config.apiKey && !!this.config.endpoint
   }
 
+  async testConnection(config?: Partial<LLMConfig>): Promise<{ success: boolean; model?: string; error?: string }> {
+    const testConfig = config ? { ...this.config, ...config } : this.config
+    
+    if (!testConfig.apiKey || !testConfig.endpoint) {
+      return { success: false, error: 'API密钥或端点未配置' }
+    }
+
+    try {
+      const response = await fetch(`${testConfig.endpoint}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${testConfig.apiKey}`
+        },
+        body: JSON.stringify({
+          model: testConfig.model,
+          messages: [
+            {
+              role: 'user',
+              content: 'hi'
+            }
+          ],
+          max_tokens: 5
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({})) as { error?: { message?: string } }
+        return { 
+          success: false, 
+          error: `连接失败: ${response.status} - ${errorData.error?.message || response.statusText}` 
+        }
+      }
+
+      return { 
+        success: true, 
+        model: testConfig.model 
+      }
+    } catch (error) {
+      return { 
+        success: false, 
+        error: `连接测试失败: ${(error as Error).message}` 
+      }
+    }
+  }
+
   async generateTables(request: GenerateTableRequest): Promise<TableSuggestion[]> {
     if (!this.isConfigured()) {
       throw new Error('LLM服务未配置，请先设置API密钥和端点')

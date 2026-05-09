@@ -11,14 +11,19 @@ const getApiBase = (): string => {
 const API_BASE = getApiBase()
 
 async function request<T>(url: string, options?: RequestInit): Promise<ApiResponse<T>> {
-  const response = await fetch(`${API_BASE}${url}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers
-    },
-    ...options
-  })
-  return await response.json()
+  try {
+    const response = await fetch(`${API_BASE}${url}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers
+      },
+      ...options
+    })
+    return await response.json()
+  } catch (error) {
+    // 静默处理网络错误，让调用方处理离线情况
+    return { success: false, message: 'Network error', data: undefined } as ApiResponse<T>
+  }
 }
 
 export const ddlApi = {
@@ -206,6 +211,11 @@ export const llmApi = {
     }),
   getConfig: () =>
     request<LLMConfigResult>('/llm/config'),
+  testConnection: (apiKey: string, endpoint?: string, model?: string) =>
+    request<{ model?: string }>('/llm/test-connection', {
+      method: 'POST',
+      body: JSON.stringify({ apiKey, endpoint, model })
+    }),
   generateTables: (description: string, databaseType?: string) =>
     request<TableSuggestion[]>('/llm/generate-tables', {
       method: 'POST',

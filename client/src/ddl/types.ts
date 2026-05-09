@@ -8,6 +8,8 @@ export interface DDLOptions {
   formatSql: boolean
   uppercaseKeywords: boolean
   includeDropTable: boolean
+  includeIndexes?: boolean
+  includeForeignKeys?: boolean
 }
 
 export interface IDDLGenerator {

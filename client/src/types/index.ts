@@ -82,3 +82,15 @@ export interface ApiResponse<T> {
   error?: string
   message?: string
 }
+
+export interface ModelConfig {
+  id: string
+  name: string
+  provider: string
+  model: string
+  apiKey: string
+  endpoint?: string
+  isDefault?: boolean
+  createdAt: string
+  updatedAt: string
+}

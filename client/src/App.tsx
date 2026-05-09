@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react'
 import { Layout, Typography, Badge, Tooltip, Button, message } from 'antd'
-import { DatabaseOutlined, CloseOutlined, CloudOutlined, CloudSyncOutlined, CloudUploadOutlined, SyncOutlined, WifiOutlined, DisconnectOutlined, SettingOutlined, LeftOutlined, RightOutlined, TeamOutlined } from '@ant-design/icons'
+import { DatabaseOutlined, CloseOutlined, CloudOutlined, CloudSyncOutlined, CloudUploadOutlined, SyncOutlined, WifiOutlined, DisconnectOutlined, SettingOutlined, LeftOutlined, RightOutlined, TeamOutlined, CodeOutlined } from '@ant-design/icons'
 import { useAppStore } from './stores/appStore'
 import { useTheme } from './theme/useTheme'
 import ProjectList from './components/ProjectList'
@@ -15,14 +15,40 @@ import { ConnectionConfigModal } from './components/ConnectionConfigModal'
 import { DatabaseImportModal } from './components/DatabaseImportModal'
 import { DatabaseSyncModal } from './components/DatabaseSyncModal'
 import { TeamManagementModal } from './components/TeamManagementModal'
-import { TableInfo } from './services/api'
+import { SQLEditor } from './components/SQLEditor'
+import NetworkStatus from './components/NetworkStatus'
+import SyncQueueModal from './components/SyncQueueModal'
+import { TableInfo, TableSuggestion } from './services/api'
+import localStorageService from './services/localStorageService'
 
 const { Header } = Layout
 const { Title } = Typography
 
 function App() {
-  const { currentProject, projects, loadProjects, selectedTableId, tables, columns, selectTable, undo, redo, canUndo, canRedo, isOnline, isSyncing, lastSaved, fontSize, setFontSize, themeColor, loadSettings, createTable, createColumn, createIndex, createRelationship, saveToLocal, deleteTable, setCanvasZoom, canvasZoom } = useAppStore()
-  const { colors } = useTheme()
+  const { theme, themeOptions, setTheme, fontConfig, colors } = useTheme()
+  const { currentProject, projects, loadProjects, selectedTableId, selectedTableIds, tables, columns, selectTable, undo, redo, canUndo, canRedo, isOnline, isSyncing, lastSaved, loadSettings, loadShortcuts, loadFontConfig, createTable, createColumn, createIndex, createRelationship, saveToLocal, deleteTable, setCanvasZoom, canvasZoom, copyTable, pasteTable, selectAllTables, shortcuts, loadUpdateLogs, addUpdateLog, updateLogs, setOnline, refreshSyncQueueCount, syncQueueCount } = useAppStore()
+
+  // 网络状态监听
+  React.useEffect(() => {
+    const handleOnline = () => setOnline(true)
+    const handleOffline = () => setOnline(false)
+
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [setOnline])
+
+  // 定期刷新同步队列计数
+  React.useEffect(() => {
+    refreshSyncQueueCount()
+    const timer = setInterval(refreshSyncQueueCount, 5000)
+    return () => clearInterval(timer)
+  }, [refreshSyncQueueCount])
+  
   const [leftWidth, setLeftWidth] = useState(350)
   const [rightWidth, setRightWidth] = useState(900)
   const [isDraggingLeft, setIsDraggingLeft] = useState(false)
@@ -35,6 +61,8 @@ function App() {
   const [showDatabaseImport, setShowDatabaseImport] = useState(false)
   const [showDatabaseSync, setShowDatabaseSync] = useState(false)
   const [showTeamManagement, setShowTeamManagement] = useState(false)
+  const [showSQLEditor, setShowSQLEditor] = useState(false)
+  const [showSyncQueue, setShowSyncQueue] = useState(false)
   const [leftCollapsed, setLeftCollapsed] = useState(false)
   const [rightCollapsed, setRightCollapsed] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -43,6 +71,12 @@ function App() {
   const startRightWidthRef = useRef(0)
   const [leftLastWidth, setLeftLastWidth] = useState(350)
   const [rightLastWidth, setRightLastWidth] = useState(900)
+  
+  // 使用 ref 跟踪最新的 leftCollapsed 状态，避免闭包陷阱
+  const leftCollapsedRef = useRef(leftCollapsed)
+  useEffect(() => {
+    leftCollapsedRef.current = leftCollapsed
+  }, [leftCollapsed])
 
   useEffect(() => {
     const ZOOM_MIN = 0.5
@@ -65,82 +99,108 @@ function App() {
       setCanvasZoom(Math.round(newZoom * 100) / 100)
     }
 
+    const matchesShortcut = (e: KeyboardEvent, shortcutKeys: string[] | undefined) => {
+    if (!shortcutKeys || shortcutKeys.length === 0) return false
+    const key = e.key.toLowerCase()
+    const hasCtrl = e.ctrlKey || e.metaKey
+    const hasShift = e.shiftKey
+    const hasAlt = e.altKey
+
+    const ctrlRequired = shortcutKeys.includes('ctrl')
+    const shiftRequired = shortcutKeys.includes('shift')
+    const altRequired = shortcutKeys.includes('alt')
+    const keyRequired = shortcutKeys.find(k => !['ctrl', 'shift', 'alt'].includes(k))
+
+      return (
+        hasCtrl === ctrlRequired &&
+        hasShift === shiftRequired &&
+        hasAlt === altRequired &&
+        (keyRequired ? key === keyRequired : true)
+      )
+    }
+
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement
       const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
 
-      if (e.ctrlKey || e.metaKey) {
-        if (e.key === 'z' && !e.shiftKey) {
+      if (matchesShortcut(e, shortcuts.undo)) {
+        e.preventDefault()
+        if (canUndo()) {
+          undo()
+        }
+      } else if (matchesShortcut(e, shortcuts.redo) || (e.ctrlKey && e.key === 'y')) {
+        e.preventDefault()
+        if (canRedo()) {
+          redo()
+        }
+      } else if (matchesShortcut(e, shortcuts.save)) {
+        e.preventDefault()
+        if (!isInput) {
+          saveToLocal()
+        }
+      } else if (matchesShortcut(e, shortcuts.newTable)) {
+        e.preventDefault()
+        if (!isInput && currentProject) {
+          createTable(currentProject.id, {
+            name: '新表',
+            positionX: 100,
+            positionY: 100
+          })
+        }
+      } else if (matchesShortcut(e, shortcuts.resetZoom)) {
+        e.preventDefault()
+        if (!isInput) {
+          setCanvasZoom(1)
+        }
+      } else if (matchesShortcut(e, shortcuts.zoomIn) || ((e.key === '+' || e.key === '=' || e.code === 'Equal') && e.ctrlKey && !e.altKey)) {
+        e.preventDefault()
+        if (!isInput) {
+          zoomIn()
+        }
+      } else if (matchesShortcut(e, shortcuts.zoomOut) || ((e.key === '-' || e.code === 'Minus') && e.ctrlKey && !e.altKey)) {
+        e.preventDefault()
+        if (!isInput) {
+          zoomOut()
+        }
+      } else if (matchesShortcut(e, shortcuts.settings)) {
+        e.preventDefault()
+        if (!isInput) {
+          setShowSettings(true)
+        }
+      } else if (matchesShortcut(e, shortcuts.importExport)) {
+        e.preventDefault()
+        if (!isInput) {
+          setShowImportExport(true)
+        }
+      } else if (matchesShortcut(e, shortcuts.selectAll)) {
+        e.preventDefault()
+        if (!isInput) {
+          selectAllTables()
+        }
+      } else if (matchesShortcut(e, shortcuts.copy)) {
+        if (!isInput) {
           e.preventDefault()
-          if (canUndo()) {
-            undo()
-          }
-        } else if ((e.key === 'z' && e.shiftKey) || e.key === 'y') {
-          e.preventDefault()
-          if (canRedo()) {
-            redo()
-          }
-        } else if (e.key === 's') {
-          e.preventDefault()
-          if (!isInput) {
-            saveToLocal()
-          }
-        } else if (e.key === 't') {
-          e.preventDefault()
-          if (!isInput && currentProject) {
-            createTable(currentProject.id, {
-              name: '新表',
-              positionX: 100,
-              positionY: 100
-            })
-          }
-        } else if (e.key === '0') {
-          e.preventDefault()
-          if (!isInput) {
-            setCanvasZoom(1)
-          }
-        } else if ((e.key === '+' || e.key === '=' || e.code === 'Equal' || e.shiftKey && e.key === '=') && !e.altKey) {
-          e.preventDefault()
-          if (!isInput) {
-            zoomIn()
-          }
-        } else if ((e.key === '-' || e.code === 'Minus') && !e.altKey) {
-          e.preventDefault()
-          if (!isInput) {
-            zoomOut()
-          }
-        } else if (e.key === ',' || e.code === 'Comma' || e.keyCode === 188) {
-          e.preventDefault()
-          if (!isInput) {
-            setShowSettings(true)
-          }
-        } else if ((e.key === 'e' || e.key === 'E') && e.shiftKey) {
-          e.preventDefault()
-          if (!isInput) {
-            setShowImportExport(true)
-          }
-        } else if (e.key === 'a') {
-          e.preventDefault()
-          if (!isInput) {
-            message.info('全选功能')
-          }
-        } else if (e.key === 'c') {
-          e.preventDefault()
-          if (!isInput && selectedTableId) {
-            message.info('复制表')
-          }
-        } else if (e.key === 'v') {
-          e.preventDefault()
-          if (!isInput && currentProject) {
-            message.info('粘贴表')
-          }
-        } else if (e.key === 'f') {
-          e.preventDefault()
-          if (!isInput) {
-            message.info('查找功能')
+          if (selectedTableId) {
+            copyTable(selectedTableId)
+            message.success('已复制表')
           }
         }
-      } else if (e.key === 'Backspace' || e.key === 'Delete') {
+      } else if (matchesShortcut(e, shortcuts.paste)) {
+        if (!isInput) {
+          e.preventDefault()
+          if (currentProject) {
+            pasteTable()
+          }
+        }
+      } else if (matchesShortcut(e, shortcuts.find)) {
+        e.preventDefault()
+        if (!isInput) {
+          message.info('查找功能')
+        }
+      } else if (matchesShortcut(e, shortcuts.toggleLeftSidebar)) {
+        e.preventDefault()
+        toggleLeftCollapse()
+      } else if ((e.key === 'Backspace' || e.key === 'Delete')) {
         if (!isInput && selectedTableId) {
           e.preventDefault()
           deleteTable(selectedTableId)
@@ -171,21 +231,55 @@ function App() {
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [undo, redo, canUndo, canRedo, currentProject, createTable, saveToLocal, selectedTableId, deleteTable, selectTable, showSettings, showImportExport, showTypeConvert, showLLM, showConnections, showDatabaseImport, setCanvasZoom])
+  }, [undo, redo, canUndo, canRedo, currentProject, createTable, saveToLocal, selectedTableId, deleteTable, selectTable, showSettings, showImportExport, showTypeConvert, showLLM, showConnections, showDatabaseImport, setCanvasZoom, shortcuts, copyTable, pasteTable, selectAllTables, createColumn, tables])
 
+  const logAddedRef = useRef(false)
+  
   useEffect(() => {
     loadProjects()
     loadSettings()
+    loadShortcuts()
+    loadFontConfig()
+    loadUpdateLogs()
+    
+    // 添加更新日志，避免重复添加
+    const initUpdateLog = async () => {
+      if (logAddedRef.current) return
+      
+      const savedLogs = await localStorageService.getMeta('updateLogs')
+      const today = new Date().toISOString().split('T')[0]
+      
+      const hasLogToday = savedLogs?.some?.((log: any) => 
+        log.date === today && log.description?.includes?.('新增快捷键 Alt + Q')
+      )
+      
+      if (!hasLogToday) {
+        addUpdateLog({
+          version: 'v1.3.0',
+          type: 'feature',
+          description: '新增快捷键功能与布局优化',
+          details: [
+            '新增快捷键 Alt + Q，开关左侧项目栏',
+            '优化列列表布局，支持可拖动调整宽度',
+            '修复主题颜色选择按钮颜色显示问题',
+            '优化弹窗标题颜色与深色主题适配',
+            '修复快捷键加载时缺失字段的问题'
+          ]
+        })
+      }
+      logAddedRef.current = true
+    }
+    
+    initUpdateLog()
   }, [])
 
   useEffect(() => {
-    document.documentElement.style.fontSize = `${fontSize}px`
-  }, [fontSize])
+    document.documentElement.style.fontSize = `${fontConfig.base}px`
+  }, [fontConfig])
 
   const handleDatabaseImport = async (importedTables: TableInfo[], targetProjectId?: string) => {
     console.log('handleDatabaseImport called with:', importedTables, 'targetProjectId:', targetProjectId)
     
-    // 使用指定的目标项目或当前项目
     const projectId = targetProjectId || currentProject?.id
     if (!projectId) {
       message.error('请先选择或创建项目')
@@ -205,9 +299,8 @@ function App() {
         comment: tableInfo.comment || undefined,
         positionX: x,
         positionY: y,
-      }, true) // skipAutoIdColumn=true，导入数据库表时跳过自动添加id列
+      }, true)
       
-      // Wait for the tables state to update
       await new Promise(resolve => setTimeout(resolve, 50))
       
       const newTable = tables.find(t => t.name === tableInfo.name && t.projectId === projectId)
@@ -228,9 +321,7 @@ function App() {
             order: colIndex,
           })
           
-          // Get the column ID for foreign key mapping
           await new Promise(resolve => setTimeout(resolve, 50))
-          // 从 tables 中获取最新的表数据，然后找到对应的列
           const updatedTable = tables.find(t => t.id === newTable.id)
           const createdColumn = updatedTable?.columns.find(c => c.name === col.name)
           if (createdColumn) {
@@ -240,12 +331,10 @@ function App() {
         
         tableMap.set(tableInfo.name, { tableId: newTable.id, columnMap })
         
-        // Create indexes
         if (tableInfo.indexes && tableInfo.indexes.length > 0) {
           for (const idx of tableInfo.indexes) {
-            if (idx.isPrimary) continue // Primary key already handled
+            if (idx.isPrimary) continue
             
-            // 将列名转换为列 ID
             const columnIds = idx.columns.map(colName => columnMap.get(colName)).filter(Boolean) as string[]
             
             if (columnIds.length > 0) {
@@ -267,7 +356,6 @@ function App() {
       }
     }
     
-    // Create foreign key relationships after all tables and columns are created
     for (const tableInfo of importedTables) {
       const sourceInfo = tableMap.get(tableInfo.name)
       if (!sourceInfo || !tableInfo.foreignKeys) continue
@@ -296,7 +384,69 @@ function App() {
     message.success(`成功导入 ${importedTables.length} 张表，已添加到画布`)
   }
 
+  const handleApplyLLMTables = async (suggestedTables: TableSuggestion[]) => {
+    if (!currentProject) {
+      message.error('请先选择或创建项目')
+      return
+    }
+
+    let x = 100
+    let y = 100
+
+    for (let index = 0; index < suggestedTables.length; index++) {
+      const tableSuggestion = suggestedTables[index]
+      
+      await createTable(currentProject.id, {
+        name: tableSuggestion.tableName,
+        comment: tableSuggestion.tableComment || undefined,
+        positionX: x,
+        positionY: y,
+      }, true)
+      
+      await new Promise(resolve => setTimeout(resolve, 100))
+      
+      const updatedTables = useAppStore.getState().tables
+      const newTable = updatedTables.find(t => t.name === tableSuggestion.tableName && t.projectId === currentProject.id)
+      
+      if (newTable) {
+        for (let colIndex = 0; colIndex < tableSuggestion.columns.length; colIndex++) {
+          const col = tableSuggestion.columns[colIndex]
+          await createColumn(newTable.id, {
+            name: col.name,
+            dataType: col.dataType,
+            nullable: col.nullable,
+            defaultValue: col.defaultValue || undefined,
+            autoIncrement: col.primaryKey || false,
+            primaryKey: col.primaryKey,
+            unique: col.unique,
+            comment: col.comment || undefined,
+            order: colIndex,
+          })
+          
+          await new Promise(resolve => setTimeout(resolve, 100))
+        }
+        
+        const updatedTable = useAppStore.getState().tables.find(t => t.id === newTable.id)
+        if (updatedTable && updatedTable.columns) {
+          const pkColumns = updatedTable.columns.filter(c => c.primaryKey)
+          console.log(`表 ${updatedTable.name} 创建成功，主键列:`, pkColumns.map(c => c.name))
+        }
+      } else {
+        console.error(`创建表 ${tableSuggestion.tableName} 后未找到`)
+      }
+      
+      x += 250
+      if (index > 0 && index % 3 === 0) {
+        x = 100
+        y += 200
+      }
+    }
+    
+    message.success(`成功添加 ${suggestedTables.length} 张表到画布`)
+  }
+
   const selectedTable = tables.find(t => t.id === selectedTableId)
+  const shouldShowTableEditor = selectedTableId !== null && selectedTableIds.length <= 1
 
   const handleLeftDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -326,6 +476,7 @@ function App() {
         const newWidth = Math.max(400, Math.min(1200, startRightWidthRef.current - delta))
         setRightWidth(newWidth)
       }
+      
     }
 
     const handleMouseUp = () => {
@@ -357,7 +508,8 @@ function App() {
   }
 
   const toggleLeftCollapse = () => {
-    if (leftCollapsed) {
+    const currentCollapsed = leftCollapsedRef.current
+    if (currentCollapsed) {
       setLeftWidth(leftLastWidth)
       setLeftCollapsed(false)
     } else {
@@ -379,10 +531,11 @@ function App() {
   }
 
   return (
-    <div style={{ height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontSize: `${fontSize}px`, fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif', backgroundColor: colors.background }}>
+    <div style={{ height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif', backgroundColor: 'var(--theme-background)' }}>
+      <NetworkStatus />
       <Header style={{
-        background: colors.backgroundSecondary,
-        borderBottom: `1px solid ${colors.border}`,
+        background: 'var(--theme-background-secondary)',
+        borderBottom: '1px solid var(--theme-border)',
         padding: '0 16px',
         display: 'flex',
         alignItems: 'center',
@@ -390,10 +543,10 @@ function App() {
         flexShrink: 0,
         minWidth: 'auto'
       }}>
-        <DatabaseOutlined style={{ fontSize: 16, color: colors.textSecondary, marginRight: 8 }} />
-        <Title level={5} style={{ margin: 0, fontSize: 13, color: colors.text, fontWeight: 500 }}>数据库可视化设计工具</Title>
+        <DatabaseOutlined style={{ fontSize: fontConfig.toolbar, color: 'var(--theme-text-secondary)', marginRight: 8 }} />
+        <Title level={5} style={{ margin: 0, fontSize: fontConfig.title * 0.7, color: 'var(--theme-text)', fontWeight: 500 }}>数据库可视化设计工具</Title>
         {currentProject && (
-          <span style={{ marginLeft: 16, color: colors.textSecondary, fontSize: 12 }}>
+          <span style={{ marginLeft: 16, color: 'var(--theme-text-secondary)', fontSize: fontConfig.caption }}>
             — {currentProject.name}
           </span>
         )}
@@ -403,19 +556,35 @@ function App() {
           <Tooltip title={isOnline ? '已连接到服务器' : '离线模式 - 数据将保存到本地'}>
             <Badge dot={!isOnline} status={isOnline ? 'success' : 'error'}>
               {isOnline ? (
-                <WifiOutlined style={{ fontSize: 14, color: colors.textSecondary }} />
+                <WifiOutlined style={{ fontSize: 14, color: 'var(--theme-text-secondary)' }} />
               ) : (
-                <DisconnectOutlined style={{ fontSize: 14, color: colors.textSecondary }} />
+                <DisconnectOutlined style={{ fontSize: 14, color: 'var(--theme-text-secondary)' }} />
               )}
             </Badge>
           </Tooltip>
 
-          <Tooltip title={isSyncing ? '正在保存...' : getLastSavedText()}>
-            {isSyncing ? (
-              <SyncOutlined spin style={{ fontSize: 14, color: colors.textSecondary }} />
-            ) : (
-              <CloudOutlined style={{ fontSize: 14, color: colors.textSecondary }} />
-            )}
+          <Tooltip title={isSyncing ? `正在同步...` : (syncQueueCount > 0 ? `待同步 ${syncQueueCount} 项 - 点击查看` : getLastSavedText())}>
+            <Button
+              type="text"
+              style={{ 
+                padding: 4,
+                minWidth: 'auto',
+                height: 'auto',
+                border: 'none',
+                boxShadow: 'none',
+                outline: 'none',
+                background: 'transparent'
+              }}
+              onClick={() => setShowSyncQueue(true)}
+            >
+              <Badge count={syncQueueCount} overflowCount={99} style={{ backgroundColor: syncQueueCount > 0 ? '#faad14' : '#52c41a' }}>
+                {isSyncing ? (
+                  <SyncOutlined spin style={{ fontSize: 14, color: 'var(--theme-text-secondary)' }} />
+                ) : (
+                  <CloudSyncOutlined style={{ fontSize: 14, color: 'var(--theme-text-secondary)' }} />
+                )}
+              </Badge>
+            </Button>
           </Tooltip>
 
           <Tooltip title="从数据库导入" mouseEnterDelay={0.1}>
@@ -424,7 +593,7 @@ function App() {
               icon={<DatabaseOutlined style={{ fontSize: 14 }} />}
               onClick={() => setShowDatabaseImport(true)}
               style={{ 
-                color: colors.textSecondary,
+                color: 'var(--theme-text-secondary)',
                 border: 'none',
                 boxShadow: 'none',
                 outline: 'none',
@@ -439,7 +608,7 @@ function App() {
               icon={<CloudUploadOutlined style={{ fontSize: 14 }} />}
               onClick={() => setShowDatabaseSync(true)}
               style={{ 
-                color: colors.textSecondary,
+                color: 'var(--theme-text-secondary)',
                 border: 'none',
                 boxShadow: 'none',
                 outline: 'none',
@@ -454,7 +623,37 @@ function App() {
               icon={<TeamOutlined style={{ fontSize: 14 }} />}
               onClick={() => setShowTeamManagement(true)}
               style={{ 
-                color: colors.textSecondary,
+                color: 'var(--theme-text-secondary)',
+                border: 'none',
+                boxShadow: 'none',
+                outline: 'none',
+                background: 'transparent'
+              }}
+            />
+          </Tooltip>
+
+          <Tooltip title="SQL编辑器" mouseEnterDelay={0.1}>
+            <Button
+              type="text"
+              icon={<CodeOutlined style={{ fontSize: 14 }} />}
+              onClick={() => setShowSQLEditor(true)}
+              style={{ 
+                color: 'var(--theme-text-secondary)',
+                border: 'none',
+                boxShadow: 'none',
+                outline: 'none',
+                background: 'transparent'
+              }}
+            />
+          </Tooltip>
+
+          <Tooltip title="设置" mouseEnterDelay={0.1}>
+            <Button
+              type="text"
+              icon={<CodeOutlined style={{ fontSize: 14 }} />}
+              onClick={() => setShowSQLEditor(true)}
+              style={{ 
+                color: 'var(--theme-text-secondary)',
                 border: 'none',
                 boxShadow: 'none',
                 outline: 'none',
@@ -496,7 +695,7 @@ function App() {
         }}
       />
       <TypeConvertModal visible={showTypeConvert} onClose={() => setShowTypeConvert(false)} />
-      <LLMModal visible={showLLM} onClose={() => setShowLLM(false)} />
+      <LLMModal visible={showLLM} onClose={() => setShowLLM(false)} onApplyTables={handleApplyLLMTables} />
       <ImportExportModal open={showImportExport} onClose={() => setShowImportExport(false)} />
       <ConnectionConfigModal visible={showConnections} onClose={() => setShowConnections(false)} />
       <DatabaseImportModal 
@@ -515,13 +714,20 @@ function App() {
         visible={showTeamManagement} 
         onClose={() => setShowTeamManagement(false)}
       />
+      <SyncQueueModal 
+        visible={showSyncQueue} 
+        onClose={() => setShowSyncQueue(false)}
+      />
+      <SQLEditor 
+        visible={showSQLEditor} 
+        onClose={() => setShowSQLEditor(false)}
+      />
 
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', marginTop: 0, paddingTop: 0, backgroundColor: colors.background }} ref={containerRef}>
-        {/* 左侧边栏 */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', marginTop: 0, paddingTop: 0, backgroundColor: 'var(--theme-background)' }} ref={containerRef}>
         <div style={{
           width: leftWidth,
-          background: colors.background,
-          borderRight: `1px solid ${colors.border}`,
+          background: 'var(--theme-background)',
+          borderRight: '1px solid var(--theme-border)',
           overflow: leftCollapsed ? 'hidden' : 'auto',
           flexShrink: 0,
           display: 'flex',
@@ -535,7 +741,7 @@ function App() {
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 8 }}>
               <Button 
                 type="text" 
-                icon={<RightOutlined style={{ color: colors.textSecondary }} />} 
+                icon={<RightOutlined style={{ color: 'var(--theme-text-secondary)' }} />} 
                 onClick={toggleLeftCollapse}
                 style={{ padding: '4px 8px', marginBottom: 8 }}
               />
@@ -543,11 +749,10 @@ function App() {
           )}
         </div>
 
-        {/* 分割条 */}
         {!leftCollapsed && (
           <div style={{
             width: 4,
-            background: isDraggingLeft ? colors.primary : colors.border,
+            background: isDraggingLeft ? 'var(--theme-primary)' : 'var(--theme-border)',
             cursor: 'col-resize',
             flexShrink: 0,
             transition: 'background 0.1s',
@@ -562,7 +767,7 @@ function App() {
                 <Button 
                   type="text" 
                   size="small"
-                  icon={<LeftOutlined style={{ color: colors.textSecondary, fontSize: 12 }} />} 
+                  icon={<LeftOutlined style={{ color: 'var(--theme-text-secondary)', fontSize: 12 }} />} 
                   onClick={toggleLeftCollapse}
                   style={{ 
                     padding: '4px 2px', 
@@ -575,10 +780,9 @@ function App() {
           </div>
         )}
 
-        {/* 中间画布区域 */}
         <div style={{
           flex: 1,
-          background: colors.background,
+          background: 'var(--theme-background)',
           overflow: 'hidden',
           minWidth: 300
         }}>
@@ -591,7 +795,7 @@ function App() {
               justifyContent: 'center',
               height: '100%',
               width: '100%',
-              color: colors.textSecondary,
+              color: 'var(--theme-text-secondary)',
               fontSize: 13
             }}>
               请选择一个项目开始设计
@@ -599,28 +803,14 @@ function App() {
           )}
         </div>
 
-        {/* 始终渲染一个隐藏的 TableEditor，确保 useForm 不会报警告 */}
-        <div style={{ display: 'none' }}>
-          <TableEditor table={{
-            id: 'persistent_table_editor',
-            name: 'persistent',
-            projectId: 'persistent',
-            positionX: 0,
-            positionY: 0,
-            columns: [],
-            indexes: [],
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          }} onClose={() => {}} />
-        </div>
 
-        {/* 右侧边栏 */}
-        {selectedTable && (
+
+        {shouldShowTableEditor && (
           <>
             {!rightCollapsed && (
               <div style={{
                 width: 4,
-                background: isDraggingRight ? colors.primary : colors.border,
+                background: isDraggingRight ? 'var(--theme-primary)' : 'var(--theme-border)',
                 cursor: 'col-resize',
                 flexShrink: 0,
                 transition: 'background 0.1s',
@@ -634,7 +824,7 @@ function App() {
                   <Button 
                     type="text" 
                     size="small"
-                    icon={<RightOutlined style={{ color: colors.textSecondary, fontSize: 12 }} />} 
+                    icon={<RightOutlined style={{ color: 'var(--theme-text-secondary)', fontSize: 12 }} />} 
                     onClick={toggleRightCollapse}
                     style={{ 
                       padding: '4px 2px',
@@ -648,8 +838,8 @@ function App() {
 
             <div style={{
               width: rightWidth,
-              background: colors.background,
-              borderLeft: `1px solid ${colors.border}`,
+              background: 'var(--theme-background)',
+              borderLeft: '1px solid var(--theme-border)',
               overflow: 'hidden',
               flexShrink: 0,
               display: 'flex',
@@ -660,33 +850,33 @@ function App() {
                 <>
                   <div style={{
                     padding: '8px 12px',
-                    borderBottom: `1px solid ${colors.border}`,
+                    borderBottom: '1px solid var(--theme-border)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     height: 36,
                     flexShrink: 0,
-                    backgroundColor: colors.backgroundSecondary
+                    backgroundColor: 'var(--theme-background-secondary)'
                   }}>
-                    <Title level={5} style={{ margin: 0, fontSize: 12, color: colors.text }}>编辑表: {selectedTable.name}</Title>
+                    <Title level={5} style={{ margin: 0, fontSize: 12, color: 'var(--theme-text)' }}>编辑表: {selectedTable?.name || ''}</Title>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                       <Tooltip title="折叠面板">
                         <Button 
                           type="text" 
                           size="small"
-                          icon={<RightOutlined style={{ color: colors.textSecondary, fontSize: 12 }} />} 
+                          icon={<RightOutlined style={{ color: 'var(--theme-text-secondary)', fontSize: 12 }} />} 
                           onClick={toggleRightCollapse}
                           style={{ padding: '4px 8px' }}
                         />
                       </Tooltip>
                       <CloseOutlined
-                        style={{ cursor: 'pointer', fontSize: 12, color: colors.textSecondary }}
+                        style={{ cursor: 'pointer', fontSize: 12, color: 'var(--theme-text-secondary)' }}
                         onClick={() => selectTable(null)}
                       />
                     </div>
                   </div>
                   <div style={{ height: 'calc(100% - 36px)', overflow: 'auto' }}>
-                    <TableEditor table={selectedTable} onClose={() => selectTable(null)} />
+                    {selectedTable && <TableEditor table={selectedTable} onClose={() => selectTable(null)} />}
                   </div>
                 </>
               ) : (
@@ -694,20 +884,37 @@ function App() {
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 8 }}>
                     <Button 
                       type="text" 
-                      icon={<LeftOutlined style={{ color: colors.textSecondary }} />} 
+                      icon={<LeftOutlined style={{ color: 'var(--theme-text-secondary)' }} />} 
                       onClick={toggleRightCollapse}
                       style={{ padding: '4px 8px', marginBottom: 8 }}
                     />
                   </div>
-                  {/* 折叠时也渲染但隐藏 TableEditor */}
-                  <div style={{ display: 'none' }}>
-                    <TableEditor table={selectedTable} onClose={() => selectTable(null)} />
-                  </div>
+                  {selectedTable && (
+                    <div style={{ display: 'none' }}>
+                      <TableEditor table={selectedTable} onClose={() => selectTable(null)} />
+                    </div>
+                  )}
                 </>
               )}
             </div>
           </>
         )}
+      </div>
+      <div style={{ display: 'none' }}>
+        <TableEditor 
+          table={{
+            id: 'hidden',
+            projectId: 'hidden',
+            name: 'hidden',
+            positionX: 0,
+            positionY: 0,
+            columns: [],
+            indexes: [],
+            createdAt: '',
+            updatedAt: ''
+          }} 
+          onClose={() => {}} 
+        />
       </div>
     </div>
   )

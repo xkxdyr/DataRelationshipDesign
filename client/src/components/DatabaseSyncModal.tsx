@@ -212,42 +212,43 @@ export const DatabaseSyncModal: React.FC<DatabaseSyncModalProps> = ({ visible, o
   }
 
   return (
-    <Modal
-      title={<><DatabaseOutlined style={{ marginRight: 8 }} />数据库同步</>}
-      open={visible}
-      onCancel={resetAndClose}
-      width={900}
-      footer={null}
-      styles={{ body: { maxHeight: '70vh', overflow: 'auto' } }}
-    >
+    <>
+      <div style={{ display: 'none' }}>
+        <Form form={form} layout="vertical">
+          <Form.Item name="databaseType"><Input /></Form.Item>
+          <Form.Item name="host"><Input /></Form.Item>
+          <Form.Item name="port"><Input /></Form.Item>
+          <Form.Item name="databaseName"><Input /></Form.Item>
+          <Form.Item name="username"><Input /></Form.Item>
+          <Form.Item name="password"><Input /></Form.Item>
+          <Form.Item name="sslEnabled"><Input /></Form.Item>
+        </Form>
+      </div>
+      <Modal
+        title={<><DatabaseOutlined style={{ marginRight: 8 }} />数据库同步</>}
+        open={visible}
+        onCancel={resetAndClose}
+        width={900}
+        footer={null}
+        styles={{ body: { maxHeight: '70vh', overflow: 'auto' } }}
+      >
       <div style={{ padding: '16px' }}>
-        <div style={{ display: 'none' }}>
-          <Form form={form} layout="vertical">
-            <Form.Item name="databaseType"><Input /></Form.Item>
-            <Form.Item name="host"><Input /></Form.Item>
-            <Form.Item name="port"><Input /></Form.Item>
-            <Form.Item name="databaseName"><Input /></Form.Item>
-            <Form.Item name="username"><Input /></Form.Item>
-            <Form.Item name="password"><Input /></Form.Item>
-            <Form.Item name="sslEnabled"><Input /></Form.Item>
-          </Form>
-        </div>
         <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
           <div
             className={`flex-1 text-center py-2 rounded-lg ${step === 'connection' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-400'}`}
-            style={{ backgroundColor: step === 'connection' ? '#eff6ff' : '#f3f4f6', color: step === 'connection' ? '#2563eb' : '#9ca3af' }}
+            style={{ backgroundColor: step === 'connection' ? 'var(--theme-selected)' : 'var(--theme-background-secondary)', color: step === 'connection' ? 'var(--theme-primary)' : 'var(--theme-text-secondary)' }}
           >
             1. 连接配置
           </div>
           <div
             className={`flex-1 text-center py-2 rounded-lg ${step === 'preview' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-400'}`}
-            style={{ backgroundColor: step === 'preview' ? '#eff6ff' : '#f3f4f6', color: step === 'preview' ? '#2563eb' : '#9ca3af' }}
+            style={{ backgroundColor: step === 'preview' ? 'var(--theme-selected)' : 'var(--theme-background-secondary)', color: step === 'preview' ? 'var(--theme-primary)' : 'var(--theme-text-secondary)' }}
           >
             2. 预览DDL
           </div>
           <div
             className={`flex-1 text-center py-2 rounded-lg ${step === 'result' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-400'}`}
-            style={{ backgroundColor: step === 'result' ? '#eff6ff' : '#f3f4f6', color: step === 'result' ? '#2563eb' : '#9ca3af' }}
+            style={{ backgroundColor: step === 'result' ? 'var(--theme-selected)' : 'var(--theme-background-secondary)', color: step === 'result' ? 'var(--theme-primary)' : 'var(--theme-text-secondary)' }}
           >
             3. 同步结果
           </div>
@@ -460,5 +461,6 @@ export const DatabaseSyncModal: React.FC<DatabaseSyncModalProps> = ({ visible, o
         )}
       </div>
     </Modal>
+    </>
   )
 }

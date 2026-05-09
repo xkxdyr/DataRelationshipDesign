@@ -4,7 +4,7 @@ import { Table } from '../generators/ddlGenerator'
 
 const router = Router()
 
-router.post('/llm/config', (req, res) => {
+router.post('/config', (req, res) => {
   try {
     const { apiKey, endpoint, model } = req.body
 
@@ -30,7 +30,7 @@ router.post('/llm/config', (req, res) => {
   }
 })
 
-router.get('/llm/config', (req, res) => {
+router.get('/config', (req, res) => {
   const config = llmService.getConfig()
   res.json({
     success: true,
@@ -43,7 +43,27 @@ router.get('/llm/config', (req, res) => {
   })
 })
 
-router.post('/llm/generate-tables', async (req, res) => {
+router.post('/test-connection', async (req, res) => {
+  try {
+    const { apiKey, endpoint, model } = req.body
+    const result = await llmService.testConnection({ apiKey, endpoint, model })
+    res.json({
+      success: result.success,
+      result: {
+        model: result.model
+      },
+      error: result.error
+    })
+  } catch (error) {
+    console.error('测试连接失败:', error)
+    res.status(500).json({ 
+      success: false, 
+      error: '测试连接失败: ' + (error as Error).message 
+    })
+  }
+})
+
+router.post('/generate-tables', async (req, res) => {
   try {
     const { description, databaseType } = req.body
 
@@ -69,7 +89,7 @@ router.post('/llm/generate-tables', async (req, res) => {
   }
 })
 
-router.post('/llm/analyze-columns', async (req, res) => {
+router.post('/analyze-columns', async (req, res) => {
   try {
     const { tableName, columns, databaseType } = req.body
 
@@ -95,7 +115,7 @@ router.post('/llm/analyze-columns', async (req, res) => {
   }
 })
 
-router.post('/llm/suggest-relationships', async (req, res) => {
+router.post('/suggest-relationships', async (req, res) => {
   try {
     const { tables } = req.body
 

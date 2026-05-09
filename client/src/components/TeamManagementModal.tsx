@@ -314,17 +314,7 @@ export const TeamManagementModal: React.FC<TeamManagementModalProps> = ({ visibl
   ]
 
   return (
-    <Modal
-      title={<><TeamOutlined style={{ marginRight: 8 }} />团队管理</>}
-      open={visible}
-      onCancel={() => {
-        resetState()
-        onClose()
-      }}
-      width={900}
-      footer={null}
-      styles={{ body: { maxHeight: '70vh', overflow: 'auto' } }}
-    >
+    <>
       <div style={{ display: 'none' }}>
         <Form form={teamForm} layout="vertical">
           <Form.Item name="name"><Input /></Form.Item>
@@ -336,6 +326,17 @@ export const TeamManagementModal: React.FC<TeamManagementModalProps> = ({ visibl
           <Form.Item name="role"><Input /></Form.Item>
         </Form>
       </div>
+      <Modal
+        title={<><TeamOutlined style={{ marginRight: 8 }} />团队管理</>}
+        open={visible}
+        onCancel={() => {
+          resetState()
+          onClose()
+        }}
+        width={900}
+        footer={null}
+        styles={{ body: { maxHeight: '70vh', overflow: 'auto' } }}
+      >
       <div style={{ padding: '16px' }}>
         {viewMode === 'list' && (
           <div>
@@ -514,5 +515,6 @@ export const TeamManagementModal: React.FC<TeamManagementModalProps> = ({ visibl
         )}
       </div>
     </Modal>
+    </>
   )
 }

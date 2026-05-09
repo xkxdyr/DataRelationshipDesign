@@ -3,10 +3,14 @@ export interface ThemeColors {
   primaryHover: string
   background: string
   backgroundSecondary: string
+  card: string
   text: string
   textSecondary: string
+  textTertiary: string
   border: string
   borderHover: string
+  hover: string
+  selected: string
   success: string
   warning: string
   error: string
