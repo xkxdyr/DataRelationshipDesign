@@ -41,3 +41,14 @@ coverage/
 server/prisma/*.db
 server/prisma/*.db-journal
 server/prisma/migrations/
+
+# Images and screenshots
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.webp
+
+# Test scripts
+test_*.py
