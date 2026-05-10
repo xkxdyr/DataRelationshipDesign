@@ -1356,7 +1356,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({ selectedTableIds: [], selectedTableId: null })
   },
   selectMultipleTables: (ids: string[]) => {
-    set({ selectedTableIds: ids, selectedTableId: ids[0] || null })
+    // 只设置选中状态，不设置 selectedTableId，这样就不会打开编辑栏
+    set({ selectedTableIds: ids })
   },
 
   copyTable: (tableId: string) => {

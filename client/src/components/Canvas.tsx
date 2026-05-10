@@ -194,7 +194,7 @@ const CanvasContent: React.FC = () => {
     setEdgeState(initialEdges)
   }, [currentProject?.id])
 
-  // 监听 tables 变化，当表位置更新时同步到 React Flow 节点（但要避免拖动过程中的循环）
+  // 监听 tables 和 selectedTableIds 变化，同步到 React Flow 节点（但要避免拖动过程中的循环）
   useEffect(() => {
     if (isDraggingRef.current) return // 拖动过程中不同步
     
@@ -209,11 +209,17 @@ const CanvasContent: React.FC = () => {
     const nodeIds = nodeState.map(n => n.id).join(',')
     const hasTableListChanged = tableIds !== nodeIds
     
-    if (hasPositionChanged || hasTableListChanged) {
+    // 检查选中状态是否变化
+    const hasSelectionChanged = nodeState.some(node => {
+      const isSelected = selectedTableIds.includes(node.id)
+      return node.selected !== isSelected
+    })
+    
+    if (hasPositionChanged || hasTableListChanged || hasSelectionChanged) {
       setNodeState(initialNodes)
       setEdgeState(initialEdges)
     }
-  }, [tables])
+  }, [tables, selectedTableIds])
 
   const onNodeDragStart = useCallback(() => {
     isDraggingRef.current = true
@@ -237,9 +243,18 @@ const CanvasContent: React.FC = () => {
         addSelectedTable(node.id)
       }
     } else {
-      selectTable(node.id)
+      // 单击只选中，不打开编辑栏
+      selectMultipleTables([node.id])
     }
-  }, [tables, selectTable, selectedTableIds, addSelectedTable, removeSelectedTable, marqueeActive])
+  }, [tables, selectMultipleTables, selectedTableIds, addSelectedTable, removeSelectedTable, marqueeActive])
+
+  const onNodeDoubleClick = useCallback((event: React.MouseEvent, node: Node) => {
+    if (marqueeActive) return
+    if (isDraggingRef.current) return
+    
+    // 双击才打开编辑栏
+    selectTable(node.id)
+  }, [selectTable, marqueeActive])
 
   const onPaneClick = useCallback((event: React.MouseEvent) => {
     if (marqueeActive) return
@@ -253,16 +268,15 @@ const CanvasContent: React.FC = () => {
   }, [selectTable, clearSelectedTables, marqueeActive])
 
   const onSelectionChange = useCallback((params: { nodes: any[]; edges: any[] }) => {
-
     console.log('[DEBUG] onSelectionChange triggered, nodes:', params.nodes.length)
-    if (params.nodes.length > 0) {
-      const selectedIds = params.nodes.map((node: any) => node.id)
-      console.log('[DEBUG] Selected IDs:', selectedIds)
-      if (selectedIds.length > 0) {
-        selectMultipleTables(selectedIds)
-      }
+    const selectedIds = params.nodes.map((node: any) => node.id)
+    console.log('[DEBUG] Selected IDs:', selectedIds)
+    if (selectedIds.length > 0) {
+      selectMultipleTables(selectedIds)
+    } else {
+      clearSelectedTables()
     }
-  }, [selectMultipleTables])
+  }, [selectMultipleTables, clearSelectedTables])
 
   const onPaneMouseDown = useCallback((event: React.MouseEvent) => {
     
@@ -792,6 +806,7 @@ const CanvasContent: React.FC = () => {
           onNodeDragStart={onNodeDragStart}
           onNodeDragStop={onNodeDragStop}
           onNodeClick={onNodeClick}
+          onNodeDoubleClick={onNodeDoubleClick}
           onPaneClick={onPaneClick}
           onMoveEnd={onMoveEnd}
           onSelectionChange={onSelectionChange}

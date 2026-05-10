@@ -3,6 +3,7 @@ import { Handle, Position, NodeProps } from 'reactflow'
 import { Table } from '../types'
 import { DeleteOutlined } from '@ant-design/icons'
 import { useAppStore } from '../stores/appStore'
+import { Modal, message } from 'antd'
 
 interface TableNodeData {
   table: Table
@@ -50,7 +51,17 @@ const TableNode: React.FC<NodeProps<TableNodeData>> = ({ data, selected }) => {
           style={{ cursor: 'pointer', fontSize: tagFontSize }}
           onClick={(e) => {
             e.stopPropagation()
-            onDelete(table.id)
+            Modal.confirm({
+              title: '确认删除',
+              content: `您确定要删除表「${table.name}」吗？此操作不可撤销。`,
+              okText: '确定删除',
+              cancelText: '取消',
+              okType: 'danger',
+              onOk: async () => {
+                await onDelete(table.id)
+                message.success('表已删除')
+              }
+            })
           }}
         />
       </div>
