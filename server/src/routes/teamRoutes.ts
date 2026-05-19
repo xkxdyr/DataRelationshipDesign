@@ -14,5 +14,8 @@ router.delete('/:teamId/members/:userId', teamController.removeMember)
 router.put('/:teamId/members/:userId/role', teamController.updateMemberRole)
 router.get('/:teamId/members/:userId/is-member', teamController.isMember)
 router.get('/:teamId/members/:userId/is-admin', teamController.isAdmin)
+router.post('/:teamId/projects/:projectId', teamController.addProjectToTeam)
+router.delete('/:teamId/projects/:projectId', teamController.removeProjectFromTeam)
+router.get('/:teamId/projects', teamController.getTeamProjects)
 
 export default router

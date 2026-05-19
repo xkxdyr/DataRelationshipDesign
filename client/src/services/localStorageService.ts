@@ -178,6 +178,10 @@ export const localStorageService = {
     })
   },
 
+  async getVersion(id: string): Promise<LocalVersion | undefined> {
+    return localDb.versions.get(id)
+  },
+
   async getVersionsByProject(projectId: string): Promise<LocalVersion[]> {
     return localDb.versions.where('projectId').equals(projectId).toArray()
   },

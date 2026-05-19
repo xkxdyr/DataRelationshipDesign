@@ -1,22 +1,30 @@
-import * as fs from 'fs'
-import * as path from 'path'
+import { PrismaClient } from '@prisma/client'
 
-export interface Team {
-  id: string
-  name: string
-  description?: string
-  avatar?: string
-  ownerId: string
-  members: TeamMember[]
-  createdAt: string
-  updatedAt: string
+const prisma = new PrismaClient()
+
+export interface ConvertToTeamResult {
+  success: boolean
+  data?: any
+  error?: string
 }
 
-export interface TeamMember {
+export interface TeamWithMembers {
+  id: string
+  name: string
+  description?: string | null
+  avatar?: string | null
+  ownerId: string
+  createdAt: Date
+  updatedAt: Date
+  members: TeamMemberWithUser[]
+}
+
+export interface TeamMemberWithUser {
+  id: string
   userId: string
   userName: string
-  role: 'owner' | 'admin' | 'member'
-  joinedAt: string
+  role: string
+  joinedAt: Date
 }
 
 export interface CreateTeamRequest {
@@ -42,195 +50,378 @@ export interface UpdateMemberRoleRequest {
   role: 'admin' | 'member'
 }
 
-const TEAMS_DIR = path.join(__dirname, '../../data/teams')
-
 export const teamService = {
-  async init() {
-    if (!fs.existsSync(TEAMS_DIR)) {
-      fs.mkdirSync(TEAMS_DIR, { recursive: true })
-    }
-  },
-
-  async createTeam(request: CreateTeamRequest): Promise<Team> {
-    await this.init()
-
-    const team: Team = {
-      id: `team-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      name: request.name,
-      description: request.description,
-      avatar: request.avatar,
-      ownerId: request.ownerId,
-      members: [{
-        userId: request.ownerId,
-        userName: request.ownerId,
-        role: 'owner',
-        joinedAt: new Date().toISOString()
-      }],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    }
-
-    const filePath = path.join(TEAMS_DIR, `${team.id}.json`)
-    fs.writeFileSync(filePath, JSON.stringify(team, null, 2), 'utf-8')
-
-    return team
-  },
-
-  async getTeamById(teamId: string): Promise<Team | null> {
-    await this.init()
-
-    const filePath = path.join(TEAMS_DIR, `${teamId}.json`)
-    if (!fs.existsSync(filePath)) {
-      return null
-    }
-
-    const content = fs.readFileSync(filePath, 'utf-8')
-    return JSON.parse(content) as Team
-  },
-
-  async getAllTeams(): Promise<Team[]> {
-    await this.init()
-
-    const files = fs.readdirSync(TEAMS_DIR)
-    const teams: Team[] = []
-
-    for (const file of files) {
-      if (file.endsWith('.json')) {
-        const filePath = path.join(TEAMS_DIR, file)
-        const content = fs.readFileSync(filePath, 'utf-8')
-        teams.push(JSON.parse(content) as Team)
+  async createTeam(request: CreateTeamRequest): Promise<TeamWithMembers> {
+    const team = await prisma.team.create({
+      data: {
+        name: request.name,
+        description: request.description,
+        avatar: request.avatar,
+        ownerId: request.ownerId,
+        members: {
+          create: {
+            userId: request.ownerId,
+            role: 'owner'
+          }
+        }
+      },
+      include: {
+        members: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                displayName: true
+              }
+            }
+          }
+        }
       }
-    }
+    })
 
-    return teams.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    return {
+      ...team,
+      members: team.members.map(m => ({
+        id: m.id,
+        userId: m.userId,
+        userName: m.user.displayName || m.user.username,
+        role: m.role,
+        joinedAt: m.joinedAt
+      }))
+    }
   },
 
-  async getTeamsByUserId(userId: string): Promise<Team[]> {
-    await this.init()
+  async getTeamById(teamId: string): Promise<TeamWithMembers | null> {
+    const team = await prisma.team.findUnique({
+      where: { id: teamId },
+      include: {
+        members: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                displayName: true
+              }
+            }
+          }
+        }
+      }
+    })
 
-    const allTeams = await this.getAllTeams()
-    return allTeams.filter(team => 
-      team.members.some(member => member.userId === userId)
-    )
+    if (!team) return null
+
+    return {
+      ...team,
+      members: team.members.map(m => ({
+        id: m.id,
+        userId: m.userId,
+        userName: m.user.displayName || m.user.username,
+        role: m.role,
+        joinedAt: m.joinedAt
+      }))
+    }
   },
 
-  async updateTeam(teamId: string, request: UpdateTeamRequest): Promise<Team | null> {
-    await this.init()
+  async getAllTeams(): Promise<TeamWithMembers[]> {
+    const teams = await prisma.team.findMany({
+      include: {
+        members: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                displayName: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    })
 
-    const team = await this.getTeamById(teamId)
-    if (!team) {
-      return null
+    return teams.map(team => ({
+      ...team,
+      members: team.members.map(m => ({
+        id: m.id,
+        userId: m.userId,
+        userName: m.user.displayName || m.user.username,
+        role: m.role,
+        joinedAt: m.joinedAt
+      }))
+    }))
+  },
+
+  async getTeamsByUserId(userId: string): Promise<TeamWithMembers[]> {
+    const teamMembers = await prisma.teamMember.findMany({
+      where: { userId },
+      include: {
+        team: {
+          include: {
+            members: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    username: true,
+                    displayName: true
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      orderBy: { team: { createdAt: 'desc' } }
+    })
+
+    return teamMembers.map(tm => ({
+      ...tm.team,
+      members: tm.team.members.map(m => ({
+        id: m.id,
+        userId: m.userId,
+        userName: m.user.displayName || m.user.username,
+        role: m.role,
+        joinedAt: m.joinedAt
+      }))
+    }))
+  },
+
+  async updateTeam(teamId: string, request: UpdateTeamRequest): Promise<TeamWithMembers | null> {
+    const team = await prisma.team.update({
+      where: { id: teamId },
+      data: {
+        name: request.name,
+        description: request.description,
+        avatar: request.avatar
+      },
+      include: {
+        members: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                displayName: true
+              }
+            }
+          }
+        }
+      }
+    })
+
+    if (!team) return null
+
+    return {
+      ...team,
+      members: team.members.map(m => ({
+        id: m.id,
+        userId: m.userId,
+        userName: m.user.displayName || m.user.username,
+        role: m.role,
+        joinedAt: m.joinedAt
+      }))
     }
-
-    if (request.name !== undefined) team.name = request.name
-    if (request.description !== undefined) team.description = request.description
-    if (request.avatar !== undefined) team.avatar = request.avatar
-    team.updatedAt = new Date().toISOString()
-
-    const filePath = path.join(TEAMS_DIR, `${teamId}.json`)
-    fs.writeFileSync(filePath, JSON.stringify(team, null, 2), 'utf-8')
-
-    return team
   },
 
   async deleteTeam(teamId: string): Promise<boolean> {
-    await this.init()
-
-    const filePath = path.join(TEAMS_DIR, `${teamId}.json`)
-    if (!fs.existsSync(filePath)) {
+    try {
+      await prisma.team.delete({ where: { id: teamId } })
+      return true
+    } catch {
       return false
     }
-
-    fs.unlinkSync(filePath)
-    return true
   },
 
-  async addMember(teamId: string, request: AddMemberRequest): Promise<Team | null> {
-    await this.init()
-
-    const team = await this.getTeamById(teamId)
-    if (!team) {
-      return null
-    }
-
-    if (team.members.some(member => member.userId === request.userId)) {
-      return team
-    }
-
-    team.members.push({
-      userId: request.userId,
-      userName: request.userName,
-      role: request.role || 'member',
-      joinedAt: new Date().toISOString()
+  async addMember(teamId: string, request: AddMemberRequest): Promise<TeamWithMembers | null> {
+    const existingMember = await prisma.teamMember.findUnique({
+      where: { teamId_userId: { teamId, userId: request.userId } }
     })
-    team.updatedAt = new Date().toISOString()
 
-    const filePath = path.join(TEAMS_DIR, `${teamId}.json`)
-    fs.writeFileSync(filePath, JSON.stringify(team, null, 2), 'utf-8')
+    if (existingMember) {
+      return this.getTeamById(teamId)
+    }
 
-    return team
+    await prisma.teamMember.create({
+      data: {
+        teamId,
+        userId: request.userId,
+        role: request.role || 'member'
+      }
+    })
+
+    return this.getTeamById(teamId)
   },
 
-  async removeMember(teamId: string, userId: string): Promise<Team | null> {
-    await this.init()
+  async removeMember(teamId: string, userId: string): Promise<TeamWithMembers | null> {
+    const member = await prisma.teamMember.findUnique({
+      where: { teamId_userId: { teamId, userId } }
+    })
 
-    const team = await this.getTeamById(teamId)
-    if (!team) {
+    if (member && member.role === 'owner') {
       return null
     }
 
-    const owner = team.members.find(m => m.role === 'owner')
-    if (owner && owner.userId === userId) {
-      return null
-    }
+    await prisma.teamMember.delete({
+      where: { teamId_userId: { teamId, userId } }
+    })
 
-    team.members = team.members.filter(member => member.userId !== userId)
-    team.updatedAt = new Date().toISOString()
-
-    const filePath = path.join(TEAMS_DIR, `${teamId}.json`)
-    fs.writeFileSync(filePath, JSON.stringify(team, null, 2), 'utf-8')
-
-    return team
+    return this.getTeamById(teamId)
   },
 
-  async updateMemberRole(teamId: string, userId: string, request: UpdateMemberRoleRequest): Promise<Team | null> {
-    await this.init()
+  async updateMemberRole(teamId: string, userId: string, request: UpdateMemberRoleRequest): Promise<TeamWithMembers | null> {
+    const member = await prisma.teamMember.findUnique({
+      where: { teamId_userId: { teamId, userId } }
+    })
 
-    const team = await this.getTeamById(teamId)
-    if (!team) {
-      return null
-    }
-
-    const member = team.members.find(m => m.userId === userId)
     if (!member || member.role === 'owner') {
-      return team
+      return this.getTeamById(teamId)
     }
 
-    member.role = request.role
-    team.updatedAt = new Date().toISOString()
+    await prisma.teamMember.update({
+      where: { teamId_userId: { teamId, userId } },
+      data: { role: request.role }
+    })
 
-    const filePath = path.join(TEAMS_DIR, `${teamId}.json`)
-    fs.writeFileSync(filePath, JSON.stringify(team, null, 2), 'utf-8')
-
-    return team
+    return this.getTeamById(teamId)
   },
 
   async isMember(teamId: string, userId: string): Promise<boolean> {
-    const team = await this.getTeamById(teamId)
-    if (!team) {
-      return false
-    }
-
-    return team.members.some(member => member.userId === userId)
+    const member = await prisma.teamMember.findUnique({
+      where: { teamId_userId: { teamId, userId } }
+    })
+    return !!member
   },
 
   async isAdmin(teamId: string, userId: string): Promise<boolean> {
-    const team = await this.getTeamById(teamId)
-    if (!team) {
-      return false
-    }
-
-    const member = team.members.find(m => m.userId === userId)
+    const member = await prisma.teamMember.findUnique({
+      where: { teamId_userId: { teamId, userId } }
+    })
     return member ? (member.role === 'owner' || member.role === 'admin') : false
+  },
+
+  async isOwner(teamId: string, userId: string): Promise<boolean> {
+    const member = await prisma.teamMember.findUnique({
+      where: { teamId_userId: { teamId, userId } }
+    })
+    return member ? member.role === 'owner' : false
+  },
+
+  async canManageTeam(teamId: string, userId: string): Promise<boolean> {
+    return this.isAdmin(teamId, userId)
+  },
+
+  async canManageMembers(teamId: string, userId: string): Promise<boolean> {
+    return this.isAdmin(teamId, userId)
+  },
+
+  async canManageProjects(teamId: string, userId: string): Promise<boolean> {
+    return this.isAdmin(teamId, userId)
+  },
+
+  async addProjectToTeam(teamId: string, projectId: string): Promise<void> {
+    await prisma.teamProject.upsert({
+      where: { teamId_projectId: { teamId, projectId } },
+      update: {},
+      create: { teamId, projectId }
+    })
+  },
+
+  async removeProjectFromTeam(teamId: string, projectId: string): Promise<void> {
+    await prisma.teamProject.delete({
+      where: { teamId_projectId: { teamId, projectId } }
+    })
+  },
+
+  async getTeamProjects(teamId: string) {
+    const teamProjects = await prisma.teamProject.findMany({
+      where: { teamId },
+      include: { project: true }
+    })
+    return teamProjects.map(tp => tp.project)
+  },
+
+  async convertPersonalToTeamProject(
+    projectId: string,
+    targetTeamId: string,
+    performingUserId: string
+  ): Promise<ConvertToTeamResult> {
+    try {
+      const project = await prisma.project.findUnique({
+        where: { id: projectId },
+        include: { 
+          projectMembers: true,
+          teamProjects: true
+        }
+      })
+
+      if (!project) {
+        return { success: false, error: '项目不存在' }
+      }
+
+      if (project.createdBy.startsWith('team_')) {
+        return { success: false, error: '该项目已经是团队项目' }
+      }
+
+      if (project.createdBy !== performingUserId) {
+        const isProjectOwner = project.projectMembers.some(
+          m => m.userId === performingUserId && m.role === 'owner'
+        )
+        if (!isProjectOwner) {
+          return { success: false, error: '只有项目所有者可以转换项目类型' }
+        }
+      }
+
+      const team = await prisma.team.findUnique({
+        where: { id: targetTeamId },
+        include: { members: true }
+      })
+
+      if (!team) {
+        return { success: false, error: '目标团队不存在' }
+      }
+
+      const isTeamOwner = team.ownerId === performingUserId
+      const isTeamAdmin = team.members.some(
+        m => m.userId === performingUserId && (m.role === 'admin' || m.role === 'owner')
+      )
+      if (!isTeamOwner && !isTeamAdmin) {
+        return { success: false, error: '只有团队管理员可以将项目加入团队' }
+      }
+
+      if (project.teamProjects.length > 0) {
+        return { success: false, error: '该项目已关联到其他团队' }
+      }
+
+      const result = await prisma.$transaction(async (tx) => {
+        await tx.teamProject.create({
+          data: {
+            teamId: targetTeamId,
+            projectId
+          }
+        })
+
+        const updatedProject = await tx.project.update({
+          where: { id: projectId },
+          data: { createdBy: `team_${targetTeamId}` }
+        })
+
+        return updatedProject
+      })
+
+      return { 
+        success: true, 
+        data: {
+          ...result,
+          teamName: team.name,
+          teamId: targetTeamId
+        }
+      }
+    } catch (error) {
+      console.error('转换个人项目为团队项目失败:', error)
+      return { success: false, error: '转换失败: ' + (error as Error).message }
+    }
   }
 }

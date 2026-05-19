@@ -69,11 +69,13 @@ const SyncQueueModal: React.FC<SyncQueueModalProps> = ({ visible, onClose }) => 
     }
     try {
       const result = await syncToServer()
-      if (result.success > 0) {
-        message.success(`成功同步 ${result.success} 项`)
-      }
-      if (result.failed > 0) {
-        message.warning(`同步失败 ${result.failed} 项`)
+      if (result) {
+        if (result.success > 0) {
+          message.success(`成功同步 ${result.success} 项`)
+        }
+        if (result.failed > 0) {
+          message.warning(`同步失败 ${result.failed} 项`)
+        }
       }
       await loadQueue()
       await refreshSyncQueueCount()

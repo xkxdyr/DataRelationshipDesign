@@ -6,7 +6,7 @@ export interface TypeMapping {
   }
 }
 
-const typeMap: TypeMapping = {
+export const typeMap: TypeMapping = {
   'INT': {
     MYSQL: 'INT',
     POSTGRESQL: 'INTEGER',

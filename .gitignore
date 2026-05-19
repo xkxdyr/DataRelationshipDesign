@@ -52,3 +52,10 @@ server/prisma/migrations/
 
 # Test scripts
 test_*.py
+test_*.js
+
+# Screenshots
+**/test-screenshots/
+
+# Trae workspace data
+.trae/

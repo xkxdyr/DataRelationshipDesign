@@ -1,6 +1,7 @@
 import { create } from 'zustand'
-import { Project, Table, Column, Relationship, Index, Version, ModelConfig } from '../types'
-import { projectApi, tableApi, columnApi, relationshipApi, indexApi, versionApi } from '../services/api'
+import { message } from 'antd'
+import { Project, Table, Column, Relationship, Index, Version, ModelConfig, User, AuthResponse, RegisterRequest, LoginRequest, Comment } from '../types'
+import { projectApi, tableApi, columnApi, relationshipApi, indexApi, versionApi, userApi, ProjectWithRole, teamApi, updateLogApi, commentApi } from '../services/api'
 import { localStorageService, LocalProject, LocalTable, LocalColumn, LocalRelationship, LocalIndex, LocalVersion } from '../services/localStorageService'
 import { ThemeMode } from '../theme/types'
 
@@ -66,7 +67,7 @@ interface AppState {
   canvasZoom: number
   showMiniMap: boolean
   autoSaveInterval: number
-  edgeStyle: 'straight' | 'step' | 'smooth'
+  edgeStyle: 'straight' | 'step' | 'smooth' | 'smart'
   showEdgeLabels: boolean
   tablePrefix: string
   tablePrefixPresets: string[]
@@ -77,15 +78,27 @@ interface AppState {
   modelConfigs: ModelConfig[]
   activeModelId: string | null
   syncQueueCount: number
+  currentUser: User | null
+  authToken: string | null
+  authLoading: boolean
+  isAuthenticated: boolean
+  // 标签页相关
+  openTabs: { id: string; title: string; projectId?: string; type: 'project' | 'table' | 'settings' | 'members' | 'createProject' | 'importExport' | 'teamManagement' | 'llm' | 'editProject' | 'versionManagement' | 'comments' | 'sqliteImport' | 'branchManagement' | 'gitConfig' | 'typeConvert' | 'sqlEditor' }[]
+  activeTabId: string | null
 }
 
 interface AppStore extends AppState {
+  register: (data: RegisterRequest) => Promise<{ success: boolean; message?: string }>
+  login: (data: LoginRequest) => Promise<{ success: boolean; message?: string }>
+  logout: () => void
+  checkAuth: () => Promise<void>
   loadProjects: () => Promise<void>
   selectProject: (id: string) => Promise<void>
   createProject: (data: Partial<Project>) => Promise<void>
   updateProject: (id: string, data: Partial<Project>) => Promise<void>
   deleteProject: (id: string) => Promise<void>
   getSyncQueue: () => Promise<any[]>
+  refreshSyncQueueCount: () => Promise<void>
 
   loadTables: (projectId: string) => Promise<void>
   createTable: (projectId: string, data: Partial<Table>, skipAutoIdColumn?: boolean) => Promise<void>
@@ -119,6 +132,7 @@ interface AppStore extends AppState {
   updateVersion: (id: string, data: Partial<Version>) => Promise<void>
   deleteVersion: (id: string) => Promise<void>
   restoreVersion: (versionId: string) => Promise<boolean>
+  getProjectSnapshot: () => any
 
   undo: () => void
   redo: () => void
@@ -134,7 +148,7 @@ interface AppStore extends AppState {
   setCanvasZoom: (zoom: number) => void
   setShowMiniMap: (show: boolean) => void
   setAutoSaveInterval: (interval: number) => void
-  setEdgeStyle: (style: 'straight' | 'step' | 'smooth') => void
+  setEdgeStyle: (style: 'straight' | 'step' | 'smooth' | 'smart') => void
   setShowEdgeLabels: (show: boolean) => void
   setTablePrefix: (prefix: string) => void
   addTablePrefixPreset: (prefix: string) => void
@@ -158,6 +172,7 @@ interface AppStore extends AppState {
   loadFromLocal: (projectId: string) => Promise<void>
   saveToLocal: () => Promise<void>
   syncAllToServer: () => Promise<{ total: number; success: number; failed: number; failedItems: any[] } | undefined>
+  syncToServer: () => Promise<{ total: number; success: number; failed: number; failedItems: any[] } | undefined>
   addUpdateLog: (log: Omit<UpdateLog, 'id' | 'date'>) => void
   loadUpdateLogs: () => Promise<void>
   
@@ -170,6 +185,25 @@ interface AppStore extends AppState {
   // 本地和云端项目同步功能
   uploadProjectToCloud: (projectId: string) => Promise<{ success: boolean; message?: string }>
   saveProjectToLocal: (projectId: string) => Promise<{ success: boolean; message?: string }>
+  
+  // 标签页相关操作
+  openProjectTab: (project: Project) => void
+  closeTab: (tabId: string) => void
+  setActiveTab: (tabId: string) => void
+  openSettingsTab: () => void
+  openMemberTab: (projectId: string, projectName: string) => void
+  openCreateProjectTab: () => void
+  openImportExportTab: (initialTab?: 'import' | 'export') => void
+  openTeamManagementTab: () => void
+  openLLMTab: () => void
+  openEditProjectTab: (projectId: string) => void
+  openVersionManagementTab: (projectId: string, projectName: string) => void
+  openCommentTab: (tableId: string, tableName: string) => void
+  openSqliteImportTab: () => void
+  openBranchManagementTab: (projectId: string, projectName?: string) => void
+  openGitConfigTab: (projectId: string, projectName?: string) => void
+  openTypeConvertTab: () => void
+  openSQLEditorTab: () => void
 }
 
 let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
@@ -200,14 +234,14 @@ export const useAppStore = create<AppStore>((set, get) => ({
   lastSaved: null,
   isLocalMode: false,
   fontConfig: {
-    base: 11,
-    title: 16,
-    subtitle: 13,
-    body: 11,
-    caption: 10,
-    tableHeader: 11,
-    tableContent: 10,
-    toolbar: 11
+    base: 10,
+    title: 14,
+    subtitle: 12,
+    body: 10,
+    caption: 9,
+    tableHeader: 10,
+    tableContent: 9,
+    toolbar: 10
   },
   themeColor: '#1890ff',
   themeMode: 'light',
@@ -220,6 +254,78 @@ export const useAppStore = create<AppStore>((set, get) => ({
   tablePrefix: '',
   tablePrefixPresets: ['', 'tbl_', 't_', 'sys_', 'app_', 'wp_', 'xmy_'],
   autoAddIdColumn: true,
+  currentUser: null,
+  authToken: null,
+  authLoading: false,
+  isAuthenticated: true,
+  // 标签页状态
+  openTabs: [],
+  activeTabId: null,
+
+  register: async (data: RegisterRequest) => {
+    set({ authLoading: true })
+    try {
+      const response = await userApi.register(data)
+      if (response.success && response.data) {
+        const { user, token } = response.data
+        localStorage.setItem('authToken', token)
+        set({ currentUser: user, authToken: token, isAuthenticated: true })
+        return { success: true }
+      }
+      return { success: false, message: response.error || '注册失败' }
+    } catch (error) {
+      return { success: false, message: '网络错误' }
+    } finally {
+      set({ authLoading: false })
+    }
+  },
+
+  login: async (data: LoginRequest) => {
+    set({ authLoading: true })
+    try {
+      const response = await userApi.login(data)
+      if (response.success && response.data) {
+        const { user, token } = response.data
+        localStorage.setItem('authToken', token)
+        set({ currentUser: user, authToken: token, isAuthenticated: true })
+        return { success: true }
+      }
+      return { success: false, message: response.error || '登录失败' }
+    } catch (error) {
+      return { success: false, message: '网络错误' }
+    } finally {
+      set({ authLoading: false })
+    }
+  },
+
+  logout: () => {
+    localStorage.removeItem('authToken')
+    set({ currentUser: null, authToken: null, isAuthenticated: false })
+  },
+
+  checkAuth: async () => {
+    const token = localStorage.getItem('authToken')
+    if (!token) {
+      set({ isAuthenticated: false })
+      return
+    }
+
+    set({ authLoading: true })
+    try {
+      const response = await userApi.getCurrentUser(token)
+      if (response.success && response.data) {
+        set({ currentUser: response.data, authToken: token, isAuthenticated: true })
+      } else {
+        localStorage.removeItem('authToken')
+        set({ currentUser: null, authToken: null, isAuthenticated: false })
+      }
+    } catch (error) {
+      localStorage.removeItem('authToken')
+      set({ currentUser: null, authToken: null, isAuthenticated: false })
+    } finally {
+      set({ authLoading: false })
+    }
+  },
   shortcuts: {
     undo: ['ctrl', 'z'],
     redo: ['ctrl', 'shift', 'z'],
@@ -290,7 +396,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({ autoSaveInterval: interval })
     localStorageService.setMeta('autoSaveInterval', interval)
   },
-  setEdgeStyle: (style: 'straight' | 'step' | 'smooth') => {
+  setEdgeStyle: (style: 'straight' | 'step' | 'smooth' | 'smart') => {
     set({ edgeStyle: style })
     localStorageService.setMeta('edgeStyle', style)
   },
@@ -359,7 +465,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       set({ autoSaveInterval: savedAutoSaveInterval })
     }
 
-    const savedEdgeStyle = await localStorageService.getMeta<'straight' | 'step' | 'smooth'>('edgeStyle')
+    const savedEdgeStyle = await localStorageService.getMeta<'straight' | 'step' | 'smooth' | 'smart'>('edgeStyle')
     if (savedEdgeStyle !== undefined) {
       set({ edgeStyle: savedEdgeStyle })
     }
@@ -517,7 +623,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
                       // 更新本地项目ID为云端ID
                       const localProject = await localStorageService.getProject(item.entityId)
                       if (localProject) {
-                        const updatedProject = { ...localProject, id: createdEntityId, createdBy: undefined }
+                        const { currentUser } = get()
+                        const updatedProject = { ...localProject, id: createdEntityId, createdBy: currentUser?.id || 'system' }
                         await localStorageService.deleteProject(item.entityId)
                         await localStorageService.saveProject(updatedProject)
                       }
@@ -668,6 +775,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
   },
 
+  syncToServer: async () => {
+    return get().syncAllToServer()
+  },
+
   undo: () => {
     const { past } = get()
     if (past.length <= 1) return
@@ -700,6 +811,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
       selectedTableIds: get().selectedTableIds,
       versions: get().versions,
       loading: get().loading,
+      projectLoading: get().projectLoading,
+      projectListLoading: get().projectListLoading,
       past: get().past,
       future: get().future,
       isOnline: get().isOnline,
@@ -719,7 +832,17 @@ export const useAppStore = create<AppStore>((set, get) => ({
       tablePrefixPresets: get().tablePrefixPresets,
       autoAddIdColumn: get().autoAddIdColumn,
       shortcuts: get().shortcuts,
-      copiedTable: get().copiedTable
+      copiedTable: get().copiedTable,
+      updateLogs: get().updateLogs,
+      modelConfigs: get().modelConfigs,
+      activeModelId: get().activeModelId,
+      syncQueueCount: get().syncQueueCount,
+      currentUser: get().currentUser,
+      authToken: get().authToken,
+      authLoading: get().authLoading,
+      isAuthenticated: get().isAuthenticated,
+      openTabs: get().openTabs,
+      activeTabId: get().activeTabId
     }
 
     set({
@@ -785,7 +908,17 @@ export const useAppStore = create<AppStore>((set, get) => ({
       tablePrefixPresets: get().tablePrefixPresets,
       autoAddIdColumn: get().autoAddIdColumn,
       shortcuts: get().shortcuts,
-      copiedTable: get().copiedTable
+      copiedTable: get().copiedTable,
+      updateLogs: get().updateLogs,
+      modelConfigs: get().modelConfigs,
+      activeModelId: get().activeModelId,
+      syncQueueCount: get().syncQueueCount,
+      currentUser: get().currentUser,
+      authToken: get().authToken,
+      authLoading: get().authLoading,
+      isAuthenticated: get().isAuthenticated,
+      openTabs: get().openTabs,
+      activeTabId: get().activeTabId
     }
     set(state => ({
       past: [...state.past.slice(-19), currentState],
@@ -797,53 +930,59 @@ export const useAppStore = create<AppStore>((set, get) => ({
   loadProjects: async () => {
     set({ projectListLoading: true })
     try {
-      const { isLocalMode, isOnline } = get()
+      const { isLocalMode, isOnline, isAuthenticated } = get()
       
       if (isLocalMode) {
         const localProjects = await localStorageService.getAllProjects()
         set({ projects: localProjects as Project[] })
+      } else if (isAuthenticated !== true) {
+        // 未登录或认证状态未确认时只显示本地项目
+        const localProjects = await localStorageService.getAllProjects()
+        set({ projects: localProjects.filter(p => p.id.startsWith('local_') || p.createdBy === 'local') as Project[] })
       } else {
-        // 并行加载本地缓存和云端数据
+        // 已登录状态下，获取用户有权限的项目
         const loadLocalPromise = localStorageService.getAllProjects()
-        let cloudProjects: Project[] | null = null
+        let userProjects: string[] = []
         
         if (isOnline) {
           try {
-            const response = await projectApi.getAll()
+            const response = await projectApi.getUserProjects()
             if (response.success && response.data) {
-              cloudProjects = response.data
-              // 异步更新本地缓存，不阻塞主流程
-              Promise.all(cloudProjects.map(p => 
-                localStorageService.saveProject(p as LocalProject)
-              )).catch(() => {
-                // 缓存保存失败不影响主流程
-              })
+              userProjects = response.data.map((p: ProjectWithRole) => p.projectId)
             }
           } catch (error) {
-            // 云端加载失败继续使用本地
-            console.warn('云端加载失败，使用本地缓存', error)
+            console.warn('获取用户项目权限失败', error)
           }
         }
         
-        // 先显示本地数据，提升响应速度
         const localProjects = await loadLocalPromise
         
-        // 合并本地和云端项目，保留所有项目
         let mergedProjects: Project[]
-        if (cloudProjects) {
-          // 使用 Map 去重，保留最新的（云端项目优先）
+        if (userProjects.length > 0) {
           const projectMap = new Map<string, Project>()
-          
-          // 先添加本地项目
           localProjects.forEach(p => projectMap.set(p.id, p))
           
-          // 再添加云端项目，覆盖同名的本地项目
-          cloudProjects.forEach(p => projectMap.set(p.id, p))
+          try {
+            const response = await projectApi.getAll()
+            if (response.success && response.data) {
+              response.data.forEach(p => {
+                if (userProjects.includes(p.id)) {
+                  projectMap.set(p.id, p)
+                  localStorageService.saveProject(p as LocalProject).catch(() => {})
+                }
+              })
+            }
+          } catch (error) {
+            console.warn('加载云端项目失败', error)
+          }
           
-          mergedProjects = Array.from(projectMap.values())
+          mergedProjects = Array.from(projectMap.values()).filter(p => 
+            p.id.startsWith('local_') || p.createdBy === 'local' || userProjects.includes(p.id)
+          )
         } else {
-          // 只有本地项目
-          mergedProjects = localProjects as Project[]
+          mergedProjects = localProjects.filter(p => 
+            p.id.startsWith('local_') || p.createdBy === 'local'
+          ) as Project[]
         }
         
         set({ projects: mergedProjects })
@@ -915,15 +1054,18 @@ export const useAppStore = create<AppStore>((set, get) => ({
   createProject: async (data: Partial<Project>) => {
     set({ loading: true })
     try {
-      const { isLocalMode, isOnline } = get()
+      const { isLocalMode, isOnline, currentUser } = get()
+      const storageLocation = (data as any).storageLocation || (isLocalMode ? 'local' : (isOnline ? 'cloud' : 'local'))
+      const isTeamProject = storageLocation === 'cloud' && ((data as any).isTeamProject || false)
+      const teamId = (data as any).teamId || ''
       
-      if (isLocalMode) {
+      if (storageLocation === 'local' || data.id?.startsWith('local_')) {
         const localProject: LocalProject = {
           id: data.id || `local_${Date.now()}`,
           name: data.name || '新项目',
           description: data.description,
-          databaseType: data.databaseType || 'MySQL',
-          status: 'active',
+          databaseType: data.databaseType || 'MYSQL',
+          status: 'DRAFT',
           version: 1,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -933,18 +1075,34 @@ export const useAppStore = create<AppStore>((set, get) => ({
         await localStorageService.saveProject(localProject)
         set(state => ({ projects: [...state.projects, localProject as Project] }))
       } else if (isOnline) {
-        const response = await projectApi.create(data)
+        const createData = { ...data }
+        delete (createData as any).storageLocation
+        delete (createData as any).isTeamProject
+        delete (createData as any).teamId
+        // 添加当前用户ID作为创建者，确保用户能查看自己创建的项目
+        if (currentUser && currentUser.id) {
+          (createData as any).createdBy = currentUser.id
+        }
+        const response = await projectApi.create(createData)
         if (response.success && response.data) {
           set(state => ({ projects: [...state.projects, response.data!] }))
           await localStorageService.saveProject(response.data as LocalProject)
+          
+          if (isTeamProject && teamId && response.data.id) {
+            try {
+              await teamApi.addProjectToTeam(teamId, response.data.id)
+            } catch (error) {
+              console.error('添加项目到团队失败:', error)
+            }
+          }
         }
       } else {
         const localProject: LocalProject = {
           id: data.id || `local_${Date.now()}`,
           name: data.name || '新项目',
           description: data.description,
-          databaseType: data.databaseType || 'MySQL',
-          status: 'active',
+          databaseType: data.databaseType || 'MYSQL',
+          status: 'DRAFT',
           version: 1,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -954,7 +1112,6 @@ export const useAppStore = create<AppStore>((set, get) => ({
         await localStorageService.saveProject(localProject)
         set(state => ({ projects: [...state.projects, localProject as Project] }))
         
-        // 只有非本地模式且离线时才添加到同步队列
         if (!isLocalMode) {
           await localStorageService.addToSyncQueue({
             type: 'create',
@@ -1458,25 +1615,25 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const savedShortcuts = await localStorageService.getMeta<ShortcutConfig>('shortcuts')
     if (savedShortcuts) {
       // 合并新的快捷键字段，避免旧数据缺失字段
+      const defaultShortcuts: ShortcutConfig = {
+        undo: ['ctrl', 'z'],
+        redo: ['ctrl', 'shift', 'z'],
+        save: ['ctrl', 's'],
+        newTable: ['ctrl', 'shift', 't'],
+        resetZoom: ['ctrl', '0'],
+        zoomIn: ['ctrl', '+'],
+        zoomOut: ['ctrl', '-'],
+        settings: ['ctrl', ','],
+        importExport: ['ctrl', 'shift', 'e'],
+        delete: ['delete'],
+        selectAll: ['ctrl', 'a'],
+        copy: ['ctrl', 'c'],
+        paste: ['ctrl', 'v'],
+        find: ['ctrl', 'f'],
+        toggleLeftSidebar: ['alt', 'q']
+      }
       set({ 
-        shortcuts: {
-          undo: ['ctrl', 'z'],
-          redo: ['ctrl', 'shift', 'z'],
-          save: ['ctrl', 's'],
-          newTable: ['ctrl', 'shift', 't'],
-          resetZoom: ['ctrl', '0'],
-          zoomIn: ['ctrl', '+'],
-          zoomOut: ['ctrl', '-'],
-          settings: ['ctrl', ','],
-          importExport: ['ctrl', 'shift', 'e'],
-          delete: ['delete'],
-          selectAll: ['ctrl', 'a'],
-          copy: ['ctrl', 'c'],
-          paste: ['ctrl', 'v'],
-          find: ['ctrl', 'f'],
-          toggleLeftSidebar: ['alt', 'q'],
-          ...savedShortcuts
-        }
+        shortcuts: Object.assign({}, defaultShortcuts, savedShortcuts)
       })
     }
   },
@@ -2331,9 +2488,25 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
   },
 
+  getProjectSnapshot: () => {
+    const { currentProject, tables, relationships } = get()
+    if (!currentProject) return null
+    
+    const projectId = currentProject.id
+    const projectTables = tables.filter(t => t.projectId === projectId)
+    const projectRelationships = relationships.filter(r => r.projectId === projectId)
+    
+    return {
+      id: projectId,
+      tables: projectTables,
+      relationships: projectRelationships,
+      project: currentProject
+    }
+  },
+
   addUpdateLog: (log: Omit<UpdateLog, 'id' | 'date'>) => {
     const newLog: UpdateLog = {
-      id: `log_${Date.now()}`,
+      id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
       date: new Date().toISOString().split('T')[0],
       ...log
     }
@@ -2345,9 +2518,45 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   loadUpdateLogs: async () => {
+    const allLogs: UpdateLog[] = []
+    
+    try {
+      const serverLogs = await updateLogApi.getAll()
+      if (serverLogs.success && serverLogs.data) {
+        serverLogs.data.forEach(log => {
+          allLogs.push({
+            id: log.id,
+            date: log.date,
+            type: log.type,
+            version: log.version,
+            description: log.description,
+            details: log.operator && log.operator !== '系统' ? [`操作人: ${log.operator}`] : []
+          })
+        })
+      }
+    } catch (error) {
+      console.warn('加载服务器更新日志失败:', error)
+    }
+    
     const savedLogs = await localStorageService.getMeta<UpdateLog[]>('updateLogs')
     if (savedLogs && savedLogs.length > 0) {
-      set({ updateLogs: savedLogs })
+      allLogs.push(...savedLogs)
+    }
+    
+    if (allLogs.length > 0) {
+      const seen = new Set<string>()
+      const uniqueLogs = allLogs.filter(log => {
+        if (seen.has(log.id)) return false
+        seen.add(log.id)
+        return true
+      })
+      
+      uniqueLogs.sort((a, b) => {
+        if (a.date !== b.date) return b.date.localeCompare(a.date)
+        return b.id.localeCompare(a.id)
+      })
+      
+      set({ updateLogs: uniqueLogs })
     }
   },
 
@@ -2742,6 +2951,362 @@ export const useAppStore = create<AppStore>((set, get) => ({
       return { success: false, message: '保存失败: ' + (error as Error).message }
     } finally {
       set({ isSyncing: false })
+    }
+  },
+
+  // 打开项目标签页
+  openProjectTab: async (project: Project) => {
+    const { openTabs } = get()
+    const existingTab = openTabs.find(tab => tab.projectId === project.id && tab.type === 'project')
+    
+    // 先加载项目数据
+    await get().selectProject(project.id)
+    
+    if (existingTab) {
+      // 如果标签页已存在，直接激活
+      set({ activeTabId: existingTab.id })
+    } else {
+      // 否则创建新标签页
+      const newTabId = `tab_project_${project.id}`
+      const newTab = {
+        id: newTabId,
+        title: project.name,
+        projectId: project.id,
+        type: 'project' as const
+      }
+      set({ 
+        openTabs: [...openTabs, newTab],
+        activeTabId: newTabId
+      })
+    }
+  },
+
+  // 关闭标签页
+  closeTab: (tabId: string) => {
+    const { openTabs, activeTabId, currentProject } = get()
+    const updatedTabs = openTabs.filter(tab => tab.id !== tabId)
+    
+    // 如果关闭的是当前激活标签页，切换到上一个标签页
+    let newActiveTabId = activeTabId
+    let newCurrentProject = currentProject
+    
+    if (activeTabId === tabId && updatedTabs.length > 0) {
+      const index = openTabs.findIndex(tab => tab.id === tabId)
+      const newActiveTab = updatedTabs[Math.min(index, updatedTabs.length - 1)]
+      newActiveTabId = newActiveTab?.id || null
+      
+      // 切换到新标签页对应的项目
+      if (newActiveTab && newActiveTab.projectId) {
+        get().selectProject(newActiveTab.projectId).catch(console.error)
+      }
+    } else if (updatedTabs.length === 0) {
+      newActiveTabId = null
+      newCurrentProject = null
+    }
+    
+    set({ openTabs: updatedTabs, activeTabId: newActiveTabId, currentProject: newCurrentProject })
+  },
+
+  // 设置激活标签页
+  setActiveTab: (tabId: string) => {
+    set({ activeTabId: tabId })
+  },
+
+  // 打开设置标签页
+  openSettingsTab: () => {
+    const { openTabs } = get()
+    const existingTab = openTabs.find(tab => tab.type === 'settings')
+    
+    if (existingTab) {
+      set({ activeTabId: existingTab.id })
+    } else {
+      const newTabId = 'tab_settings'
+      const newTab = {
+        id: newTabId,
+        title: '设置',
+        projectId: '',
+        type: 'settings' as const
+      }
+      set({ 
+        openTabs: [...openTabs, newTab],
+        activeTabId: newTabId
+      })
+    }
+  },
+
+  // 打开项目成员管理标签页
+  openMemberTab: (projectId: string, projectName: string) => {
+    const { openTabs } = get()
+    const existingTab = openTabs.find(tab => tab.type === 'members' && tab.projectId === projectId)
+    
+    if (existingTab) {
+      set({ activeTabId: existingTab.id })
+    } else {
+      const newTabId = `tab_members_${projectId}`
+      const newTab = {
+        id: newTabId,
+        title: `${projectName} - 成员管理`,
+        projectId,
+        type: 'members' as const
+      }
+      set({ 
+        openTabs: [...openTabs, newTab],
+        activeTabId: newTabId
+      })
+    }
+  },
+
+  // 打开创建项目标签页
+  openCreateProjectTab: () => {
+    const { openTabs } = get()
+    const existingTab = openTabs.find(tab => tab.type === 'createProject')
+    
+    if (existingTab) {
+      set({ activeTabId: existingTab.id })
+    } else {
+      const newTabId = `tab_create_project_${Date.now()}`
+      const newTab = {
+        id: newTabId,
+        title: '创建新项目',
+        type: 'createProject' as const
+      }
+      set({ 
+        openTabs: [...openTabs, newTab],
+        activeTabId: newTabId
+      })
+    }
+  },
+
+  // 打开导入导出标签页
+  openImportExportTab: (initialTab: 'import' | 'export' = 'export') => {
+    const { openTabs } = get()
+    const existingTab = openTabs.find(tab => tab.type === 'importExport')
+    
+    if (existingTab) {
+      set({ activeTabId: existingTab.id })
+    } else {
+      const newTabId = `tab_import_export_${Date.now()}`
+      const newTab = {
+        id: newTabId,
+        title: initialTab === 'import' ? '导入数据' : '导出数据',
+        type: 'importExport' as const
+      }
+      set({ 
+        openTabs: [...openTabs, newTab],
+        activeTabId: newTabId
+      })
+    }
+  },
+
+  // 打开团队管理标签页
+  openTeamManagementTab: () => {
+    const { openTabs } = get()
+    const existingTab = openTabs.find(tab => tab.type === 'teamManagement')
+    
+    if (existingTab) {
+      set({ activeTabId: existingTab.id })
+    } else {
+      const newTabId = `tab_team_management_${Date.now()}`
+      const newTab = {
+        id: newTabId,
+        title: '团队管理',
+        type: 'teamManagement' as const
+      }
+      set({ 
+        openTabs: [...openTabs, newTab],
+        activeTabId: newTabId
+      })
+    }
+  },
+
+  // 打开LLM助手标签页
+  openLLMTab: () => {
+    const { openTabs } = get()
+    const existingTab = openTabs.find(tab => tab.type === 'llm')
+    
+    if (existingTab) {
+      set({ activeTabId: existingTab.id })
+    } else {
+      const newTabId = `tab_llm_${Date.now()}`
+      const newTab = {
+        id: newTabId,
+        title: 'AI助手',
+        type: 'llm' as const
+      }
+      set({ 
+        openTabs: [...openTabs, newTab],
+        activeTabId: newTabId
+      })
+    }
+  },
+
+  // 打开编辑项目标签页
+  openEditProjectTab: (projectId: string) => {
+    const { openTabs, projects } = get()
+    const existingTab = openTabs.find(tab => tab.type === 'editProject' && tab.projectId === projectId)
+    
+    if (existingTab) {
+      set({ activeTabId: existingTab.id })
+    } else {
+      const project = projects.find(p => p.id === projectId)
+      if (!project) return
+      
+      const newTabId = `tab_edit_project_${projectId}`
+      const newTab = {
+        id: newTabId,
+        title: `编辑 - ${project.name}`,
+        projectId,
+        type: 'editProject' as const
+      }
+      set({ 
+        openTabs: [...openTabs, newTab],
+        activeTabId: newTabId
+      })
+    }
+  },
+
+  // 打开版本管理标签页
+  openVersionManagementTab: (projectId: string, projectName: string) => {
+    const { openTabs } = get()
+    const existingTab = openTabs.find(tab => tab.type === 'versionManagement' && tab.projectId === projectId)
+    
+    if (existingTab) {
+      set({ activeTabId: existingTab.id })
+    } else {
+      const newTabId = `tab_version_${projectId}`
+      const newTab = {
+        id: newTabId,
+        title: `版本 - ${projectName}`,
+        projectId,
+        type: 'versionManagement' as const
+      }
+      set({ 
+        openTabs: [...openTabs, newTab],
+        activeTabId: newTabId
+      })
+    }
+  },
+
+  openCommentTab: (tableId: string, tableName: string) => {
+    const { openTabs } = get()
+    const existingTab = openTabs.find(tab => tab.type === 'comments' && tab.projectId === tableId)
+
+    if (existingTab) {
+      set({ activeTabId: existingTab.id })
+    } else {
+      const newTabId = `tab_comments_${tableId}`
+      const newTab = {
+        id: newTabId,
+        title: `评论 - ${tableName}`,
+        projectId: tableId,
+        type: 'comments' as const
+      }
+      set({
+        openTabs: [...openTabs, newTab],
+        activeTabId: newTabId
+      })
+    }
+  },
+
+  openSqliteImportTab: () => {
+    const { openTabs } = get()
+    const existingTab = openTabs.find(tab => tab.type === 'sqliteImport')
+    
+    if (existingTab) {
+      set({ activeTabId: existingTab.id })
+    } else {
+      const newTabId = `tab_sqlite_import_${Date.now()}`
+      const newTab = {
+        id: newTabId,
+        title: '导入 SQLite',
+        type: 'sqliteImport' as const
+      }
+      set({ 
+        openTabs: [...openTabs, newTab],
+        activeTabId: newTabId
+      })
+    }
+  },
+
+  openBranchManagementTab: (projectId: string, projectName?: string) => {
+    const { openTabs } = get()
+    const existingTab = openTabs.find(tab => tab.type === 'branchManagement' && tab.projectId === projectId)
+    
+    if (existingTab) {
+      set({ activeTabId: existingTab.id })
+    } else {
+      const newTabId = `tab_branch_${projectId}`
+      const newTab = {
+        id: newTabId,
+        title: `分支管理${projectName ? ' - ' + projectName : ''}`,
+        projectId,
+        type: 'branchManagement' as const
+      }
+      set({ 
+        openTabs: [...openTabs, newTab],
+        activeTabId: newTabId
+      })
+    }
+  },
+
+  openGitConfigTab: (projectId: string, projectName?: string) => {
+    const { openTabs } = get()
+    const existingTab = openTabs.find(tab => tab.type === 'gitConfig' && tab.projectId === projectId)
+    
+    if (existingTab) {
+      set({ activeTabId: existingTab.id })
+    } else {
+      const newTabId = `tab_git_config_${projectId}`
+      const newTab = {
+        id: newTabId,
+        title: `Git 配置${projectName ? ' - ' + projectName : ''}`,
+        projectId,
+        type: 'gitConfig' as const
+      }
+      set({ 
+        openTabs: [...openTabs, newTab],
+        activeTabId: newTabId
+      })
+    }
+  },
+
+  openTypeConvertTab: () => {
+    const { openTabs } = get()
+    const existingTab = openTabs.find(tab => tab.type === 'typeConvert')
+    
+    if (existingTab) {
+      set({ activeTabId: existingTab.id })
+    } else {
+      const newTabId = `tab_type_convert_${Date.now()}`
+      const newTab = {
+        id: newTabId,
+        title: '类型转换',
+        type: 'typeConvert' as const
+      }
+      set({ 
+        openTabs: [...openTabs, newTab],
+        activeTabId: newTabId
+      })
+    }
+  },
+
+  openSQLEditorTab: () => {
+    const { openTabs } = get()
+    const existingTab = openTabs.find(tab => tab.type === 'sqlEditor')
+    
+    if (existingTab) {
+      set({ activeTabId: existingTab.id })
+    } else {
+      const newTabId = `tab_sql_editor_${Date.now()}`
+      const newTab = {
+        id: newTabId,
+        title: 'SQL 编辑器',
+        type: 'sqlEditor' as const
+      }
+      set({ 
+        openTabs: [...openTabs, newTab],
+        activeTabId: newTabId
+      })
     }
   }
 }))

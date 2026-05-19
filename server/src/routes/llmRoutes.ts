@@ -1,144 +1,27 @@
 import { Router } from 'express'
-import { llmService, TableSuggestion, ColumnSuggestion, RelationshipSuggestion } from '../generators/llmService'
-import { Table } from '../generators/ddlGenerator'
+import { llmController } from '../controllers/llmController'
 
 const router = Router()
 
-router.post('/config', (req, res) => {
-  try {
-    const { apiKey, endpoint, model } = req.body
+router.get('/configs/user/:userId', llmController.getUserConfigs)
+router.get('/configs/team/:teamId', llmController.getTeamConfigs)
+router.post('/configs/user/:userId', llmController.createUserConfig)
+router.post('/configs/team/:teamId', llmController.createTeamConfig)
+router.put('/configs/:configId', llmController.updateConfig)
+router.delete('/configs/:configId', llmController.deleteConfig)
 
-    if (!apiKey) {
-      res.status(400).json({ error: 'API密钥是必填项' })
-      return
-    }
+router.post('/test-connection', llmController.testConnection)
+router.post('/generate-tables', llmController.generateTables)
+router.post('/analyze-columns', llmController.analyzeColumns)
+router.post('/suggest-relationships', llmController.suggestRelationships)
 
-    llmService.configure({
-      apiKey,
-      endpoint: endpoint || 'https://api.openai.com/v1',
-      model: model || 'gpt-4'
-    })
+router.post('/mock-data', llmController.generateMockData)
+router.post('/mock-data/batch', llmController.generateBatchMockData)
+router.get('/mock-templates', llmController.getMockTemplates)
 
-    res.json({
-      success: true,
-      message: 'LLM配置已更新',
-      configured: llmService.isConfigured()
-    })
-  } catch (error) {
-    console.error('配置LLM失败:', error)
-    res.status(500).json({ error: '配置LLM失败: ' + (error as Error).message })
-  }
-})
+router.post('/snapshot', llmController.createSnapshot)
+router.get('/snapshot/:projectId/latest', llmController.getLatestSnapshot)
 
-router.get('/config', (req, res) => {
-  const config = llmService.getConfig()
-  res.json({
-    success: true,
-    result: {
-      configured: llmService.isConfigured(),
-      hasApiKey: !!config.apiKey,
-      endpoint: config.endpoint,
-      model: config.model
-    }
-  })
-})
-
-router.post('/test-connection', async (req, res) => {
-  try {
-    const { apiKey, endpoint, model } = req.body
-    const result = await llmService.testConnection({ apiKey, endpoint, model })
-    res.json({
-      success: result.success,
-      result: {
-        model: result.model
-      },
-      error: result.error
-    })
-  } catch (error) {
-    console.error('测试连接失败:', error)
-    res.status(500).json({ 
-      success: false, 
-      error: '测试连接失败: ' + (error as Error).message 
-    })
-  }
-})
-
-router.post('/generate-tables', async (req, res) => {
-  try {
-    const { description, databaseType } = req.body
-
-    if (!description) {
-      res.status(400).json({ error: '描述是必填项' })
-      return
-    }
-
-    if (!llmService.isConfigured()) {
-      res.status(400).json({ error: 'LLM服务未配置，请先设置API密钥' })
-      return
-    }
-
-    const tables = await llmService.generateTables({ description, databaseType })
-
-    res.json({
-      success: true,
-      result: tables
-    })
-  } catch (error) {
-    console.error('生成表结构失败:', error)
-    res.status(500).json({ error: '生成表结构失败: ' + (error as Error).message })
-  }
-})
-
-router.post('/analyze-columns', async (req, res) => {
-  try {
-    const { tableName, columns, databaseType } = req.body
-
-    if (!tableName || !columns || !Array.isArray(columns)) {
-      res.status(400).json({ error: 'tableName和columns是必填项' })
-      return
-    }
-
-    if (!llmService.isConfigured()) {
-      res.status(400).json({ error: 'LLM服务未配置，请先设置API密钥' })
-      return
-    }
-
-    const analyzedColumns = await llmService.analyzeColumns({ tableName, columns, databaseType })
-
-    res.json({
-      success: true,
-      result: analyzedColumns
-    })
-  } catch (error) {
-    console.error('分析字段类型失败:', error)
-    res.status(500).json({ error: '分析字段类型失败: ' + (error as Error).message })
-  }
-})
-
-router.post('/suggest-relationships', async (req, res) => {
-  try {
-    const { tables } = req.body
-
-    if (!tables || !Array.isArray(tables)) {
-      res.status(400).json({ error: 'tables是必填项' })
-      return
-    }
-
-    if (!llmService.isConfigured()) {
-      res.status(400).json({ error: 'LLM服务未配置，请先设置API密钥' })
-      return
-    }
-
-    const suggestions = await llmService.suggestRelationships(tables as Table[])
-
-    res.json({
-      success: true,
-      result: suggestions
-    })
-  } catch (error) {
-    console.error('建议关系失败:', error)
-    res.status(500).json({ error: '建议关系失败: ' + (error as Error).message })
-  }
-})
+router.post('/log-operation', llmController.logOperation)
 
 export default router

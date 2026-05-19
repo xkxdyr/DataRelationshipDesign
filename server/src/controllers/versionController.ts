@@ -54,5 +54,15 @@ export const versionController = {
     } catch (error) {
       res.status(500).json({ success: false, error: (error as Error).message })
     }
+  },
+
+  async compare(req: Request, res: Response) {
+    try {
+      const { versionId1, versionId2 } = req.params
+      const result = await versionService.compare(versionId1, versionId2)
+      res.json({ success: true, data: result })
+    } catch (error) {
+      res.status(500).json({ success: false, error: (error as Error).message })
+    }
   }
 }

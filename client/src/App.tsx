@@ -1,32 +1,44 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react'
-import { Layout, Typography, Badge, Tooltip, Button, message } from 'antd'
-import { DatabaseOutlined, CloseOutlined, CloudOutlined, CloudSyncOutlined, CloudUploadOutlined, SyncOutlined, WifiOutlined, DisconnectOutlined, SettingOutlined, LeftOutlined, RightOutlined, TeamOutlined, CodeOutlined } from '@ant-design/icons'
+import { Layout, Typography, Badge, Tooltip, Button, message, Avatar, Dropdown, Tabs } from 'antd'
+import { MessageOutlined, DatabaseOutlined, CloseOutlined, CloudOutlined, CloudSyncOutlined, CloudUploadOutlined, SyncOutlined, WifiOutlined, DisconnectOutlined, SettingOutlined, LeftOutlined, RightOutlined, TeamOutlined, CodeOutlined, UserOutlined, LogoutOutlined, LoginOutlined, BranchesOutlined, GithubOutlined } from '@ant-design/icons'
 import { useAppStore } from './stores/appStore'
 import { useTheme } from './theme/useTheme'
 import ProjectList from './components/ProjectList'
 import Canvas from './components/Canvas'
 import TableEditor from './components/TableEditor'
 import ModeSwitch from './components/ModeSwitch'
-import { SettingsModal } from './components/SettingsModal'
-import { TypeConvertModal } from './components/TypeConvertModal'
-import { LLMModal } from './components/LLMModal'
-import ImportExportModal from './components/ImportExportModal'
+import { SettingsTab } from './components/SettingsTab'
+import { ProjectMemberTab } from './components/ProjectMemberTab'
+import { CreateProjectTab } from './components/CreateProjectTab'
+import { ImportExportTab } from './components/ImportExportTab'
+import { TeamManagementTab } from './components/TeamManagementTab'
+import { LLMTab } from './components/LLMTab'
+import { EditProjectTab } from './components/EditProjectTab'
+import { VersionManagementTab } from './components/VersionManagementTab'
+import { CommentTab } from './components/CommentTab'
+import { TypeConvertTab } from './components/TypeConvertTab'
 import { ConnectionConfigModal } from './components/ConnectionConfigModal'
 import { DatabaseImportModal } from './components/DatabaseImportModal'
 import { DatabaseSyncModal } from './components/DatabaseSyncModal'
-import { TeamManagementModal } from './components/TeamManagementModal'
-import { SQLEditor } from './components/SQLEditor'
+import { SqliteImportTab } from './components/SqliteImportTab'
+import BranchManagerTab from './components/BranchManagerTab'
+import GitConfigTab from './components/GitConfigTab'
+import { AuthModal } from './components/AuthModal'
+import LoginPage from './components/LoginPage'
+import { SQLEditorTab } from './components/SQLEditorTab'
 import NetworkStatus from './components/NetworkStatus'
 import SyncQueueModal from './components/SyncQueueModal'
+import { CollabProvider } from './providers/CollabProvider'
+import { CollabUsers } from './components/CollabUsers'
 import { TableInfo, TableSuggestion } from './services/api'
 import localStorageService from './services/localStorageService'
 
-const { Header } = Layout
+const { Header, Content } = Layout
 const { Title } = Typography
 
-function App() {
+function AppContent() {
   const { theme, themeOptions, setTheme, fontConfig, colors } = useTheme()
-  const { currentProject, projects, loadProjects, selectedTableId, selectedTableIds, tables, columns, selectTable, undo, redo, canUndo, canRedo, isOnline, isSyncing, lastSaved, loadSettings, loadShortcuts, loadFontConfig, createTable, createColumn, createIndex, createRelationship, saveToLocal, deleteTable, setCanvasZoom, canvasZoom, copyTable, pasteTable, selectAllTables, shortcuts, loadUpdateLogs, addUpdateLog, updateLogs, setOnline, refreshSyncQueueCount, syncQueueCount } = useAppStore()
+  const { currentProject, projects, loadProjects, selectedTableId, selectedTableIds, tables, selectTable, undo, redo, canUndo, canRedo, isOnline, isSyncing, lastSaved, loadSettings, loadShortcuts, loadFontConfig, createTable, createColumn, createIndex, createRelationship, saveToLocal, deleteTable, setCanvasZoom, canvasZoom, copyTable, pasteTable, selectAllTables, shortcuts, loadUpdateLogs, addUpdateLog, updateLogs, setOnline, refreshSyncQueueCount, syncQueueCount, currentUser, authToken, authLoading, checkAuth, logout, openTabs, activeTabId, openProjectTab, closeTab, setActiveTab, openSettingsTab, openMemberTab, openCreateProjectTab, openImportExportTab, openTeamManagementTab, openLLMTab, openEditProjectTab, openVersionManagementTab, openCommentTab, openSqliteImportTab, openBranchManagementTab, openGitConfigTab, selectProject, openTypeConvertTab, openSQLEditorTab } = useAppStore()
 
   // 网络状态监听
   React.useEffect(() => {
@@ -53,16 +65,11 @@ function App() {
   const [rightWidth, setRightWidth] = useState(900)
   const [isDraggingLeft, setIsDraggingLeft] = useState(false)
   const [isDraggingRight, setIsDraggingRight] = useState(false)
-  const [showSettings, setShowSettings] = useState(false)
-  const [showTypeConvert, setShowTypeConvert] = useState(false)
-  const [showLLM, setShowLLM] = useState(false)
-  const [showImportExport, setShowImportExport] = useState(false)
   const [showConnections, setShowConnections] = useState(false)
   const [showDatabaseImport, setShowDatabaseImport] = useState(false)
   const [showDatabaseSync, setShowDatabaseSync] = useState(false)
-  const [showTeamManagement, setShowTeamManagement] = useState(false)
-  const [showSQLEditor, setShowSQLEditor] = useState(false)
   const [showSyncQueue, setShowSyncQueue] = useState(false)
+  const [showAuthModal, setShowAuthModal] = useState(false)
   const [leftCollapsed, setLeftCollapsed] = useState(false)
   const [rightCollapsed, setRightCollapsed] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -165,12 +172,12 @@ function App() {
       } else if (matchesShortcut(e, shortcuts.settings)) {
         e.preventDefault()
         if (!isInput) {
-          setShowSettings(true)
+          openSettingsTab()
         }
       } else if (matchesShortcut(e, shortcuts.importExport)) {
         e.preventDefault()
         if (!isInput) {
-          setShowImportExport(true)
+          openImportExportTab()
         }
       } else if (matchesShortcut(e, shortcuts.selectAll)) {
         e.preventDefault()
@@ -208,18 +215,16 @@ function App() {
       } else if (e.key === 'Escape') {
         if (!isInput) {
           e.preventDefault()
-          if (showSettings) {
-            setShowSettings(false)
-          } else if (showImportExport) {
-            setShowImportExport(false)
-          } else if (showTypeConvert) {
-            setShowTypeConvert(false)
-          } else if (showLLM) {
-            setShowLLM(false)
-          } else if (showConnections) {
+          if (showConnections) {
             setShowConnections(false)
           } else if (showDatabaseImport) {
             setShowDatabaseImport(false)
+          } else if (showDatabaseSync) {
+            setShowDatabaseSync(false)
+          } else if (showSyncQueue) {
+            setShowSyncQueue(false)
+          } else if (showAuthModal) {
+            setShowAuthModal(false)
           } else if (selectedTableId) {
             selectTable(null)
           }
@@ -231,29 +236,152 @@ function App() {
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [undo, redo, canUndo, canRedo, currentProject, createTable, saveToLocal, selectedTableId, deleteTable, selectTable, showSettings, showImportExport, showTypeConvert, showLLM, showConnections, showDatabaseImport, setCanvasZoom, shortcuts, copyTable, pasteTable, selectAllTables, createColumn, tables])
+  }, [undo, redo, canUndo, canRedo, currentProject, createTable, saveToLocal, selectedTableId, deleteTable, selectTable, showConnections, showDatabaseImport, showDatabaseSync, showSyncQueue, showAuthModal, setCanvasZoom, shortcuts, copyTable, pasteTable, selectAllTables, createColumn, tables])
 
   const logAddedRef = useRef(false)
   
   useEffect(() => {
-    loadProjects()
-    loadSettings()
-    loadShortcuts()
-    loadFontConfig()
-    loadUpdateLogs()
+    const initApp = async () => {
+      await checkAuth()
+      await loadProjects()
+      loadSettings()
+      loadShortcuts()
+      loadFontConfig()
+      loadUpdateLogs()
+    }
     
     // 添加更新日志，避免重复添加
     const initUpdateLog = async () => {
       if (logAddedRef.current) return
       
-      const savedLogs = await localStorageService.getMeta('updateLogs')
+      const savedLogs = (await localStorageService.getMeta<any[]>('updateLogs')) || []
       const today = new Date().toISOString().split('T')[0]
       
-      const hasLogToday = savedLogs?.some?.((log: any) => 
+      // 检查是否已有v1.8.0的日志
+      const hasV18Log = Array.isArray(savedLogs) && savedLogs.some((log: any) => 
+        log.description?.includes?.('字段级锁机制与操作历史导出')
+      )
+      
+      if (!hasV18Log) {
+        addUpdateLog({
+          version: 'v1.8.0',
+          type: 'feature',
+          description: '字段级锁机制与操作历史导出',
+          details: [
+            '后端实现字段级锁服务（LockService.ts），支持表级锁和字段级锁',
+            '锁超时机制：5分钟无操作自动释放',
+            '后端 WebSocket 消息协议新增 LOCK_ACQUIRE/LOCK_RELEASE/LOCK_GRANTED/LOCK_DENIED/LOCK_STATE 消息类型',
+            '协作房间（Room）集成锁状态广播',
+            '操作历史支持 JSON/CSV 格式导出',
+            '前端创建操作历史模态框组件（HistoryModal.tsx）',
+            '操作历史支持统计展示、搜索、筛选、分页',
+            '设置面板新增"操作历史"入口',
+            '前端锁状态管理 Hook（useCollabLocks.ts）',
+            'TypeScript 零错误'
+          ]
+        })
+      }
+      
+      // 检查是否已有v1.7.0的日志
+      const hasV17Log = savedLogs.some((log: any) => 
+        log.description?.includes?.('标签页功能实现')
+      )
+      
+      if (!hasV17Log) {
+        addUpdateLog({
+          version: 'v1.7.0',
+          type: 'feature',
+          description: '标签页功能实现',
+          details: [
+            '在appStore.ts中添加标签页状态管理（openTabs、activeTabId）',
+            '实现openProjectTab方法，支持打开项目标签页',
+            '实现closeTab方法，支持关闭标签页',
+            '实现setActiveTab方法，支持切换激活标签页',
+            '在App.tsx中使用Ant Design Tabs组件实现标签页UI',
+            '支持editable-card模式，可关闭标签页',
+            '修改ProjectList组件使用openProjectTab替代selectProject',
+            '每个标签页显示对应项目的Canvas画布',
+            '无标签页时显示友好提示',
+            'TypeScript零错误'
+          ]
+        })
+      }
+      
+      // 检查是否已有v1.6.0的日志
+      const hasV16Log = savedLogs.some((log: any) => 
+        log.description?.includes?.('登录注册页面与权限控制完成')
+      )
+      
+      if (!hasV16Log) {
+        addUpdateLog({
+          version: 'v1.6.0',
+          type: 'feature',
+          description: '登录注册页面与权限控制完成',
+          details: [
+            '创建独立登录注册页面（LoginPage.tsx），采用全屏布局而非弹窗模式',
+            '实现登录和注册两个Tab界面',
+            '完整的表单验证逻辑',
+            '与appStore认证状态管理集成',
+            '实现App.tsx权限控制：未登录显示登录页，已登录显示主应用',
+            '确保未登录用户无法访问主应用功能',
+            '认证加载状态处理',
+            '美观的UI设计，支持主题适配',
+            'TypeScript零错误'
+          ]
+        })
+      }
+      
+      // 检查是否已有v1.5.0的日志
+      const hasV15Log = savedLogs.some((log: any) => 
+        log.description?.includes?.('用户系统与团队系统数据模型完成')
+      )
+      
+      if (!hasV15Log) {
+        addUpdateLog({
+          version: 'v1.5.0',
+          type: 'feature',
+          description: '用户系统与团队系统数据模型完成',
+          details: [
+            '完成前置条件分析与规划，确认用户系统缺失和团队系统不完整的现状',
+            '在 Prisma Schema 中添加 User 数据模型，包含用户认证所需字段',
+            '在 Prisma Schema 中添加 Team 数据模型，包含团队基本信息和所有者关联',
+            '在 Prisma Schema 中添加 TeamMember 数据模型，管理团队成员角色和权限',
+            '在 Prisma Schema 中添加 TeamProject 数据模型，管理团队与项目关联',
+            '修复 Prisma Schema 双向关系，确保数据模型完整性',
+            '修复 WebSocket 服务器 TypeScript 类型安全问题',
+            '安装后端所需依赖：bcrypt（密码加密）、jsonwebtoken（JWT认证）',
+            '成功执行 Prisma 数据库同步，新增 User、Team、TeamMember、TeamProject 表'
+          ]
+        })
+      }
+      
+      // 检查是否已有协作功能的日志
+      const hasCollabLog = savedLogs.some((log: any) => 
+        log.description?.includes?.('新增团队协作功能')
+      )
+      
+      if (!hasCollabLog) {
+        addUpdateLog({
+          version: 'v1.4.0',
+          type: 'feature',
+          description: '新增团队协作功能',
+          details: [
+            '实现 WebSocket 实时通信服务，支持多人同时在线协作',
+            '新增协作房间管理，按项目隔离协作环境',
+            '实现在线用户列表和用户加入/离开通知',
+            '集成消息协议，支持操作同步',
+            '添加协作用户颜色标识，区分不同用户',
+            '在设置面板新增更新日志入口'
+          ]
+        })
+      }
+      
+      // 检查是否已有 v1.3.0 日志
+      const hasV13Log = savedLogs.some((log: any) => 
         log.date === today && log.description?.includes?.('新增快捷键 Alt + Q')
       )
       
-      if (!hasLogToday) {
+      if (!hasV13Log) {
         addUpdateLog({
           version: 'v1.3.0',
           type: 'feature',
@@ -270,8 +398,9 @@ function App() {
       logAddedRef.current = true
     }
     
+    initApp()
     initUpdateLog()
-  }, [])
+  }, [checkAuth, loadProjects, loadSettings, loadShortcuts, loadFontConfig, loadUpdateLogs, addUpdateLog])
 
   useEffect(() => {
     document.documentElement.style.fontSize = `${fontConfig.base}px`
@@ -530,6 +659,31 @@ function App() {
     }
   }
 
+  const userMenuItems = currentUser ? [
+    {
+      key: 'profile',
+      label: (
+        <span>
+          <UserOutlined style={{ marginRight: 8 }} />
+          个人资料
+        </span>
+      ),
+    },
+    {
+      key: 'logout',
+      label: (
+        <span>
+          <LogoutOutlined style={{ marginRight: 8 }} />
+          退出登录
+        </span>
+      ),
+      onClick: () => {
+        logout()
+        message.success('已退出登录')
+      },
+    },
+  ] : []
+
   return (
     <div style={{ height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif', backgroundColor: 'var(--theme-background)' }}>
       <NetworkStatus />
@@ -617,11 +771,13 @@ function App() {
             />
           </Tooltip>
 
+          <CollabUsers />
+
           <Tooltip title="团队管理" mouseEnterDelay={0.1}>
             <Button
               type="text"
               icon={<TeamOutlined style={{ fontSize: 14 }} />}
-              onClick={() => setShowTeamManagement(true)}
+              onClick={openTeamManagementTab}
               style={{ 
                 color: 'var(--theme-text-secondary)',
                 border: 'none',
@@ -636,7 +792,7 @@ function App() {
             <Button
               type="text"
               icon={<CodeOutlined style={{ fontSize: 14 }} />}
-              onClick={() => setShowSQLEditor(true)}
+              onClick={openSQLEditorTab}
               style={{ 
                 color: 'var(--theme-text-secondary)',
                 border: 'none',
@@ -647,13 +803,61 @@ function App() {
             />
           </Tooltip>
 
-          <Tooltip title="设置" mouseEnterDelay={0.1}>
+          {currentUser ? (
+            <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                cursor: 'pointer',
+                padding: '4px 8px',
+                borderRadius: 4
+              }}>
+                <Avatar 
+                  size={24} 
+                  icon={<UserOutlined />}
+                  style={{ backgroundColor: '#1890ff' }}
+                />
+                <span style={{ 
+                  marginLeft: 8, 
+                  fontSize: fontConfig.caption,
+                  color: 'var(--theme-text)'
+                }}>
+                  {currentUser.displayName || currentUser.username}
+                </span>
+              </div>
+            </Dropdown>
+          ) : (
+            <Tooltip title="登录/注册" mouseEnterDelay={0.1}>
+              <Button
+                type="text"
+                icon={<LoginOutlined style={{ fontSize: 14 }} />}
+                onClick={() => setShowAuthModal(true)}
+                style={{ 
+                  color: colors.textSecondary,
+                  border: 'none',
+                  boxShadow: 'none',
+                  outline: 'none',
+                  background: 'transparent'
+                }}
+              >
+                登录
+              </Button>
+            </Tooltip>
+          )}
+
+          <Tooltip title="评论" mouseEnterDelay={0.1}>
             <Button
               type="text"
-              icon={<CodeOutlined style={{ fontSize: 14 }} />}
-              onClick={() => setShowSQLEditor(true)}
+              icon={<MessageOutlined style={{ fontSize: 14 }} />}
+              onClick={() => {
+                if (selectedTableIds.length === 1) {
+                  const tbl = tables.find(t => t.id === selectedTableIds[0])
+                  if (tbl) openCommentTab(tbl.id, tbl.name)
+                }
+              }}
+              disabled={selectedTableIds.length !== 1}
               style={{ 
-                color: 'var(--theme-text-secondary)',
+                color: colors.textSecondary,
                 border: 'none',
                 boxShadow: 'none',
                 outline: 'none',
@@ -666,7 +870,64 @@ function App() {
             <Button
               type="text"
               icon={<SettingOutlined style={{ fontSize: 14 }} />}
-              onClick={() => setShowSettings(true)}
+              onClick={() => openSettingsTab()}
+              style={{ 
+                color: colors.textSecondary,
+                border: 'none',
+                boxShadow: 'none',
+                outline: 'none',
+                background: 'transparent'
+              }}
+            />
+          </Tooltip>
+
+          <Tooltip title="导入 SQLite" mouseEnterDelay={0.1}>
+            <Button
+              type="text"
+              icon={<DatabaseOutlined style={{ fontSize: 14 }} />}
+              onClick={openSqliteImportTab}
+              style={{ 
+                color: colors.textSecondary,
+                border: 'none',
+                boxShadow: 'none',
+                outline: 'none',
+                background: 'transparent'
+              }}
+            />
+          </Tooltip>
+
+          <Tooltip title="分支管理" mouseEnterDelay={0.1}>
+            <Button
+              type="text"
+              icon={<BranchesOutlined style={{ fontSize: 14 }} />}
+              onClick={() => {
+                if (!currentProject?.id) {
+                  message.warning('请先选择一个项目')
+                  return
+                }
+                openBranchManagementTab(currentProject.id, currentProject.name)
+              }}
+              style={{ 
+                color: colors.textSecondary,
+                border: 'none',
+                boxShadow: 'none',
+                outline: 'none',
+                background: 'transparent'
+              }}
+            />
+          </Tooltip>
+
+          <Tooltip title="Git 配置" mouseEnterDelay={0.1}>
+            <Button
+              type="text"
+              icon={<GithubOutlined style={{ fontSize: 14 }} />}
+              onClick={() => {
+                if (!currentProject?.id) {
+                  message.warning('请先选择一个项目')
+                  return
+                }
+                openGitConfigTab(currentProject.id, currentProject.name)
+              }}
               style={{ 
                 color: colors.textSecondary,
                 border: 'none',
@@ -678,25 +939,6 @@ function App() {
           </Tooltip>
         </div>
       </Header>
-      <SettingsModal
-        visible={showSettings}
-        onClose={() => setShowSettings(false)}
-        onOpenTypeConvert={() => {
-          setShowSettings(false)
-          setShowTypeConvert(true)
-        }}
-        onOpenLLM={() => {
-          setShowSettings(false)
-          setShowLLM(true)
-        }}
-        onOpenConnections={() => {
-          setShowSettings(false)
-          setShowConnections(true)
-        }}
-      />
-      <TypeConvertModal visible={showTypeConvert} onClose={() => setShowTypeConvert(false)} />
-      <LLMModal visible={showLLM} onClose={() => setShowLLM(false)} onApplyTables={handleApplyLLMTables} />
-      <ImportExportModal open={showImportExport} onClose={() => setShowImportExport(false)} />
       <ConnectionConfigModal visible={showConnections} onClose={() => setShowConnections(false)} />
       <DatabaseImportModal 
         visible={showDatabaseImport} 
@@ -710,19 +952,14 @@ function App() {
         onClose={() => setShowDatabaseSync(false)}
         tables={tables}
       />
-      <TeamManagementModal 
-        visible={showTeamManagement} 
-        onClose={() => setShowTeamManagement(false)}
-      />
       <SyncQueueModal 
         visible={showSyncQueue} 
         onClose={() => setShowSyncQueue(false)}
       />
-      <SQLEditor 
-        visible={showSQLEditor} 
-        onClose={() => setShowSQLEditor(false)}
+      <AuthModal 
+        visible={showAuthModal} 
+        onClose={() => setShowAuthModal(false)}
       />
-
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', marginTop: 0, paddingTop: 0, backgroundColor: 'var(--theme-background)' }} ref={containerRef}>
         <div style={{
           width: leftWidth,
@@ -784,10 +1021,110 @@ function App() {
           flex: 1,
           background: 'var(--theme-background)',
           overflow: 'hidden',
-          minWidth: 300
+          minWidth: 300,
+          display: 'flex',
+          flexDirection: 'column'
         }}>
-          {currentProject ? (
-            <Canvas />
+          {openTabs.length > 0 ? (
+            <>
+              <Tabs
+                activeKey={activeTabId || ''}
+                onChange={(key) => {
+                  const tab = openTabs.find(t => t.id === key)
+                  if (tab) {
+                    setActiveTab(key)
+                    if (tab.type === 'project' && tab.projectId) {
+                      selectProject(tab.projectId).catch(err => {
+                        console.error('Error switching project:', err)
+                        message.error('切换项目失败')
+                      })
+                    }
+                  }
+                }}
+                type="editable-card"
+                onEdit={(targetKey, action) => {
+                  if (action === 'remove') {
+                    closeTab(targetKey as string)
+                  }
+                }}
+                items={openTabs.map(tab => ({
+                  key: tab.id,
+                  label: tab.title
+                }))}
+              />
+              <div style={{ flex: 1, overflow: 'hidden' }}>
+                {(() => {
+                  const activeTab = activeTabId ? openTabs.find(t => t.id === activeTabId) : null
+                  if (!activeTab) return <Canvas />
+                  
+                  switch (activeTab.type) {
+                    case 'settings':
+                      return (
+                        <SettingsTab
+                          onOpenTypeConvert={openTypeConvertTab}
+                          onOpenLLM={openLLMTab}
+                          onOpenConnections={() => setShowConnections(true)}
+                        />
+                      )
+                    case 'members':
+                      return (
+                        <ProjectMemberTab
+                          projectId={activeTab.projectId || ''}
+                          projectName={activeTab.title.replace(' - 成员管理', '')}
+                        />
+                      )
+                    case 'createProject':
+                      return <CreateProjectTab />
+                    case 'importExport':
+                      return <ImportExportTab />
+                    case 'teamManagement':
+                      return <TeamManagementTab />
+                    case 'llm':
+                      return <LLMTab onApplyTables={handleApplyLLMTables} />
+                    case 'editProject':
+                      return (
+                        <EditProjectTab
+                          projectId={activeTab.projectId || ''}
+                        />
+                      )
+                    case 'versionManagement':
+                      return (
+                        <VersionManagementTab
+                          projectId={activeTab.projectId || ''}
+                          projectName={activeTab.title.replace('版本 - ', '')}
+                        />
+                      )
+                    case 'comments':
+                      return <CommentTab />
+                    case 'sqliteImport':
+                      return <SqliteImportTab />
+                    case 'branchManagement':
+                      return (
+                        <BranchManagerTab
+                          projectId={activeTab.projectId || ''}
+                          onBranchChange={(branchId) => {
+                            if (currentProject?.id) {
+                              selectProject(currentProject.id)
+                            }
+                          }}
+                        />
+                      )
+                    case 'gitConfig':
+                      return (
+                        <GitConfigTab
+                          projectId={activeTab.projectId || ''}
+                        />
+                      )
+                    case 'typeConvert':
+                      return <TypeConvertTab />
+                    case 'sqlEditor':
+                      return <SQLEditorTab />
+                    default:
+                      return <Canvas />
+                  }
+                })()}
+              </div>
+            </>
           ) : (
             <div style={{
               display: 'flex',
@@ -917,6 +1254,27 @@ function App() {
         />
       </div>
     </div>
+  )
+}
+
+function App() {
+  const { currentUser, checkAuth, isAuthenticated, authLoading } = useAppStore()
+  
+  // 初始化时检查认证状态
+  React.useEffect(() => {
+    checkAuth()
+  }, [checkAuth])
+  
+  // 默认显示主应用，身份校验失败时跳转登录
+  if (isAuthenticated === false) {
+    return <LoginPage />
+  }
+  
+  // 已认证成功，显示主应用
+  return (
+    <CollabProvider>
+      <AppContent />
+    </CollabProvider>
   )
 }
 

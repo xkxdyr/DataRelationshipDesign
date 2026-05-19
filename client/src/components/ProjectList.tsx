@@ -1,16 +1,15 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
-import { List, Button, Card, Empty, Space, Popconfirm, Tag, Modal, Typography, Table, Divider, Statistic, Row, Col, Descriptions, Tooltip, Menu, message, Spin, Skeleton } from 'antd'
-import { PlusOutlined, DeleteOutlined, FolderOutlined, EditOutlined, HistoryOutlined, ImportOutlined, ExportOutlined, EyeOutlined, TableOutlined, LinkOutlined, AppstoreOutlined, CopyOutlined, RotateLeftOutlined, CloudOutlined, DatabaseOutlined, CloudUploadOutlined, SaveOutlined, LoadingOutlined } from '@ant-design/icons'
+import { List, Button, Card, Empty, Space, Popconfirm, Tag, Modal, Typography, Table, Divider, Statistic, Row, Col, Descriptions, Tooltip, Menu, message, Spin, Skeleton, Select, Input } from 'antd'
+import { PlusOutlined, DeleteOutlined, FolderOutlined, EditOutlined, HistoryOutlined, ImportOutlined, ExportOutlined, EyeOutlined, TableOutlined, LinkOutlined, AppstoreOutlined, CopyOutlined, RotateLeftOutlined, CloudOutlined, DatabaseOutlined, CloudUploadOutlined, SaveOutlined, TeamOutlined, UserOutlined, FilterOutlined, KeyOutlined } from '@ant-design/icons'
 import { useAppStore } from '../stores/appStore'
-import { Version, Project as ProjectType, Table as TableType, Relationship, Column, Index } from '../types'
-import { ImportExportModal } from './ImportExportModal'
-import { CreateProjectModal } from './CreateProjectModal'
-import { EditProjectModal } from './EditProjectModal'
-import { CreateVersionModal } from './CreateVersionModal'
+import { Project as ProjectType, Table as TableType, Relationship, Column, Index } from '../types'
 
 const { Text, Paragraph } = Typography
+const { Option } = Select
 
 type ContainerWidth = 'extra-narrow' | 'narrow' | 'medium' | 'wide'
+
+export type ProjectFilterType = 'all' | 'local' | 'cloud-personal' | 'team' | 'shared'
 
 const ProjectList: React.FC = () => {
   const { 
@@ -19,10 +18,6 @@ const ProjectList: React.FC = () => {
     selectProject, 
     currentProject, 
     loadProjects, 
-    loadVersions,
-    deleteVersion,
-    restoreVersion,
-    versions,
     tables,
     relationships,
     fontConfig,
@@ -30,26 +25,29 @@ const ProjectList: React.FC = () => {
     isOnline,
     uploadProjectToCloud,
     saveProjectToLocal,
-    projectListLoading
+    projectListLoading,
+    isAuthenticated,
+    currentUser,
+    openProjectTab,
+    openCreateProjectTab,
+    openImportExportTab,
+    openEditProjectTab,
+    openVersionManagementTab,
+    openMemberTab
   } = useAppStore()
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-  const [isVersionModalOpen, setIsVersionModalOpen] = useState(false)
-  const [isCreateVersionModalOpen, setIsCreateVersionModalOpen] = useState(false)
-  const [isImportExportModalOpen, setIsImportExportModalOpen] = useState(false)
-  const [importExportInitialTab, setImportExportInitialTab] = useState<'import' | 'export'>('export')
+  
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false)
-  const [editingProjectId, setEditingProjectId] = useState<string | null>(null)
-  const [editingProject, setEditingProject] = useState<ProjectType | null>(null)
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [previewProjectId, setPreviewProjectId] = useState<string | null>(null)
   const [contextMenuProject, setContextMenuProject] = useState<ProjectType | null>(null)
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 })
   const [containerWidth, setContainerWidth] = useState<ContainerWidth>('medium')
+  const [filterType, setFilterType] = useState<ProjectFilterType>('all')
+  const [isJoinProjectModalOpen, setIsJoinProjectModalOpen] = useState(false)
+  const [inviteCodeInput, setInviteCodeInput] = useState('')
+  const [joiningProject, setJoiningProject] = useState(false)
   
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // 预计算项目统计数据，避免每次渲染都重新计算
   const projectStatsMap = useMemo(() => {
     const stats = new Map<string, { tables: TableType[]; relationships: Relationship[]; totalColumns: number }>()
     projects.forEach(project => {
@@ -61,7 +59,30 @@ const ProjectList: React.FC = () => {
     return stats
   }, [projects, tables, relationships])
 
-  // 预计算可见操作
+  const filteredProjects = useMemo(() => {
+    if (filterType === 'all') return projects
+    
+    return projects.filter(project => {
+      const isLocal = project.id.startsWith('local_') || project.createdBy === 'local'
+      const isCloud = !isLocal
+      const isPersonalCloud = isCloud && !project.createdBy.startsWith('team_')
+      const isTeamProject = isCloud && project.createdBy.startsWith('team_')
+      
+      switch (filterType) {
+        case 'local':
+          return isLocal
+        case 'cloud-personal':
+          return isPersonalCloud
+        case 'team':
+          return isTeamProject
+        case 'shared':
+          return isCloud && !isTeamProject && project.createdBy !== 'local' && !project.createdBy.startsWith('team_')
+        default:
+          return true
+      }
+    })
+  }, [projects, filterType])
+
   const visibleActions = useMemo(() => {
     switch(containerWidth) {
       case 'extra-narrow':
@@ -71,22 +92,16 @@ const ProjectList: React.FC = () => {
       case 'medium':
         return ['preview', 'edit', 'delete']
       default:
-        return ['preview', 'version', 'edit', 'delete']
+        return ['preview', 'version', 'members', 'edit', 'delete']
     }
   }, [containerWidth])
 
-  // 预计算显示标志
   const shouldShowStats = useMemo(() => containerWidth !== 'extra-narrow', [containerWidth])
   const shouldShowDescription = useMemo(() => containerWidth === 'wide' || containerWidth === 'medium', [containerWidth])
 
-  // 使用 useCallback 优化事件处理函数 - 先定义所有处理函数
   const handleOpenModal = useCallback(() => {
-    setIsModalOpen(true)
-  }, [])
-
-  const handleCloseModal = useCallback(() => {
-    setIsModalOpen(false)
-  }, [])
+    openCreateProjectTab()
+  }, [openCreateProjectTab])
 
   const handleDelete = useCallback(async (id: string) => {
     await deleteProject(id)
@@ -94,51 +109,30 @@ const ProjectList: React.FC = () => {
 
   const handleOpenEditModal = useCallback((project: any, e: React.MouseEvent) => {
     e.stopPropagation()
-    setEditingProjectId(project.id)
-    setEditingProject(project)
-    setIsEditModalOpen(true)
-  }, [])
-
-  const handleCloseEditModal = useCallback(() => {
-    setIsEditModalOpen(false)
-    setEditingProjectId(null)
-    setEditingProject(null)
-  }, [])
+    openEditProjectTab(project.id)
+  }, [openEditProjectTab])
 
   const handleOpenVersionModal = useCallback((projectId: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    setSelectedProjectId(projectId)
-    loadVersions(projectId)
-    setIsVersionModalOpen(true)
-  }, [loadVersions])
-
-  const handleOpenCreateVersionModal = useCallback(() => {
-    setIsCreateVersionModalOpen(true)
-  }, [])
-
-  const handleVersionCreated = useCallback(() => {
-    if (selectedProjectId) {
-      loadVersions(selectedProjectId)
+    const project = projects.find(p => p.id === projectId)
+    if (project) {
+      openVersionManagementTab(projectId, project.name)
     }
-  }, [selectedProjectId, loadVersions])
-
-  const handleRestoreVersion = useCallback(async (versionId: string) => {
-    try {
-      await restoreVersion(versionId)
-      message.success('版本回滚成功')
-      setIsVersionModalOpen(false)
-      if (selectedProjectId) {
-        loadVersions(selectedProjectId)
-      }
-    } catch (error) {
-      message.error('版本回滚失败: ' + (error as Error).message)
-    }
-  }, [restoreVersion, selectedProjectId, loadVersions])
+  }, [projects, openVersionManagementTab])
 
   const handleOpenPreview = useCallback((projectId: string, e: React.MouseEvent) => {
     e.stopPropagation()
     setPreviewProjectId(projectId)
     setIsPreviewModalOpen(true)
+  }, [])
+
+  const handleOpenMemberTab = useCallback((project: ProjectType, e: React.MouseEvent) => {
+    e.stopPropagation()
+    openMemberTab(project.id, project.name)
+  }, [openMemberTab])
+
+  const isCloudProject = useCallback((project: ProjectType) => {
+    return !project.id.startsWith('local_') && project.createdBy !== 'local'
   }, [])
 
   const handleContextMenu = useCallback((e: React.MouseEvent, project: ProjectType) => {
@@ -152,7 +146,6 @@ const ProjectList: React.FC = () => {
     setContextMenuProject(null)
   }, [])
 
-  // 上传项目到云端
   const handleUploadToCloud = useCallback(async (projectId: string) => {
     try {
       const result = await uploadProjectToCloud(projectId)
@@ -166,7 +159,6 @@ const ProjectList: React.FC = () => {
     }
   }, [uploadProjectToCloud])
 
-  // 保存项目到本地
   const handleSaveToLocal = useCallback(async (projectId: string) => {
     try {
       const result = await saveProjectToLocal(projectId)
@@ -180,7 +172,47 @@ const ProjectList: React.FC = () => {
     }
   }, [saveProjectToLocal])
 
-  // 监听容器宽度变化
+  const handleJoinProject = useCallback(async () => {
+    if (!inviteCodeInput.trim()) {
+      message.error('请输入邀请码')
+      return
+    }
+    
+    if (!isAuthenticated) {
+      message.error('请先登录')
+      return
+    }
+    
+    setJoiningProject(true)
+    try {
+      const cleanCode = inviteCodeInput.replace(/-/g, '').toUpperCase().trim()
+      const response = await fetch(`${window.location.protocol}//${window.location.hostname}:3001/api/projects/invites/join`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+        },
+        body: JSON.stringify({ inviteCode: cleanCode })
+      })
+      const data = await response.json()
+      if (data.success) {
+        message.success('加入项目成功！')
+        setIsJoinProjectModalOpen(false)
+        setInviteCodeInput('')
+        loadProjects()
+        if (data.data && data.data.id) {
+          openProjectTab(data.data)
+        }
+      } else {
+        message.error(data.message || '加入项目失败')
+      }
+    } catch (error) {
+      message.error('加入项目失败: ' + (error as Error).message)
+    } finally {
+      setJoiningProject(false)
+    }
+  }, [inviteCodeInput, isAuthenticated, loadProjects, openProjectTab])
+
   useEffect(() => {
     if (!containerRef.current) return
 
@@ -221,12 +253,14 @@ const ProjectList: React.FC = () => {
       default: return 'default'
     }
   }
-  
+
   const getContextMenuItems = useCallback(() => {
     if (!contextMenuProject) return []
     
     const isLocal = isLocalProject(contextMenuProject)
     
+    const isCloud = !isLocal
+
     return [
       {
         key: 'open',
@@ -249,13 +283,19 @@ const ProjectList: React.FC = () => {
         label: '版本管理',
         icon: <HistoryOutlined />
       },
+      ...(isCloud && isAuthenticated ? [
+        {
+          key: 'members',
+          label: '管理成员',
+          icon: <TeamOutlined />
+        }
+      ] : []),
       {
         key: 'export',
         label: '导出项目',
         icon: <ExportOutlined />
       },
       { type: 'divider' as const },
-      // 根据项目类型显示不同的同步选项
       ...(isLocal ? [
         {
           key: 'uploadToCloud',
@@ -285,26 +325,24 @@ const ProjectList: React.FC = () => {
     
     switch (action) {
       case 'open':
-        selectProject(contextMenuProject.id)
+        openProjectTab(contextMenuProject)
         break
       case 'preview':
         setPreviewProjectId(contextMenuProject.id)
         setIsPreviewModalOpen(true)
         break
       case 'edit':
-        setEditingProjectId(contextMenuProject.id)
-        setEditingProject(contextMenuProject)
-        setIsEditModalOpen(true)
+        openEditProjectTab(contextMenuProject.id)
         break
       case 'version':
-        setSelectedProjectId(contextMenuProject.id)
-        loadVersions(contextMenuProject.id)
-        setIsVersionModalOpen(true)
+        openVersionManagementTab(contextMenuProject.id, contextMenuProject.name)
+        break
+      case 'members':
+        openMemberTab(contextMenuProject.id, contextMenuProject.name)
         break
       case 'export':
         selectProject(contextMenuProject.id)
-        setImportExportInitialTab('export')
-        setIsImportExportModalOpen(true)
+        openImportExportTab('export')
         break
       case 'uploadToCloud':
         handleUploadToCloud(contextMenuProject.id)
@@ -318,18 +356,12 @@ const ProjectList: React.FC = () => {
     }
     
     closeContextMenu()
-  }, [contextMenuProject, selectProject, loadVersions, deleteProject, handleUploadToCloud, handleSaveToLocal, closeContextMenu])
+  }, [contextMenuProject, selectProject, deleteProject, handleUploadToCloud, handleSaveToLocal, closeContextMenu, openProjectTab, openEditProjectTab, openVersionManagementTab, openMemberTab])
 
-  // 根据宽度决定显示的操作按钮
   const getVisibleActions = useCallback(() => visibleActions, [visibleActions])
-
-  // 根据宽度决定是否显示统计信息
   const showStats = useCallback(() => shouldShowStats, [shouldShowStats])
-
-  // 根据宽度决定是否显示描述
   const showDescription = useCallback(() => shouldShowDescription, [shouldShowDescription])
 
-  // 获取项目预览数据
   const getProjectPreviewData = useCallback((projectId: string) => {
     const project = projects.find(p => p.id === projectId)
     if (!project) return null
@@ -370,25 +402,28 @@ const ProjectList: React.FC = () => {
               <>
                 <Button 
                   icon={<ImportOutlined />} 
-                  onClick={() => {
-                    setImportExportInitialTab('import')
-                    setIsImportExportModalOpen(true)
-                  }}
+                  onClick={() => openImportExportTab('import')}
                   size="small"
                 >
                   导入
                 </Button>
                 <Button 
                   icon={<ExportOutlined />} 
-                  onClick={() => {
-                    setImportExportInitialTab('export')
-                    setIsImportExportModalOpen(true)
-                  }}
+                  onClick={() => openImportExportTab('export')}
                   size="small"
                 >
                   导出
                 </Button>
               </>
+            )}
+            {isAuthenticated && (
+              <Button 
+                icon={<KeyOutlined />} 
+                onClick={() => setIsJoinProjectModalOpen(true)}
+                size="small"
+              >
+                加入项目
+              </Button>
             )}
             <Button 
               type="primary" 
@@ -416,27 +451,46 @@ const ProjectList: React.FC = () => {
             minHeight: 40
           },
           body: { 
-            height: 'calc(100% - 41px)', 
+            height: 'calc(100% - 80px)', 
             overflow: 'auto',
             padding: '4px 0',
             backgroundColor: 'var(--theme-background-secondary)'
           } 
         }}
       >
+        {isAuthenticated && containerWidth !== 'extra-narrow' && (
+          <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--theme-border)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <FilterOutlined style={{ fontSize: 14, color: 'var(--theme-text-secondary)' }} />
+            <Select
+              value={filterType}
+              onChange={setFilterType}
+              style={{ width: 160 }}
+              size="small"
+              options={[
+                { value: 'all', label: '全部项目', icon: <FolderOutlined /> },
+                { value: 'local', label: '本地项目', icon: <DatabaseOutlined /> },
+                { value: 'cloud-personal', label: '云端个人', icon: <CloudOutlined /> },
+                { value: 'team', label: '团队项目', icon: <TeamOutlined /> },
+                { value: 'shared', label: '有权项目', icon: <UserOutlined /> }
+              ]}
+            />
+          </div>
+        )}
+
         {projectListLoading ? (
           <div style={{ padding: '16px' }}>
             <Skeleton active avatar paragraph={{ rows: 2 }} />
             <Skeleton active avatar paragraph={{ rows: 2 }} style={{ marginTop: '16px' }} />
             <Skeleton active avatar paragraph={{ rows: 2 }} style={{ marginTop: '16px' }} />
           </div>
-        ) : projects.length === 0 ? (
+        ) : filteredProjects.length === 0 ? (
           <Empty 
             description="暂无项目，点击上方按钮创建" 
             style={{ padding: '40px 0' }}
           />
         ) : (
           <List
-            dataSource={projects}
+            dataSource={filteredProjects}
             renderItem={(project) => {
               const isSelected = currentProject?.id === project.id;
               const stats = projectStatsMap.get(project.id);
@@ -453,7 +507,7 @@ const ProjectList: React.FC = () => {
                 borderRadius: 4,
                 marginBottom: 2,
                 padding: containerWidth === 'extra-narrow' ? '6px 8px' : '8px 12px',
-                border: isSelected ? `2px solid var(--theme-primary)` : `1px solid ${isLocal ? 'rgba(250, 173, 20, 0.2)' : 'rgba(24, 144, 255, 0.1)'}`,
+                border: isSelected ? `2px solid var(--theme-primary)` : `1px solid ${isLocal ? 'rgba(250, 173, 20, 0.2)' : 'rgba(24, 144, 255, 0.1)'}` ,
                 transition: 'background-color 0.1s ease, border-color 0.1s ease',
                 boxShadow: 'none',
                 position: 'relative',
@@ -474,7 +528,6 @@ const ProjectList: React.FC = () => {
               onContextMenu={(e) => handleContextMenu(e, project)}
               actions={
                 [
-                  // 根据项目类型添加同步按钮
                   ...(containerWidth !== 'extra-narrow' ? [
                     isLocal ? (
                       <Tooltip title="上传到云端" key="upload">
@@ -515,7 +568,6 @@ const ProjectList: React.FC = () => {
                       </Tooltip>
                     )
                   ] : []),
-                  // 现有的操作按钮
                   ...visibleActions.map(action => {
                     if (action === 'preview') {
                       return (
@@ -549,6 +601,24 @@ const ProjectList: React.FC = () => {
                               borderRadius: 2
                             }}
                             onClick={(e) => handleOpenVersionModal(project.id, e)}
+                          />
+                        </Tooltip>
+                      )
+                    }
+                    if (action === 'members' && isCloudProject(project) && isAuthenticated) {
+                      return (
+                        <Tooltip title="管理成员" key="members">
+                          <Button
+                            type="text"
+                            size="small"
+                            icon={<TeamOutlined />}
+                            style={{ 
+                              padding: '4px 8px',
+                              color: isSelected ? 'var(--theme-primary)' : 'var(--theme-text-secondary)',
+                              fontSize: 12,
+                              borderRadius: 2
+                            }}
+                            onClick={(e) => handleOpenMemberTab(project, e)}
                           />
                         </Tooltip>
                       )
@@ -603,7 +673,7 @@ const ProjectList: React.FC = () => {
                   })
                 ].filter(Boolean)
               }
-              onClick={() => selectProject(project.id)}
+              onClick={() => openProjectTab(project)}
             >
               <List.Item.Meta
                 avatar={
@@ -768,108 +838,10 @@ const ProjectList: React.FC = () => {
       )}
       </Card>
 
-      <CreateProjectModal
-        open={isModalOpen}
-        onClose={handleCloseModal}
-      />
 
-      <EditProjectModal
-        open={isEditModalOpen}
-        project={editingProject}
-        onClose={handleCloseEditModal}
-      />
-
-      <Modal
-        title="版本管理"
-        open={isVersionModalOpen}
-        onCancel={() => setIsVersionModalOpen(false)}
-        width={700}
-        footer={[
-          <Button key="create-version" type="primary" icon={<PlusOutlined />} onClick={handleOpenCreateVersionModal}>
-            新建版本
-          </Button>
-        ]}
-      >
-        <Table
-          dataSource={versions}
-          rowKey="id"
-          pagination={false}
-          size="small"
-          columns={[
-            {
-              title: "版本号",
-              dataIndex: "version",
-              key: "version",
-              width: 100
-            },
-            {
-              title: "版本名称",
-              dataIndex: "name",
-              key: "name"
-            },
-            {
-              title: "备注",
-              dataIndex: "comment",
-              key: "comment"
-            },
-            {
-              title: "创建时间",
-              dataIndex: "createdAt",
-              key: "createdAt",
-              render: (date: string) => new Date(date).toLocaleString()
-            },
-            {
-              title: "操作",
-              key: "action",
-              width: 200,
-              render: (record: Version) => (
-                <Space size="small">
-                  <Tooltip title="回滚到此版本">
-                    <Popconfirm
-                      title="确定回滚到此版本吗？"
-                      description="回滚后将覆盖当前项目的所有表和关系"
-                      onConfirm={() => handleRestoreVersion(record.id)}
-                      okText="确定"
-                      cancelText="取消"
-                      okButtonProps={{ type: 'primary' }}
-                    >
-                      <Button type="text" size="small" icon={<RotateLeftOutlined />} />
-                    </Popconfirm>
-                  </Tooltip>
-                  <Tooltip title="删除版本">
-                    <Popconfirm
-                      title="确定删除这个版本吗？"
-                      onConfirm={() => deleteVersion(record.id)}
-                      okText="确定"
-                      cancelText="取消"
-                    >
-                      <Button type="text" danger size="small" icon={<DeleteOutlined />} />
-                    </Popconfirm>
-                  </Tooltip>
-                </Space>
-              )
-            }
-          ]}
-        />
-      </Modal>
-
-      <CreateVersionModal
-        open={isCreateVersionModalOpen}
-        selectedProjectId={selectedProjectId}
-        onClose={() => setIsCreateVersionModalOpen(false)}
-        onSuccess={handleVersionCreated}
-      />
-
-      <ImportExportModal
-        open={isImportExportModalOpen}
-        onClose={() => setIsImportExportModalOpen(false)}
-        initialTab={importExportInitialTab}
-      />
       
-      {/* 右键菜单 */}
       {contextMenuProject && (
         <>
-          {/* 点击其他地方关闭右键菜单 */}
           <div
             style={{
               position: 'fixed',
@@ -881,7 +853,6 @@ const ProjectList: React.FC = () => {
             }}
             onClick={closeContextMenu}
           />
-          {/* 菜单内容 */}
           <div
             style={{
               position: 'fixed',
@@ -918,8 +889,11 @@ const ProjectList: React.FC = () => {
             type="primary" 
             onClick={() => {
               if (previewProjectId) {
-                selectProject(previewProjectId)
-                setIsPreviewModalOpen(false)
+                const project = projects.find(p => p.id === previewProjectId)
+                if (project) {
+                  openProjectTab(project)
+                  setIsPreviewModalOpen(false)
+                }
               }
             }}
           >
@@ -1049,6 +1023,54 @@ const ProjectList: React.FC = () => {
             </div>
           )
         })()}
+      </Modal>
+
+      <Modal
+        title={
+          <Space>
+            <KeyOutlined />
+            <span>加入项目</span>
+          </Space>
+        }
+        open={isJoinProjectModalOpen}
+        onCancel={() => {
+          setIsJoinProjectModalOpen(false)
+          setInviteCodeInput('')
+        }}
+        footer={[
+          <Button 
+            key="cancel" 
+            onClick={() => {
+              setIsJoinProjectModalOpen(false)
+              setInviteCodeInput('')
+            }}
+          >
+            取消
+          </Button>,
+          <Button 
+            key="join" 
+            type="primary" 
+            onClick={handleJoinProject}
+            loading={joiningProject}
+            disabled={!inviteCodeInput.trim()}
+          >
+            加入
+          </Button>
+        ]}
+        width={500}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <p style={{ color: '#8c8c8c', marginBottom: 16 }}>请输入邀请码加入项目。邀请码格式：XXXX-XXXX-XXXX-XXXX</p>
+          <Input
+            placeholder="请输入邀请码（如：8K2F-9Q4X-Z3N5-7A6C）"
+            value={inviteCodeInput}
+            onChange={(e) => setInviteCodeInput(e.target.value.toUpperCase())}
+            prefix={<KeyOutlined />}
+            size="large"
+            style={{ textAlign: 'center', fontFamily: 'monospace', fontSize: '18px', letterSpacing: '2px' }}
+            maxLength={23}
+          />
+        </div>
       </Modal>
     </div>
   )

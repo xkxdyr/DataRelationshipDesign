@@ -8,5 +8,6 @@ router.get('/versions/:id', versionController.getById)
 router.post('/projects/:projectId/versions', versionController.create)
 router.put('/versions/:id', versionController.update)
 router.delete('/versions/:id', versionController.delete)
+router.get('/versions/compare/:versionId1/:versionId2', versionController.compare)
 
 export default router

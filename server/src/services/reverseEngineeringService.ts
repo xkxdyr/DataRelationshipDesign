@@ -68,19 +68,14 @@ export const reverseEngineeringService = {
           })
           
           await connection.connect()
-          console.log('Connected to database successfully')
           
           const tables = await this.getMySQLTables(connection, data.databaseName, data.tables)
-          console.log('Tables found:', tables)
           const tableInfos: TableInfo[] = []
           
           for (const table of tables) {
             const columns = await this.getMySQLColumns(connection, data.databaseName, table)
-            console.log(`Table ${table} columns:`, columns)
             const indexes = await this.getMySQLIndexes(connection, data.databaseName, table)
-            console.log(`Table ${table} indexes:`, indexes)
             const foreignKeys = await this.getMySQLForeignKeys(connection, data.databaseName, table)
-            console.log(`Table ${table} foreign keys:`, foreignKeys)
             
             const tableComment = await this.getMySQLTableComment(connection, data.databaseName, table)
             

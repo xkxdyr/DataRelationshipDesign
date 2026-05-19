@@ -207,7 +207,6 @@ export const DatabaseSyncModal: React.FC<DatabaseSyncModalProps> = ({ visible, o
     setSyncResult(null)
     setSelectedTables([])
     setSelectedConnection(null)
-    form.resetFields()
     onClose()
   }
 

@@ -24,15 +24,17 @@
 
 | 类别 | 技术选择 | 说明 |
 |------|----------|------|
-| **前端框架** | React 18 + TypeScript | 更好的类型安全和开发体验 |
-| **图形引擎** | React Flow | 专业的关系图可视化库 |
-| **状态管理** | Zustand | 轻量级、高效的状态管理 |
+| **前端框架** | React 18 + TypeScript + Vite | 现代化前端开发体验 |
+| **图形引擎** | React Flow 11 | 专业的关系图可视化库 |
+| **状态管理** | Zustand 4 | 轻量级、高效的状态管理 |
 | **UI 组件** | Ant Design 5 | 企业级 UI 组件库 |
-| **拖拽框架** | dnd-kit | 现代拖拽功能库 |
-| **后端框架** | Node.js + Express | 简洁高效的 API 服务 |
-| **数据库** | SQLite (本地) / PostgreSQL | 数据持久化存储 |
+| **拖拽框架** | @dnd-kit/core | 现代拖拽功能库 |
+| **本地存储** | Dexie.js (IndexedDB) | 浏览器端数据持久化 |
+| **后端框架** | Node.js + Express + ts-node | 简洁高效的 API 服务 |
+| **数据库** | SQLite | 开发数据持久化存储 |
 | **ORM** | Prisma | 现代 ORM 解决方案 |
-| **API 风格** | RESTful + GraphQL | 灵活的 API 设计 |
+| **API 风格** | RESTful | 简洁的 API 设计 |
+| **实时协作** | WebSocket + Yjs (CRDT) | 分布式实时同步 |
 
 ### 2.2 系统架构图
 
@@ -46,27 +48,28 @@
 │  └────┬────┘  └────┬────┘  └────┬────┘  └────┬────┘        │
 │       └────────────┴────────────┴────────────┘              │
 │                         │                                   │
-│                    ┌────┴────┐                              │
-│                    │  Store  │ (Zustand)                     │
-│                    └────┬────┘                              │
+│                    ┌────┴────┐        ┌─────────┐          │
+│                    │  Store  │        │ IndexedDB│          │
+│                    │(Zustand)│        │ (Dexie) │          │
+│                    └────┬────┘        └─────────┘          │
 └─────────────────────────┼───────────────────────────────────┘
-                          │ HTTP/WebSocket
+                          │ HTTP/WebSocket + Yjs (CRDT)
 ┌─────────────────────────┼───────────────────────────────────┐
-│                    Server (Node.js)                         │
+│                    Server (Node.js + Express)              │
 ├─────────────────────────┼───────────────────────────────────┤
 │                         │                                   │
 │  ┌──────────┐  ┌────────┴────┐  ┌──────────┐               │
 │  │  Auth    │  │    API     │  │  DDL     │               │
-│  │  Service │  │   Gateway  │  │ Generator│               │
+│  │  Service │  │   Router   │  │ Generator│               │
 │  └──────────┘  └─────────────┘  └──────────┘               │
 │                         │                                   │
 │  ┌──────────┐  ┌────────┴────┐  ┌──────────┐               │
-│  │ Project  │  │   Version  │  │   Sync   │               │
+│  │ Project  │  │   Version  │  │   User   │               │
 │  │  Service │  │   Service  │  │  Service │               │
 │  └──────────┘  └─────────────┘  └──────────┘               │
 │                         │                                   │
 │                    ┌────┴────┐                              │
-│                    │ Database│ (PostgreSQL)                 │
+│                    │ Database│ (SQLite + Prisma)            │
 │                    └─────────┘                              │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -78,35 +81,56 @@
 ### 3.1 模块结构
 
 ```
-src/
-├── modules/
-│   ├── canvas/           # 画布编辑模块
-│   │   ├── components/  # 画布组件
-│   │   ├── hooks/       # 画布相关 hooks
-│   │   └── stores/      # 画布状态管理
-│   ├── table/           # 表设计模块
-│   │   ├── components/  # 表组件
-│   │   ├── hooks/       # 表操作逻辑
-│   │   └── stores/      # 表状态管理
-│   ├── relationship/    # 关系设计模块
-│   │   ├── components/  # 关系组件
-│   │   ├── hooks/       # 关系逻辑
-│   │   └── stores/      # 关系状态管理
-│   ├── ddl/             # DDL 生成模块
-│   │   ├── generator/   # 各数据库 DDL 生成器
-│   │   └── parser/      # SQL 解析器
-│   ├── collaboration/  # 协作模块
-│   │   ├── hooks/       # 协作相关 hooks
-│   │   └── services/    # 实时协作服务
-│   └── settings/        # 设置模块
-│
-├── components/          # 公共组件
-├── hooks/               # 公共 hooks
-├── services/            # API 服务
-├── stores/              # 全局状态
+client/src/
+├── components/          # UI 组件
+│   ├── Canvas.tsx       # 画布编辑组件
+│   ├── TableNode.tsx    # 表节点组件
+│   ├── TableEditor.tsx  # 表编辑器
+│   ├── ProjectList.tsx  # 项目列表
+│   ├── SettingsTab.tsx  # 设置标签页
+│   ├── VersionManagementTab.tsx  # 版本管理
+│   ├── ProjectMemberTab.tsx      # 项目成员管理
+│   ├── TeamManagementTab.tsx     # 团队管理
+│   ├── ImportExportTab.tsx       # 导入导出
+│   ├── LoginPage.tsx   # 登录页面
+│   └── ...
+├── ddl/                 # DDL 生成器
+│   ├── MySQLGenerator.ts
+│   ├── PostgreSQLGenerator.ts
+│   ├── SQLiteGenerator.ts
+│   ├── SQLServerGenerator.ts
+│   ├── OracleGenerator.ts
+│   └── DDLGeneratorFactory.ts
+├── hooks/               # 自定义 Hooks
+│   └── useCRDT.ts       # CRDT 协作 Hook
+├── providers/           # Context Providers
+│   └── CollabProvider.tsx  # 协作上下文
+├── services/            # 服务层
+│   ├── api.ts           # API 服务
+│   ├── localStorageService.ts  # 本地存储
+│   ├── collabService.ts # 协作服务
+│   ├── importService.ts # 导入服务
+│   └── exportService.ts # 导出服务
+├── stores/              # Zustand 状态管理
+│   └── appStore.ts      # 全局状态
+├── theme/               # 主题配置
+│   ├── ThemeProvider.tsx
+│   ├── themes.ts
+│   └── useTheme.ts
 ├── types/               # TypeScript 类型定义
-├── utils/               # 工具函数
-└── constants/           # 常量定义
+│   └── index.ts
+├── App.tsx              # 应用入口组件
+└── main.tsx             # 应用入口
+
+server/src/
+├── controllers/         # API 控制器
+├── services/            # 业务逻辑层
+├── routes/              # API 路由
+├── types/               # DTO 类型定义
+├── generators/          # DDL 生成器
+├── middleware/          # 中间件
+├── ws/                  # WebSocket 服务
+└── server.ts            # 服务器入口
 ```
 
 ### 3.2 核心模块说明
@@ -285,8 +309,8 @@ interface Index {
 
 ```prisma
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
 generator client {
@@ -294,26 +318,32 @@ generator client {
 }
 
 model Project {
-  id           String   @id @default(uuid())
-  name         String
-  description  String?
-  databaseType DatabaseType
-  status       ProjectStatus @default(DRAFT)
-  version      Int      @default(1)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  createdBy    String
+  id                   String   @id @default(cuid())
+  name                 String
+  description          String?
+  databaseType         String   @default("MYSQL")
+  status               String   @default("DRAFT")
+  version              Int      @default(1)
+  collaborationEnabled Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  createdBy            String   @default("system")
   
-  tables        Table[]
-  relationships Relationship[]
-  versions      Version[]
+  tables         Table[]
+  relationships  Relationship[]
+  versions       Version[]
+  teamProjects   TeamProject[]
+  projectMembers ProjectMember[]
+  invites        Invite[]
+  branches       Branch[]
+  gitConfigs     GitConfig[]
   
   @@index([createdBy])
   @@index([status])
 }
 
 model Table {
-  id        String   @id @default(uuid())
+  id        String   @id @default(cuid())
   projectId String
   name      String
   comment   String?
@@ -330,10 +360,10 @@ model Table {
 }
 
 model Column {
-  id           String   @id @default(uuid())
+  id           String   @id @default(cuid())
   tableId      String
   name         String
-  dataType     String
+  dataType     String   @default("VARCHAR")
   length       Int?
   precision    Int?
   scale        Int?
@@ -353,16 +383,16 @@ model Column {
 }
 
 model Relationship {
-  id              String   @id @default(uuid())
+  id              String   @id @default(cuid())
   projectId       String
   name            String?
   sourceTableId   String
   sourceColumnId  String
   targetTableId   String
   targetColumnId  String
-  relationshipType RelationshipType
-  onUpdate        ReferentialAction @default(CASCADE)
-  onDelete        ReferentialAction @default(CASCADE)
+  relationshipType String   @default("ONE_TO_MANY")
+  onUpdate        String   @default("CASCADE")
+  onDelete        String   @default("CASCADE")
   createdAt       DateTime @default(now())
   
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -373,12 +403,12 @@ model Relationship {
 }
 
 model Index {
-  id      String   @id @default(uuid())
+  id      String   @id @default(cuid())
   tableId String
   name    String
-  columns String[] // JSON array of column IDs
+  columns String   @default("[]")
   unique  Boolean  @default(false)
-  type    IndexType @default(BTREE)
+  type    String   @default("BTREE")
   
   table Table @relation(fields: [tableId], references: [id], onDelete: Cascade)
   
@@ -386,51 +416,221 @@ model Index {
 }
 
 model Version {
-  id        String   @id @default(uuid())
+  id        String   @id @default(cuid())
   projectId String
+  branchId  String?
   version   Int
   name      String
   comment   String?
-  data      Json     // 完整的项目快照
+  data      String   @default("{}")
   createdAt DateTime @default(now())
   
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  branch  Branch?  @relation(fields: [branchId], references: [id], onDelete: SetNull)
   
   @@unique([projectId, version])
 }
 
-enum DatabaseType {
-  MYSQL
-  POSTGRESQL
-  SQLITE
-  SQLSERVER
-  ORACLE
+model Branch {
+  id          String   @id @default(cuid())
+  projectId   String
+  name        String
+  description String?
+  isDefault   Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  parentId    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  versions Version[]
+  parent   Branch?   @relation("BranchParent", fields: [parentId], references: [id], onDelete: SetNull)
+  children Branch[]  @relation("BranchParent")
+  
+  @@index([projectId])
+  @@index([isActive])
 }
 
-enum ProjectStatus {
-  DRAFT
-  PUBLISHED
-  ARCHIVED
+model GitConfig {
+  id             String   @id @default(cuid())
+  projectId      String   @unique
+  enabled        Boolean  @default(false)
+  repositoryUrl  String?
+  branch         String   @default("main")
+  username       String?
+  token          String?
+  sshKeyPath     String?
+  autoCommit     Boolean  @default(false)
+  autoPush       Boolean  @default(false)
+  commitMessageTemplate String  @default("Update: {{version}}")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
-enum RelationshipType {
-  ONE_TO_ONE
-  ONE_TO_MANY
-  MANY_TO_MANY
+model ConnectionConfig {
+  id            String   @id @default(cuid())
+  name          String
+  databaseType  String   @default("MYSQL")
+  host          String   @default("localhost")
+  port          Int      @default(3306)
+  databaseName  String
+  username      String
+  password      String
+  sslEnabled    Boolean  @default(false)
+  description   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@index([name])
 }
 
-enum ReferentialAction {
-  CASCADE
-  SET_NULL
-  RESTRICT
-  NO_ACTION
-  SET_DEFAULT
+model User {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  email     String   @unique
+  password  String
+  displayName String?
+  avatar    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  teamMembers     TeamMember[]
+  ownedTeams      Team[] @relation("TeamOwner")
+  projectMembers  ProjectMember[]
+  sessions        UserSession[]
+  settings        UserSettings?
+  
+  @@index([username])
+  @@index([email])
 }
 
-enum IndexType {
-  BTREE
-  HASH
-  FULLTEXT
+model Team {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  avatar      String?
+  ownerId     String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  owner       User         @relation("TeamOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members     TeamMember[]
+  projects    TeamProject[]
+  
+  @@index([ownerId])
+}
+
+model TeamMember {
+  id        String   @id @default(cuid())
+  teamId    String
+  userId    String
+  role      String   @default("member")
+  joinedAt  DateTime @default(now())
+  
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([teamId, userId])
+  @@index([teamId])
+  @@index([userId])
+}
+
+model TeamProject {
+  id        String   @id @default(cuid())
+  teamId    String
+  projectId String
+  createdAt DateTime @default(now())
+  
+  team      Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  @@unique([teamId, projectId])
+  @@index([teamId])
+  @@index([projectId])
+}
+
+model OperationRecord {
+  id           String   @id @default(cuid())
+  projectId    String
+  userId       String
+  userName     String
+  operationType String
+  targetType   String
+  targetId     String
+  targetName   String
+  changes      String?
+  timestamp    DateTime @default(now())
+  
+  @@index([projectId])
+  @@index([userId])
+  @@index([timestamp])
+  @@index([operationType])
+  @@index([targetType])
+}
+
+model ProjectMember {
+  id        String   @id @default(cuid())
+  projectId String
+  userId    String
+  role      String   @default("viewer")
+  joinedAt  DateTime @default(now())
+  
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([userId])
+}
+
+model UserSession {
+  id           String   @id @default(cuid())
+  userId       String
+  token        String   @unique
+  deviceName   String?
+  ipAddress    String?
+  userAgent    String?
+  loginTime    DateTime @default(now())
+  lastActiveAt DateTime @default(now())
+  isActive     Boolean  @default(true)
+  
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([token])
+  @@index([isActive])
+  @@index([loginTime])
+}
+
+model UserSettings {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  maxActiveSessions  Int      @default(1)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Invite {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  projectId   String
+  role        String   @default("editor")
+  maxUses     Int      @default(1)
+  usedCount   Int      @default(0)
+  createdBy   String
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime
+  isActive    Boolean  @default(true)
+  
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  @@index([code])
+  @@index([projectId])
+  @@index([expiresAt])
 }
 ```
 
@@ -699,30 +899,36 @@ databases/
 
 ## 11. 开发计划
 
-### Phase 1: 基础功能 (MVP)
-- [ ] 项目管理（CRUD）
-- [ ] 表设计（创建、编辑、删除）
-- [ ] 字段设计（增删改查）
-- [ ] 基础画布展示
-- [ ] MySQL DDL 生成
+### Phase 1: 基础功能 (MVP) ✅ 已完成
+- [x] 项目管理（CRUD）
+- [x] 表设计（创建、编辑、删除）
+- [x] 字段设计（增删改查）
+- [x] 基础画布展示
+- [x] MySQL DDL 生成
+- [x] PostgreSQL DDL 生成
+- [x] SQLite DDL 生成
+- [x] SQL Server DDL 生成
+- [x] Oracle DDL 生成
 
-### Phase 2: 关系设计
-- [ ] 可视化关系创建
-- [ ] 关系线展示
-- [ ] 外键关系管理
-- [ ] 多数据库 DDL 生成
+### Phase 2: 关系设计 ✅ 已完成
+- [x] 可视化关系创建
+- [x] 关系线展示
+- [x] 外键关系管理
+- [x] 多数据库 DDL 生成
 
 ### Phase 3: 高级功能
-- [ ] 索引设计
-- [ ] 版本管理
-- [ ] 逆向工程
-- [ ] 增量 DDL 生成
+- [x] 索引设计
+- [x] 版本管理
+- [x] 逆向工程（数据库连接与导入）
+- [x] 增量 DDL 生成
+- [x] 分支管理功能
+- [x] Git 配置集成
 
 ### Phase 4: 协作功能
-- [ ] 用户认证
-- [ ] 团队协作
-- [ ] 权限管理
-- [ ] 实时同步
+- [x] 用户认证
+- [x] 团队协作（基础版）
+- [x] 权限管理（owner/editor/viewer）
+- [x] 实时同步（Yjs + CRDT）
 
 ---
 
@@ -730,13 +936,16 @@ databases/
 
 | 技术 | 理由 |
 |------|------|
-| **React + TypeScript** | 成熟稳定，类型安全，生态丰富 |
-| **React Flow** | 专为关系图设计，支持自定义节点和边 |
-| **Zustand** | 比 Redux 轻量，API 简洁，TypeScript 支持好 |
-| **Ant Design** | 组件丰富，企业级体验 |
-| **Node.js + Express** | 高并发，适合 I/O 密集型操作 |
+| **React 18 + TypeScript + Vite** | 成熟稳定，类型安全，构建快，生态丰富 |
+| **React Flow 11** | 专为关系图设计，支持自定义节点和边 |
+| **Zustand 4** | 比 Redux 轻量，API 简洁，TypeScript 支持好 |
+| **Ant Design 5** | 组件丰富，企业级体验 |
+| **Node.js + Express + ts-node** | 高并发，适合 I/O 密集型操作 |
 | **Prisma** | 类型安全的 ORM，迁移方便 |
-| **PostgreSQL** | 支持 JSON，高可用，成熟稳定 |
+| **SQLite** | 轻量级，零配置，适合开发和单用户场景 |
+| **Dexie.js (IndexedDB)** | 浏览器端本地存储，支持离线模式 |
+| **Yjs (CRDT)** | 分布式实时同步，支持离线编辑和自动合并 |
+| **WebSocket** | 实时协作通信 |
 
 ---
 

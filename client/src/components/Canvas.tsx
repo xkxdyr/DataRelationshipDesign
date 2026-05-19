@@ -13,6 +13,7 @@ import ReactFlow, {
 import 'reactflow/dist/style.css'
 import { Table, Relationship } from '../types'
 import TableNode from './TableNode'
+import { SmartEdge } from './SmartEdge'
 import RelationshipEditor from './RelationshipEditor'
 import { useAppStore } from '../stores/appStore'
 import { Button, Space, Dropdown, message, Modal, Form, Card, Radio, Slider, Select, Input } from 'antd'
@@ -46,6 +47,10 @@ const defaultLayoutOptions: AutoLayoutOptions = {
 
 const nodeTypes = {
   tableNode: TableNode
+}
+
+const edgeTypes = {
+  smart: SmartEdge
 }
 
 const CanvasContent: React.FC = () => {
@@ -101,40 +106,6 @@ const CanvasContent: React.FC = () => {
     }
   }, [selectedTableIds])
 
-  const handleBatchDelete = () => {
-    if (selectedTableIds.length === 0) return
-    Modal.confirm({
-      title: `确认删除`,
-      content: `您确定要删除选中的 ${selectedTableIds.length} 张表吗？此操作不可撤销。`,
-      okText: '确定删除',
-      cancelText: '取消',
-      okType: 'danger',
-      onOk: async () => {
-        for (const id of selectedTableIds) {
-          await deleteTable(id)
-        }
-        clearSelectedTables()
-        message.success(`成功删除 ${selectedTableIds.length} 张表`)
-      }
-    })
-  }
-
-  // 没有选择项目时渲染空内容
-  if (!currentProject) {
-    return (
-      <>
-        <div style={{ display: 'none' }}>
-          <Form form={autoLayoutForm} layout="vertical">
-            <Form.Item name="layoutType"><Input /></Form.Item>
-            <Form.Item name="paddingX"><Input /></Form.Item>
-            <Form.Item name="paddingY"><Input /></Form.Item>
-            <Form.Item name="maxColumns"><Input /></Form.Item>
-          </Form>
-        </div>
-      </>
-    )
-  }
-
   const initialNodes: Node[] = useMemo(() => {
     if (!tables || !Array.isArray(tables)) return []
     return tables.map(table => ({
@@ -167,7 +138,7 @@ const CanvasContent: React.FC = () => {
           id: rel.id,
           source: rel.sourceTableId,
           target: rel.targetTableId,
-          animated: true,
+          animated: edgeStyle !== 'smart',
           label: showEdgeLabels ? label : undefined,
           labelStyle: {
             fontSize: 11,
@@ -177,7 +148,7 @@ const CanvasContent: React.FC = () => {
             stroke: 'var(--theme-primary)',
             strokeWidth: 2
           },
-          type: edgeStyle
+          type: edgeStyle === 'smart' ? 'smart' : edgeStyle
         }
       }
       return null
@@ -268,9 +239,7 @@ const CanvasContent: React.FC = () => {
   }, [selectTable, clearSelectedTables, marqueeActive])
 
   const onSelectionChange = useCallback((params: { nodes: any[]; edges: any[] }) => {
-    console.log('[DEBUG] onSelectionChange triggered, nodes:', params.nodes.length)
     const selectedIds = params.nodes.map((node: any) => node.id)
-    console.log('[DEBUG] Selected IDs:', selectedIds)
     if (selectedIds.length > 0) {
       selectMultipleTables(selectedIds)
     } else {
@@ -350,6 +319,40 @@ const CanvasContent: React.FC = () => {
       setCanvasZoom(Math.round(clampedZoom * 100) / 100)
     }
   }, [canvasZoom, setCanvasZoom])
+
+  const handleBatchDelete = () => {
+    if (selectedTableIds.length === 0) return
+    Modal.confirm({
+      title: `确认删除`,
+      content: `您确定要删除选中的 ${selectedTableIds.length} 张表吗？此操作不可撤销。`,
+      okText: '确定删除',
+      cancelText: '取消',
+      okType: 'danger',
+      onOk: async () => {
+        for (const id of selectedTableIds) {
+          await deleteTable(id)
+        }
+        clearSelectedTables()
+        message.success(`成功删除 ${selectedTableIds.length} 张表`)
+      }
+    })
+  }
+
+  // 没有选择项目时渲染空内容
+  if (!currentProject) {
+    return (
+      <>
+        <div style={{ display: 'none' }}>
+          <Form form={autoLayoutForm} layout="vertical">
+            <Form.Item name="layoutType"><Input /></Form.Item>
+            <Form.Item name="paddingX"><Input /></Form.Item>
+            <Form.Item name="paddingY"><Input /></Form.Item>
+            <Form.Item name="maxColumns"><Input /></Form.Item>
+          </Form>
+        </div>
+      </>
+    )
+  }
 
   const autoLayoutTables = (tablesToLayout: any[], options: Partial<AutoLayoutOptions> = {}): any[] => {
     if (!tablesToLayout || tablesToLayout.length === 0) return tablesToLayout
@@ -811,6 +814,7 @@ const CanvasContent: React.FC = () => {
           onMoveEnd={onMoveEnd}
           onSelectionChange={onSelectionChange}
           nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
           fitView
           style={{ background: 'var(--theme-background)', width: '100%', height: '100%' }}
           nodesDraggable={!isLocked}
@@ -847,10 +851,7 @@ const CanvasContent: React.FC = () => {
                 borderRadius: 6,
                 padding: 0,
                 margin: 0,
-                color: isLocked ? '#ccc' : '#666',
-                '&:hover': {
-                  backgroundColor: '#f5f5f5'
-                }
+                color: isLocked ? '#ccc' : '#666'
               }}
               title="放大"
             />
@@ -865,10 +866,7 @@ const CanvasContent: React.FC = () => {
                 borderRadius: 6,
                 padding: 0,
                 margin: 0,
-                color: isLocked ? '#ccc' : '#666',
-                '&:hover': {
-                  backgroundColor: '#f5f5f5'
-                }
+                color: isLocked ? '#ccc' : '#666'
               }}
               title="缩小"
             />
@@ -884,10 +882,7 @@ const CanvasContent: React.FC = () => {
                 borderRadius: 6,
                 padding: 0,
                 margin: 0,
-                color: isLocked ? '#ccc' : '#666',
-                '&:hover': {
-                  backgroundColor: '#f5f5f5'
-                }
+                color: isLocked ? '#ccc' : '#666'
               }}
               title="重置缩放"
             />
@@ -902,10 +897,7 @@ const CanvasContent: React.FC = () => {
                 borderRadius: 6,
                 padding: 0,
                 margin: 0,
-                color: isLocked ? '#ccc' : '#666',
-                '&:hover': {
-                  backgroundColor: '#f5f5f5'
-                }
+                color: isLocked ? '#ccc' : '#666'
               }}
               title="适应视图"
             />
@@ -922,10 +914,7 @@ const CanvasContent: React.FC = () => {
                 borderRadius: 6,
                 padding: 0,
                 margin: 0,
-                color: isLocked ? '#ccc' : '#666',
-                '&:hover': {
-                  backgroundColor: '#f5f5f5'
-                }
+                color: isLocked ? '#ccc' : '#666'
               }}
               title="居中"
             />
@@ -941,10 +930,7 @@ const CanvasContent: React.FC = () => {
                 padding: 0,
                 margin: 0,
                 color: isLocked ? '#1890ff' : '#666',
-                backgroundColor: isLocked ? '#e6f7ff' : 'transparent',
-                '&:hover': {
-                  backgroundColor: isLocked ? '#bae7ff' : '#f5f5f5'
-                }
+                backgroundColor: isLocked ? '#e6f7ff' : 'transparent'
               }}
               title={isLocked ? '解锁' : '锁定'}
             />

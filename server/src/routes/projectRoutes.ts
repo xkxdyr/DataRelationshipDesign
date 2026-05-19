@@ -9,5 +9,8 @@ router.post('/', projectController.create)
 router.put('/:id', projectController.update)
 router.delete('/:id', projectController.delete)
 router.post('/:id/duplicate', projectController.duplicate)
+router.post('/:projectId/collaboration', projectController.toggleCollaboration)
+router.get('/:projectId/collaboration', projectController.getCollaborationStatus)
+router.post('/:projectId/convert-to-team', projectController.convertToTeamProject)
 
 export default router

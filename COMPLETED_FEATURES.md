@@ -235,6 +235,113 @@
 | 224 | ModelManager循环引用警告修复 | 前端 Bug修复 | 2026-05-09 | Assistant | 修复ModelManager切换厂商时循环引用警告：1.移除Modal内的隐藏Form；2.在表单操作中使用JSON深拷贝避免传递带循环引用的对象 |
 | 225 | LLM生成表应用到画布修复 | 前端 Bug修复 | 2026-05-09 | Assistant | 修复AI助手生成表后点击"应用到画布"无响应问题：1.在App.tsx中添加handleApplyLLMTables回调函数；2.实现表结构生成和列添加逻辑；3.将回调函数传递给LLMModal组件；4.完善类型导入和依赖项 |
 | 226 | LLM生成表缓存功能 | 前端 功能 | 2026-05-09 | Assistant | 添加LLM生成表缓存功能：1.自动保存生成的表结构到本地存储；2.支持历史记录列表展示；3.支持一键复用历史记录；4.支持删除单条记录；5.最多保存10条记录，自动淘汰最早的记录 |
+| 227 | 项目启动流程验证 | 项目运维 | 2026-05-11 | Assistant | 完整的项目启动流程验证：1.检查端口占用（3001后端、3002前端）；2.启动后端服务（ts-node）；3.启动前端服务（vite）；4.API健康检查通过；5.前端页面可访问；6.零报错、零崩溃、项目完整正常运行 |
+| 228 | 协作服务后端架构 | 后端 WebSocket | 2026-05-11 | Assistant | 实现协作功能后端架构：1.安装 ws、bufferutil、utf-8-validate、msgpackr、yjs 依赖；2.创建 protocol.ts 定义消息协议和类型；3.创建 room.ts 实现协作房间管理；4.创建 server.ts 实现 WebSocket 服务；5.集成到 Express 服务 |
+| 229 | 协作服务前端架构 | 前端 WebSocket | 2026-05-11 | Assistant | 实现协作功能前端架构：1.安装 msgpackr、yjs 依赖；2.创建 collabService.ts 实现 WebSocket 连接管理；3.创建 CollabProvider.tsx 提供协作上下文；4.创建 CollabUsers.tsx 显示在线用户列表；5.集成到 App.tsx 主应用 |
+| 230 | 更新日志功能完善 | 前端 UI | 2026-05-11 | Assistant | 完善更新日志功能：1.在设置面板添加更新日志入口；2.使用 Timeline 组件展示更新记录；3.支持版本号、日期、功能描述和详细说明；4.在 App.tsx 中添加协作功能的更新日志记录；5.在项目根目录创建 logs/update.log 文件 |
+| 231 | CRDT后端文档管理器 | 后端 CRDT | 2026-05-11 | Assistant | 实现后端CRDT文档管理器：1.创建 server/src/ws/crdt.ts；2.CRDTDocumentManager 类管理 Yjs 文档生命周期；3.支持表、列、关系、索引的 CRUD 操作；4.文档序列化/反序列化支持；5.文档状态差异计算和更新应用；6.CRDTDocumentFactory 单例工厂管理多项目文档 |
+| 232 | CRDT前端状态Hook | 前端 CRDT | 2026-05-11 | Assistant | 实现前端CRDT状态Hook：1.创建 client/src/hooks/useCRDT.ts；2.useCRDT Hook 管理前端 Yjs 文档状态；3.支持表、列、关系、索引的 CRUD 操作；4.远程更新应用和本地更新广播；5.与后端 WebSocket 服务集成；6.TypeScript 零错误 |
+| 233 | CRDT房间管理集成 | 后端 WebSocket | 2026-05-11 | Assistant | 集成 CRDT 到协作房间管理：1.更新 server/src/ws/room.ts；2.CollabRoom 类添加 CRDT 文档管理器引用；3.新增二进制消息广播方法 broadcastBinary；4.新增指定用户消息发送方法 sendToUser/sendBinaryToUser；5.房间为空时自动清理 CRDT 文档；6.TypeScript 零错误 |
+| 234 | CRDT WebSocket服务器集成 | 后端 WebSocket | 2026-05-11 | Assistant | 集成 CRDT 到 WebSocket 服务器：1.更新 server/src/ws/server.ts；2.新增二进制消息处理方法 handleBinaryMessage；3.支持 CRDT 同步请求/响应；4.支持 CRDT 更新广播；5.msgpackr 二进制序列化集成；6.TypeScript 零错误 |
+| 235 | CRDT协作服务二进制支持 | 前端 WebSocket | 2026-05-11 | Assistant | 更新前端协作服务支持CRDT二进制消息：1.更新 client/src/services/collabService.ts；2.新增二进制消息处理器；3.新增 sendBinary 方法发送二进制消息；4.支持 ArrayBuffer/Blob 消息处理；5.msgpackr 序列化/反序列化集成；6.TypeScript 零错误 |
+| 236 | CRDT协作上下文集成 | 前端 CRDT | 2026-05-11 | Assistant | 集成 useCRDT 到协作上下文：1.更新 client/src/providers/CollabProvider.tsx；2.集成 useCRDT 到协作上下文；3.提供完整的协作数据操作接口；4.支持表、列、关系、索引的分布式操作；5.TypeScript 零错误 |
+| 237 | Phase 3.1 二进制消息协议 | 后端 消息协议 | 2026-05-11 | Assistant | 实现 MessagePack 序列化/反序列化工具：1.serializeMessage/deserializeMessage 函数；2.compressMessageSync 同步压缩；3.消息验证和大小计算工具；4.批量消息处理支持 |
+| 238 | Phase 3.2 消息压缩 | 后端 消息协议 | 2026-05-11 | Assistant | 实现 gzip 压缩大消息：1.压缩阈值 1KB；2.gzip magic number 标识压缩数据；3.更新 server.ts 消息处理逻辑；4.更新 collabService.ts 压缩/解压缩支持；5.前端添加 pako 依赖 |
+| 239 | Phase 3.3 心跳与重连 | 后端 消息协议 | 2026-05-11 | Assistant | 实现智能心跳与重连：1.心跳间隔 30 秒；2.心跳超时 10 秒；3.指数退避重连 1s-16s 最大 30 秒；4.连接状态管理（DISCONNECTED/CONNECTING/CONNECTED/RECONNECTING）；5.WebSocket 原生 ping/pong |
+| 240 | WebSocket连接错误修复 | 前端 WebSocket | 2026-05-11 | Assistant | 修复 WebSocket 连接错误：1.修复浏览器不支持 WebSocket.ping() 方法的问题；2.使用自定义 PING/PONG 消息替代原生 ping/pong；3.添加 pako 依赖和类型声明；4.修复压缩/解压缩逻辑，正确处理 gzip magic number；5.更新前端心跳机制，确保跨浏览器兼容性；6.更新后端消息处理，支持自定义 PING/PONG 消息；7.修复重连错误日志问题 |
+| 241 | 前置条件分析与规划 | 协作前置条件 | 2026-05-11 | Assistant | 分析用户系统和团队系统现状：1.确认用户系统缺失（无User模型、无认证API、无登录界面）；2.确认团队系统不完整（仅文件存储、无数据库模型、无项目关联）；3.制定完整的前置功能完成计划；4.记录缺失的功能和闭环节点 |
+| 242 | User数据模型设计 | 数据模型 | 2026-05-11 | Assistant | 在Prisma Schema中添加User模型：1.User模型包含id、username、email、passwordHash、displayName、avatar等字段；2.建立User与Team的关联关系（owner关系）；3.建立User与TeamMember的关联关系；4.创建teams关联字段；5.TypeScript类型生成准备 |
+| 243 | Team数据模型设计 | 数据模型 | 2026-05-11 | Assistant | 在Prisma Schema中添加Team模型：1.Team模型包含id、name、description、avatar、ownerId等字段；2.建立owner关联到User；3.建立members关联到TeamMember；4.建立projects关联到TeamProject；5.Timestamp字段自动管理 |
+| 244 | TeamMember数据模型设计 | 数据模型 | 2026-05-11 | Assistant | 在Prisma Schema中添加TeamMember模型：1.TeamMember模型包含id、teamId、userId、role、joinedAt等字段；2.建立team关联到Team；3.建立user关联到User；4.唯一索引确保用户在团队中唯一性；5.role字段支持owner/admin/member |
+| 245 | TeamProject数据模型设计 | 数据模型 | 2026-05-11 | Assistant | 在Prisma Schema中添加TeamProject模型：1.TeamProject模型包含id、teamId、projectId、createdAt等字段；2.建立team关联到Team；3.建立project关联到Project；4.唯一索引确保项目在团队中唯一性；5.扩展Project模型添加teamProjects关联 |
+| 246 | Prisma Schema关系修复 | 数据模型 | 2026-05-11 | Assistant | 修复Prisma Schema双向关系：1.在User模型中明确ownedTeams关联名称；2.在Project模型中添加teamProjects反向关联；3.确保所有关系字段完整且一致；4.通过Prisma Schema验证检查 |
+| 247 | TypeScript类型安全修复 | 后端开发 | 2026-05-11 | Assistant | 修复WebSocket服务器TypeScript错误：1.修复ws/server.ts第195行类型不匹配问题；2.使用String()强制转换确保类型安全；3.项目ID获取逻辑保持完整功能；4.TypeScript零错误编译通过 |
+| 248 | 后端依赖安装 | 后端部署 | 2026-05-11 | Assistant | 安装后端所需新增依赖：1.bcrypt用于密码加密；2.jsonwebtoken用于JWT认证；3.对应类型声明@types/bcrypt和@types/jsonwebtoken；4.依赖安装成功完成 |
+| 249 | 数据库同步 | 数据模型 | 2026-05-11 | Assistant | 执行Prisma数据库同步：1.运行prisma db push同步Schema变更；2.新增User、Team、TeamMember、TeamProject表；3.现有表结构保持完整；4.数据库同步成功完成 |
+| 250 | 用户服务层实现 | 后端 用户系统 | 2026-05-11 | Assistant | 实现用户服务层：1.userService.ts包含注册、登录、获取用户信息、验证Token等方法；2.bcrypt密码加密；3.jsonwebtoken JWT生成和验证；4.RegisterRequest/LoginRequest/AuthResponse接口定义；5.TypeScript零错误 |
+| 251 | 用户API控制器实现 | 后端 用户系统 | 2026-05-11 | Assistant | 实现用户API控制器：1.userController.ts包含register/login/getCurrentUser/getUserById/getUserByUsername方法；2.完整的请求参数验证；3.统一的API响应格式；4.TypeScript零错误 |
+| 252 | 用户API路由配置 | 后端 用户系统 | 2026-05-11 | Assistant | 配置用户API路由：1.userRoutes.ts包含POST /register、POST /login、GET /me、GET /:userId、GET /username/:username等路由；2.路由集成到server.ts主服务；3.完整的API接口文档；4.TypeScript零错误 |
+| 253 | 团队服务层完善 | 后端 团队系统 | 2026-05-11 | Assistant | 完善团队服务层：1.teamService.ts支持数据库模型操作（原文件存储迁移到Prisma）；2.完整的CRUD操作（创建/获取/更新/删除团队）；3.成员管理（添加/移除/角色更新）；4.项目关联管理（添加/移除项目）；5.TypeScript零错误 |
+| 254 | 团队API控制器完善 | 后端 团队系统 | 2026-05-11 | Assistant | 完善团队API控制器：1.teamController.ts支持完整的团队管理接口；2.与数据库模型无缝集成；3.成员和项目关联管理接口完整；4.TypeScript零错误 |
+| 255 | 团队API路由配置完善 | 后端 团队系统 | 2026-05-11 | Assistant | 完善团队API路由配置：1.teamRoutes.ts完整路由定义；2.与数据库模型集成；3.路由正确挂载到server.ts；4.TypeScript零错误 |
+| 256 | 用户认证前端API | 前端 用户系统 | 2026-05-11 | Assistant | 实现用户认证前端API：1.在api.ts中添加userApi模块；2.包含register/login/getCurrentUser/getUserById/getUserByUsername方法；3.完整的请求和响应类型定义；4.TypeScript零错误 |
+| 257 | 用户认证状态管理 | 前端 用户系统 | 2026-05-11 | Assistant | 实现用户认证状态管理：1.在appStore.ts中添加currentUser、authToken、authLoading状态；2.实现register/login/logout/checkAuth方法；3.Token本地存储和读取；4.登录状态持久化；5.TypeScript零错误 |
+| 258 | 登录注册模态框完善 | 前端 用户系统 | 2026-05-11 | Assistant | 完善登录注册模态框：1.AuthModal.tsx支持登录和注册两个Tab；2.完整的表单验证；3.与appStore集成；4.错误提示和成功提示；5.TypeScript零错误 |
+| 259 | Header用户状态显示 | 前端 UI | 2026-05-11 | Assistant | 实现Header用户状态显示：1.未登录时显示登录按钮；2.已登录时显示用户头像和用户名；3.用户下拉菜单包含个人资料和退出登录；4.点击登录按钮打开AuthModal；5.TypeScript零错误 |
+| 260 | App.tsx用户认证集成 | 前端 集成 | 2026-05-11 | Assistant | 集成用户认证到App.tsx：1.导入AuthModal组件；2.添加showAuthModal状态；3.从appStore中解构认证相关状态和方法；4.在useEffect中调用checkAuth初始化登录状态；5.渲染AuthModal组件；6.修复Header重复设置按钮问题；7.TypeScript零错误 |
+| 261 | v1.5.0更新日志添加 | 前端 UI | 2026-05-11 | Assistant | 在App.tsx中添加v1.5.0更新日志：1.在initUpdateLog函数中检查是否已存在v1.5.0记录；2.添加用户系统和团队系统数据模型完成的详细更新记录；3.包含10项功能细节描述；4.正确添加到更新日志列表中 |
+| 262 | 前置功能完善完成验证 | 测试 | 2026-05-11 | Assistant | 完成前置功能开发和验证：1.用户系统数据模型和API完整；2.团队系统数据模型和API完整；3.前端用户认证界面完整；4.所有TypeScript文件零错误；5.无崩溃、无报错、项目完整正常运行 |
+| 263 | 独立登录注册页面开发 | 前端 用户系统 | 2026-05-11 | Assistant | 创建LoginPage.tsx独立登录注册页面：1.采用全屏布局而非弹窗模式；2.包含登录和注册两个Tab；3.完整的表单验证逻辑；4.与appStore认证状态管理集成；5.美观的UI设计，支持主题适配；6.TypeScript零错误 |
+| 264 | App.tsx权限控制实现 | 前端 安全 | 2026-05-11 | Assistant | 实现App.tsx登录权限控制：1.添加LoginPage组件导入；2.从appStore中获取currentUser和authLoading状态；3.实现条件渲染逻辑：未登录显示LoginPage，已登录显示主应用；4.认证加载状态处理；5.确保未登录用户无法访问主应用功能；6.TypeScript零错误 |
+| 265 | 标签页状态管理实现 | 前端 状态管理 | 2026-05-11 | Assistant | 在appStore.ts中实现标签页状态管理：1.添加openTabs状态数组；2.添加activeTabId状态；3.实现openProjectTab方法打开项目标签页；4.实现closeTab方法关闭标签页；5.实现setActiveTab方法切换激活标签页；6.打开标签页时自动加载项目数据；7.TypeScript零错误 |
+| 266 | 标签页UI组件实现 | 前端 UI | 2026-05-11 | Assistant | 在App.tsx中实现标签页UI：1.使用Ant Design Tabs组件；2.支持editable-card模式可关闭标签；3.实现标签页切换和项目加载逻辑；4.修改ProjectList组件使用openProjectTab替代selectProject；5.每个标签页显示对应项目的Canvas画布；6.无标签页时显示提示；7.TypeScript零错误 |
+| 267 | EditProjectTab标签页组件实现 | 前端 UI | 2026-05-14 | Assistant | 创建EditProjectTab.tsx标签页组件：1.替代原EditProjectModal弹窗；2.包含项目名称、描述、数据库类型的编辑功能；3.支持从标签页跳转到成员管理；4.完整的表单验证；5.TypeScript零错误 |
+| 268 | VersionManagementTab标签页组件实现 | 前端 UI | 2026-05-14 | Assistant | 创建VersionManagementTab.tsx标签页组件：1.替代原版本管理弹窗；2.包含版本列表展示、创建新版本、版本回滚、删除版本功能；3.完整的操作反馈和错误处理；4.TypeScript零错误 |
+| 269 | 标签页系统完整整改 | 前端 架构优化 | 2026-05-14 | Assistant | 完成标签页系统完整整改：1.在appStore.ts中添加editProject和versionManagement标签页类型；2.实现openEditProjectTab和openVersionManagementTab方法；3.更新App.tsx导入新组件并在switch语句中添加新类型；4.更新ProjectList.tsx使用新标签页方法替代弹窗；5.清理不再需要的Modal组件引用和状态；6.编辑项目和版本管理功能完整转换为标签页模式；7.支持同时打开多个项目标签页；8.TypeScript零错误 |
+| 270 | 个人云端项目多人协作功能完善 | 全栈 | 2026-05-14 | Assistant | 完善个人云端项目多人协作功能：1.后端添加获取用户有权限项目列表API（/api/users/projects）；2.更新项目列表筛选逻辑，区分本地项目/云端个人项目/团队项目/有权项目；3.EditProjectTab添加成员管理入口，支持邀请其他用户共同编辑；4.ProjectMemberTab支持添加成员并分配角色（owner/editor/viewer）；5.TypeScript零错误 |
+| 271 | 管理成员入口优化 | 前端 UI/UX | 2026-05-15 | Assistant | 优化管理成员入口，解决用户找不到管理成员的问题：1.在项目列表卡片上添加管理成员按钮（wide 模式，云端项目且登录时显示）；2.在项目右键菜单中添加"管理成员"选项；3.修复 EditProjectTab 中按钮显示条件，使用 isAuthenticated === true 进行严格判断；4.添加禁用状态按钮和提示说明：云端项目但未登录时显示"请先登录后再管理项目成员"，本地项目时显示"本地项目不支持多人协作，请上传到云端后再管理成员"；5.新增三种访问管理成员的方式；6.TypeScript零错误 |
+| 272 | ProjectMemberTab API 调用修复 | 前端 Bug修复 | 2026-05-15 | Assistant | 修复项目成员管理标签页的 API 调用问题：1.问题原因：`ProjectMemberTab.tsx` 使用 `/api/projects/...` 相对路径调用，但前端开发服务器未配置代理，导致请求发送到前端服务器返回 HTML 而非 JSON；2.解决方案：添加 `API_BASE` 常量直接指向后端服务器 `http://localhost:3001/api`；3.修改所有 fetch 调用使用完整的 API_BASE 路径；4.添加错误提示 message；5.TypeScript零错误 |
+| 273 | updateLogs ID生成逻辑修复 | 前端 Bug修复 | 2026-05-16 | Assistant | 修复 SettingsTab 中 Timeline 组件重复 key 问题：1.问题原因：`appStore.ts` 中 `addUpdateLog` 方法使用 `log_${Date.now()}` 生成 ID，同一毫秒内调用会产生重复 ID；2.解决方案：添加随机字符串 `log_${Date.now()}_${Math.random().toString(36).substring(2, 9)`；3.在 `loadUpdateLogs` 中添加去重逻辑，自动去除重复的日志项并重新保存；4.TypeScript零错误 |
+| 274 | logs目录和update.log文件创建 | 项目配置 | 2026-05-16 | Assistant | 创建 logs 目录和 update.log 文件，用于记录更新日志，格式：日期+更新内容+操作人 |
+| 275 | README.md文档全面更新 | 文档维护 | 2026-05-16 | Assistant | 全面更新 README.md 文档：1.修正前端端口描述（统一为3002）；2.更新项目结构描述，添加缺失目录（logs、theme、providers等）；3.更新API文档，添加所有实际存在的API端点（用户认证、数据库连接、团队管理、会话管理、历史记录等）；4.更新未来计划，与项目当前状态一致 |
+| 276 | DESIGN_DOC.md文档全面更新 | 文档维护 | 2026-05-16 | Assistant | 全面更新 DESIGN_DOC.md 文档：1.更新技术栈选型表，添加Vite、Dexie.js、WebSocket、Yjs等；2.更新系统架构图，修正数据库为SQLite，添加IndexedDB；3.更新模块结构，与实际项目目录一致；4.更新数据库Schema，与实际schema.prisma完全一致（使用cuid而非uuid、String而非enum、添加User/Team/Branch/GitConfig等模型）；5.更新开发计划，标记已完成的Phase 1-4功能，添加待完成功能 |
+| 277 | 设置更新日志颜色映射修复 | 前端 Bug修复 | 2026-05-16 | Assistant | 修复 SettingsTab 中更新日志 Timeline 颜色映射问题：1.原代码使用 `type === 'fix'` 但类型定义是 `'bugfix'`；2.添加 `security` 类型的橙色颜色映射；3.修正为 `type === 'bugfix'`；4.TypeScript零错误 |
+| 278 | 更新日志后端API实现 | 后端 API | 2026-05-16 | Assistant | 实现后端读取和写入 update.log 文件的 API：1.创建 updateLogController.ts 控制器；2.创建 updateLogRoutes.ts 路由；3.在 server.ts 中注册 `/api/update-logs` 路由（公开访问，无需认证）；4.解析日志文件格式（日期+[类型]+描述+操作人）；5.支持中文类型标签（修复、功能、安全、文档、增强等） |
+| 279 | 前端更新日志同步后端 | 前端 集成 | 2026-05-16 | Assistant | 前端更新日志同步后端 update.log 文件：1.在 api.ts 中添加 updateLogApi；2.在 appStore.ts 中导入 updateLogApi；3.修改 loadUpdateLogs 方法，从服务器和本地同时加载日志并合并去重；4.按日期倒序排列；5.TypeScript零错误 |
+| 280 | 字段级锁后端服务 | 后端 协作 | 2026-05-16 | Assistant | 实现字段级锁服务（LockService.ts）：1.支持表级锁和字段级锁两种粒度；2.5分钟无操作自动释放机制；3.1分钟定期清理过期锁；4.三重映射管理（项目锁、用户锁、表锁）；5.冲突检测和拒绝机制；6.TypeScript零错误 |
+| 281 | 锁消息协议定义 | 后端 WebSocket | 2026-05-16 | Assistant | 扩展 WebSocket 消息协议：1.新增 LOCK_ACQUIRE 锁获取消息；2.新增 LOCK_RELEASE 锁释放消息；3.新增 LOCK_GRANTED 锁授权响应；4.新增 LOCK_DENIED 锁拒绝响应；5.新增 LOCK_STATE 锁状态广播；6.新增 LockInfo/LockRequestData/LockResponseData 类型定义；7.TypeScript零错误 |
+| 282 | 协作房间锁集成 | 后端 WebSocket | 2026-05-16 | Assistant | 协作房间集成锁服务：1.CollabRoom 新增 handleLockAcquire 处理锁获取请求；2.新增 handleLockRelease 处理锁释放请求；3.新增 broadcastLockState 广播锁状态；4.用户加入时发送当前锁状态；5.用户离开时释放所有锁；6.新增 getTableLocks 和 isLocked 辅助方法；7.TypeScript零错误 |
+| 283 | WebSocket服务器锁消息处理 | 后端 WebSocket | 2026-05-16 | Assistant | WebSocket 服务器处理锁消息：1.handleMessage 方法新增 LOCK_ACQUIRE 消息分支；2.新增 LOCK_RELEASE 消息分支；3.调用房间相应方法处理锁逻辑；4.TypeScript零错误 |
+| 284 | 操作历史导出功能 | 后端 API | 2026-05-16 | Assistant | 操作历史支持 JSON/CSV 格式导出：1.historyController 新增 exportProjectHistory 方法；2.新增 exportUserHistory 方法；3.recordsToJSON 函数生成带元数据的 JSON 格式；4.recordsToCSV 函数生成标准 CSV 格式（含 BOM 支持 Excel）；5.设置正确的 Content-Type 和 Content-Disposition；6.historyRoutes 新增导出路由；7.TypeScript零错误 |
+| 285 | 前端操作历史API | 前端 API | 2026-05-16 | Assistant | 前端操作历史 API 服务：1.创建 historyApi.ts；2.getProjectHistory 获取项目历史记录；3.getProjectStats 获取操作统计；4.getUserHistory 获取用户历史；5.getRecentActivity 获取最近活动；6.exportProjectHistory 支持 JSON/CSV 导出（带认证头）；7.exportUserHistory 导出用户历史；8.OperationRecord 和 OperationStats 类型定义；9.TypeScript零错误 |
+| 286 | 操作历史模态框组件 | 前端 UI | 2026-05-16 | Assistant | 创建 HistoryModal 操作历史组件：1.统计卡片展示（总操作数、创建数、更新数、参与人数、最活跃用户）；2.操作记录表格（操作类型、目标类型、目标名称、操作人、描述、时间）；3.多维度筛选（搜索、操作类型、目标类型、日期范围）；4.排序和分页（每页10/20/50/100）；5.JSON/CSV 导出功能；6.空状态友好提示；7.本地模式未打开项目提示；8.集成 antd 组件（Modal、Table、Card、Statistic、Tag、Dropdown、DatePicker）；9.TypeScript零错误 |
+| 287 | 设置面板操作历史入口 | 前端 UI | 2026-05-16 | Assistant | 设置面板集成操作历史：1.SettingsTab 新增 operation-history 菜单项；2.工具分类下添加"操作历史"子项；3.添加 HistoryModal 状态管理；4.检查本地模式和项目状态；5.打开操作历史模态框；6.传递项目ID和名称；7.TypeScript零错误 |
+| 288 | 前端锁服务扩展 | 前端 WebSocket | 2026-05-16 | Assistant | 前端协作服务扩展锁功能：1.新增 MessageType 锁相关枚举；2.LockType/LockInfo/LockRequestData/LockDeniedData 类型定义；3.acquireLock 方法请求获取锁；4.releaseLock 方法释放锁；5.onLockGranted 回调锁授权成功；6.onLockDenied 回调锁被拒绝；7.onLockState 回调锁状态更新；8.handleMessage 分发锁消息；9.TypeScript零错误 |
+| 289 | 锁状态管理Hook | 前端 状态管理 | 2026-05-16 | Assistant | 创建 useCollabLocks Hook：1.locks 所有锁状态；2.myLocks 我持有的锁；3.isConnected 连接状态；4.getTableLocks 获取表的所有锁；5.getColumnLocks 获取字段的所有锁；6.isTableLocked 检查表是否被其他用户锁住；7.isColumnLocked 检查字段是否被其他用户锁住；8.amIHoldingTableLock/amIHoldingColumnLock 检查自己是否持有锁；9.requestTableLock/requestColumnLock 请求锁；10.releaseTableLock/releaseColumnLock 释放锁；11.releaseAllMyLocks 释放所有锁；12.连接状态变化监听；13.TypeScript零错误 |
+| 290 | v1.8.0 更新日志 | 前端 UI | 2026-05-16 | Assistant | 在 App.tsx initUpdateLog 中添加 v1.8.0 更新日志：1.后端实现字段级锁服务（LockService.ts），支持表级锁和字段级锁；2.锁超时机制：5分钟无操作自动释放；3.后端 WebSocket 消息协议新增 LOCK_ACQUIRE/LOCK_RELEASE/LOCK_GRANTED/LOCK_DENIED/LOCK_STATE 消息类型；4.协作房间（Room）集成锁状态广播；5.操作历史支持 JSON/CSV 格式导出；6.前端创建操作历史模态框组件（HistoryModal.tsx）；7.操作历史支持统计展示、搜索、筛选、分页；8.设置面板新增"操作历史"入口；9.前端锁状态管理 Hook（useCollabLocks.ts）；10.TypeScript 零错误 |
+| 291 | localStorageService添加getVersion方法 | 前端 Bug修复 | 2026-05-17 | Assistant | 在 localStorageService.ts 中添加 getVersion 方法，支持通过版本 ID 获取单个版本信息，修复 appStore.ts 中 updateVersion 和 deleteVersion 方法调用不存在方法的问题 |
+| 292 | appStore添加syncToServer别名方法 | 前端 Bug修复 | 2026-05-17 | Assistant | 在 AppStore 接口和实现中添加 syncToServer 方法作为 syncAllToServer 的别名，确保 SyncQueueModal.tsx 和 App.tsx 能正确调用同步方法 |
+| 293 | appStore添加refreshSyncQueueCount接口声明 | 前端 Bug修复 | 2026-05-17 | Assistant | 在 AppStore 接口定义中添加 refreshSyncQueueCount 方法声明，虽然实现已存在但接口缺失导致 TypeScript 编译错误 |
+| 294 | 修复createdBy类型不兼容问题 | 前端 Bug修复 | 2026-05-17 | Assistant | 修复 syncAllToServer 方法中将 createdBy 设置为 undefined 导致的类型不兼容问题，改为使用 currentUser?.id || 'system' 作为默认值，确保 LocalProject 接口要求的 string 类型 |
+| 295 | 修复AppState缺少字段问题 | 前端 Bug修复 | 2026-05-17 | Assistant | 修复 redo 和 pushHistory 方法中 AppState 构造缺少必需字段的问题，补充添加：updateLogs、modelConfigs、activeModelId、syncQueueCount、currentUser、authToken、authLoading、isAuthenticated、openTabs、activeTabId |
+| 296 | 修复App.tsx updateLogs类型问题 | 前端 Bug修复 | 2026-05-17 | Assistant | 修复 initUpdateLog 中 savedLogs 类型问题：1.添加类型断言 getMeta<any[]>；2.提供 [] 默认值；3.使用 Array.isArray() 检查确保类型安全；4.修复 replace_all 导致的多余括号语法错误 |
+| 297 | 修复userMenuItems空值问题 | 前端 Bug修复 | 2026-05-17 | Assistant | 修复 userMenuItems 可能为 null 导致 Dropdown 组件类型不兼容问题，将默认值从 null 改为空数组 [] |
+| 298 | 修复activeTab.projectId类型问题 | 前端 Bug修复 | 2026-05-17 | Assistant | 修复多处 activeTab.projectId 可能为 undefined 的问题：1.App.tsx 中 ProjectMemberTab 组件添加 || '' 默认值；2.appStore.ts 中 closeTab 方法添加 newActiveTab.projectId 存在性检查 |
+| 299 | 修复TypeConvertModal类型问题 | 前端 Bug修复 | 2026-05-17 | Assistant | 修复 TypeConvertModal.tsx 中 response.data.result 类型错误，改为正确的 response.data.mappings，并添加 response.result 的兼容处理 |
+| 300 | 修复ProjectMemberModal Select组件 | 前端 Bug修复 | 2026-05-17 | Assistant | 移除 ProjectMemberModal.tsx 中 Select 组件无效的 mode="single" 属性，antd Select 只支持 mode="multiple" 和 mode="tags" |
+| 301 | 修复SettingsModal log.type比较 | 前端 Bug修复 | 2026-05-17 | Assistant | 修复 SettingsModal.tsx 中 log.type 比较错误，UpdateLog 接口定义的是 'bugfix' 而非 'fix' |
+| 302 | 修复SyncQueueModal result空值问题 | 前端 Bug修复 | 2026-05-17 | Assistant | 修复 SyncQueueModal.tsx 中 syncToServer 返回值可能为 undefined 的问题，添加 result 存在性检查后再访问 success 和 failed 属性 |
+| 303 | 前端TypeScript编译零错误 | 前端 构建验证 | 2026-05-17 | Assistant | 前端完整构建验证通过：1.tsc 编译零错误；2.vite 构建成功；3.生成 dist/index.html、CSS(44.96KB)、JavaScript(2031.98KB) |
+| 304 | 后端TypeScript编译零错误 | 后端 构建验证 | 2026-05-17 | Assistant | 后端完整构建验证通过：1.tsc 编译零错误；2.退出码 0；3.所有 TypeScript 文件编译成功 |
+| 305 | 修复LLMTab Table缺少rowKey警告 | 前端 Bug修复 | 2026-05-17 | Assistant | 修复 LLMTab.tsx 数据模拟表格缺少 rowKey 属性导致的 React "Each child in a list should have a unique key prop" 警告，添加 rowKey={(record, index) => record.id &#124;&#124; &#96;mock-row-${index}&#96;} |
+| 306 | 添加Ollama本地大模型支持 | 全栈 功能新增 | 2026-05-17 | Assistant | 完整支持 Ollama 本地大模型：1.前端 LLMTab.tsx 添加 Ollama 提供商选项、默认端点(http://localhost:11434/v1)、7个模型选项(Llama3/Mistral/Qwen2.5/Gemma3/DeepSeekR1/Phi4)；2.前端 apiKey 字段对 Ollama 可选；3.后端 llmRoutes.ts 放宽 apiKey 检查(Ollama 免密钥)；4.后端 llmService.ts 移除 Ollama 场景的 Authorization 头；5.默认新建配置改为 Ollama；6.所有 LLM 路由 configure 调用传递 provider 字段 |
+| 307 | 重构数据模拟生成逻辑：上下文感知 | 后端 Bug修复 | 2026-05-17 | Assistant | 全面重构 llmDataMockService.ts 数据生成逻辑：1.修复核心Bug：`isPersonalName()` 替代盲目的 `name.includes('name')`，仅当列名包含用户/人员/员工等个人上下文时才生成人名；2.新增 `generateThingName()` 函数，根据列名+comment 生成武器名/书名/产品名/颜色/尺寸/课程/游戏/公司名等上下文物数据；3.新增 `generateContextString()` 处理未匹配的 VARCHAR 列；4.新增武器/书籍/产品/颜色/尺寸/课程/游戏/公司 8个数据词典；5.增加 `comment` 字段传递支持；6.新增性别/年份/月份/百分比等数值列智能判断；7.前端 LLMTab.tsx/api.ts 同步传递 comment 字段 |
+| 308 | 连接测试增强：安全性+可用性评估 | 全栈 功能新增 | 2026-05-17 | Assistant | 新建配置时连接测试从简单连通检查升级为三维度评估：1.安全性评估（HTTPS加密检测、localhost识别、API密钥脱敏显示、密钥强度评分 good/strong/weak、安全警告列表、safe/warning/unsafe 综合评分）；2.可用性评估（响应时间测量、模型确认比照请求vs返回、capable 标记、详细说明）；3.前端弹窗展示（Modal 含 Alert + 双 Card 布局，安全性和可用性独立展示，彩色Tag标记评分等级）；4.后端新增 ConnectionTestResult 接口、assessApiKeyStrength/maskApiKey/buildSecurityResult/buildAvailabilityResult 辅助函数；5.路由层透传完整结果 |
+| 309 | 修复 Modal destroyOnClose 弃用警告 + 后端掉线修复 | 全栈 Bug修复 | 2026-05-17 | Assistant | 修复两个问题：1.LLMTab.tsx 测试报告 Modal 使用已弃用的 destroyOnClose → destroyOnHidden（Ant Design 5.x API 更新）；2.后端服务掉线导致前端 ERR_CONNECTION_REFUSED，强制停止端口3001残留进程并重启后端 |
+| 310 | 修复 Table rowKey index 参数弃用 | 全栈 Bug修复 | 2026-05-17 | Assistant | Ant Design 5.x 弃用 rowKey 回调的 index 参数：1.前端 rowKey 从 `(record, index) => record.id \|\| mock-row-${index}` 改为 `(record) => record._key \|\| record.id \|\| JSON.stringify(record)`；2.后端 llmDataMockService.ts 为每行数据添加 `_key` 字段（格式 mock-row-{tableName}-{i}），确保所有表格都有稳定唯一键 |
+| 311 | 可视化版本对比功能 | 全栈 功能新增 | 2026-05-17 | Assistant | 实现版本间差异可视化对比：1.后端 versionService.ts 新增 compare() 方法，完整差异算法（表级+字段级+关系级），解析版本 JSON 快照逐项对比；2.新增 compareFields() 辅助函数，排除无关键按 JSON 深度对比；3.后端 versionController.compare + route GET /versions/compare/:versionId1/:versionId2；4.前端新增 VersionCompareModal.tsx（950px），含变更摘要Tag栏、表结构变更折叠面板（可展开字段详情）、未变更表折叠面板、关系变更表格；5.字段变更展示 old→new 样式（红删除线→绿色新值）；6.VersionManagementTab 操作列每行添加「对比」按钮，自动取当前版本与上一版本对比 |
+| 312 | 关系线智能避让功能 | 前端 功能新增 | 2026-05-17 | Assistant | 实现关系线自动避开中间表节点的智能路径：1.新增 SmartEdge.tsx 自定义边组件，核心算法：lineIntersectsRect() 检测直线是否穿过矩形节点、8方向候选绕行点+代价排序选择最优路径、双段贝塞尔曲线拼接；2.Canvas.tsx 注册 edgeTypes、edgeStyle==='smart'时使用自定义边+关闭动画；3.appStore.ts edgeStyle 类型扩展为 'straight'\|'step'\|'smooth'\|'smart'；4.SettingsTab.tsx 关系线设置添加「智能避让」按钮+说明文字 |
+| 313 | 评论与标注功能 | 全栈 功能新增 | 2026-05-18 | Assistant | 实现表节点评论与标注系统：1.后端 Prisma 新增 Comment 模型（关联 Project/Table/User，支持嵌套回复 parentId，状态流转 open↔resolved）；2.后端三层架构 CommentService/CommentController/commentRoutes（6个端点：GET/POST /tables/:tableId/comments、GET /tables/:tableId/comments/count、GET /comments/:id、PUT /comments/:id、DELETE /comments/:id）；3.前端 types/index.ts 新增 Comment 接口；4.前端 api.ts 新增 commentApi；5.前端 appStore.ts 新增 openCommentTab 方法、'comments' 标签页类型；6.前端 CommentTab.tsx（可递归渲染嵌套评论、回复/解决/重新打开/删除操作、选中表格自动加载评论）；7.App.tsx 工具栏添加评论按钮（仅单选时可用）、switch 注册 'comments' 分支；8.修复 appStore.ts setEdgeStyle 接口签名遗漏 'smart' 类型 |
+| 314 | 本地数据库可视化（SQLite） | 全栈 功能新增 | 2026-05-18 | Assistant | 实现 SQLite 本地数据库文件读取和可视化导入：1.后端 sqliteReaderService.ts 使用 better-sqlite3 解析 SQLite 文件（sqlite_master + PRAGMA table_info/foreign_key_list/index_list），提取表结构/列定义/外键/索引；2.后端 multer 文件上传处理（支持 .db/.sqlite/.sqlite3，最大100MB）；3.后端三层架构 SqliteReaderController/sqliteReaderRoutes（POST /api/sqlite/read multipart上传、POST /api/sqlite/read-path JSON路径）；4.前端 api.ts 新增 sqliteApi（FormData + fetch 上传）；5.前端 SqliteImportModal.tsx（文件拖拽上传、表列表预览、每个表详情含外键+列定义、多选导入）；6.导入流程：创建表→批量创建列→尝试创建外键关系到项目；7.App.tsx 工具栏添加"导入 SQLite"按钮（DatabaseOutlined 图标）、Modal 注册
+| 315 | 增量 DDL 生成 | 全栈 功能新增 | 2026-05-18 | Assistant | 实现表结构版本差异生成 ALTER TABLE 语句：1.后端 incrementalDdlService.ts 核心引擎（compareColumns 列级对比、compareIndexes 索引对比、5种数据库 ALTER TABLE 语法：ADD/DROP/MODIFY COLUMN、ADD/DROP INDEX、PostgreSQL 多行 ALTER、SQLite 不支持的提示）；2.后端 incrementalDdlController.ts（4个端点：POST /versions/:id1/:id2、POST /tables、GET /projects/:id/vs-version/:vid、POST /projects/:id/versions）；3.后端 incrementalDdlRoutes.ts + server.ts 注册（/api/ddl/incremental，公开路由）；4.前端 api.ts 新增 incrementalDdlApi + 6个类型接口；5.前端 VersionCompareModal.tsx 集成"生成增量DDL"按钮+数据库类型选择器(5种数据库)+DDL深色展示弹窗(含复制功能)；6.Bug修复：Index.columns 类型收窄、JSX Fragment 双 Modal 包裹
+| 316 | 分支管理功能 | 全栈 功能新增 | 2026-05-18 | Assistant | 实现项目分支管理系统：1.后端 branchService.ts（findByProject/findById/create/update/remove/setDefault/switchBranch/getDefaultBranch，含版本计数和父子分支关系）；2.后端 branchController.ts（8个端点：GET项目分支列表、GET默认分支、GET分支详情、POST创建、PUT更新、DELETE删除含保护规则、POST设默认、POST切换活跃）；3.后端 branchRoutes.ts + server.ts 注册（/api，需认证）；4.前端 api.ts 新增 BranchInfo 接口 + branchApi（8个方法）；5.前端 BranchManager.tsx（分支表格含名称/描述/版本数/操作列、默认金色Tag、活跃蓝色Tag、新建/编辑/删除/设默认/切换功能）；6.App.tsx 工具栏添加"分支管理"按钮（BranchesOutlined 图标）、Modal 注册
+| — | 分支 ↔ 版本/画布联动 | 全栈 功能增强 | 2026-05-18 | Assistant | P1 集成增强：1.后端 versionService.create() 自动查询活跃分支并在创建版本时填充 branchId；2.前端 BranchManager.onBranchChange 回调调用 selectProject() 实现切换分支后自动刷新画布数据（重新加载 tables/columns/indexes）
+| 317 | Git 配置集成 | 全栈 功能新增 | 2026-05-18 | Assistant | 实现项目 Git 配置管理：1.后端 GitConfig Prisma 模型（1:1 关联 Project，@unique on projectId）；2.后端三层架构 gitConfigService/gitConfigController/gitConfigRoutes（upsert 模式创建或更新）；3.前端 api.ts 新增 gitConfigApi（get/upsert/remove）；4.前端 GitConfigPanel.tsx Modal 组件（启用开关、仓库地址/分支/用户名/令牌/SSH路径/自动提交/自动推送/提交信息模板配置）；5.App.tsx 工具栏添加"Git 配置"按钮（GithubOutlined 图标）
+| 318 | P2 代码重构：llmRoutes 拆出 Controller | 后端 重构 | 2026-05-18 | Assistant | 将 llmRoutes.ts 从 322 行内联路由处理精简为 27 行纯路由注册：1.新建 llmController.ts（331 行）含 16 个 handler 方法；2.llmRoutes.ts 改为导入 llmController 并纯注册路由；3.架构对齐为 Service→Controller→Route 三层标准模式
+| 319 | P2 代码重构：DDL 类型映射器抽取 | 后端 重构 | 2026-05-18 | Assistant | 消除 DDL 生成器中 6 处重复代码：1.新建 ddlTypeMapper.ts 统一导出 mapDataType/formatDefaultValue/escapeString；2.multiDdlGenerator.ts 移除 6 个私有 typeMap+6 个 map*DataType+6 个 format*DefaultValue+escapeString 方法；3.从 typeConverter.ts 导出 typeMap 作为单一数据源；4.multiDdlGenerator.ts 从 690 行缩减至 440 行 |
+| 320 | P0 架构一致性：Controller/Service 层补齐 | 后端 重构 | 2026-05-18 | Assistant | 补齐全栈三层架构：1.新建 typeConvertController.ts（typeConvertRoutes 137→11行）；2.新建 ddlService.ts（ddlController 189→78行）；3.新建 snapshotService.ts（snapshotController 128→97行）；4.新建 inviteService.ts（inviteController 349→262行）；5.删除孤儿组件 CreateVersionModal.tsx；6.新建 updateLogService.ts（updateLogController 111→25行）。全部 Controller 均遵循 Service→Controller→Route 三层标准 |
+| 321 | Bug修复：antd Table pagination.total 警告 | 前端 Bug修复 | 2026-05-18 | Assistant | 修复 LLMTab.tsx 数据预览表格：dataSource 被 slice(0,20) 截断但 pagination.total 为完整 rows.length，导致 antd "dataSource length less than pagination.total" 警告。改为 total = Math.min(rows.length, 20) |
+| 322 | P2-1 清理 Service 层调试日志 | 后端 重构 | 2026-05-18 | Assistant | 移除 reverseEngineeringService.ts 中 5 个 console.log 调试语句（Connected to database/Tables found/Table columns/indexes/foreign keys），保留 catch 块 console.error（统一日志模式） |
+| 323 | P2-2 LLM Service 位置迁移 | 后端 重构 | 2026-05-18 | Assistant | 将 llmService.ts 从 generators/ 迁移至 services/：该类执行 HTTP 外部 API 调用、连接测试、LLM 对话，属于有状态网络服务而非纯代码生成器。更新 llmController.ts import 路径，删除旧文件 |
+| 324 | P0-5 incrementalDdlController 抽取 Prisma 操作 | 后端 重构 | 2026-05-18 | Assistant | incrementalDdlController 移除 PrismaClient：getProjectTables/getVersionTables 函数迁移至 incrementalDdlService.ts。新增 getVersionProjectId 方法支持 'current' 动态解析。Controller 276→171行 |
+| 325 | P0-6 projectController 消除 PrismaClient | 后端 重构 | 2026-05-18 | Assistant | projectController 移除 PrismaClient 导入：toggleCollaboration 改用 projectService.findWithMembers+update，getCollaborationStatus 改用 projectService.getCollaborationStatus。projectService 新增 2 个方法 |
+| 326 | Bug修复：TableEditor Modal Form 无限重渲染 | 前端 Bug修复 | 2026-05-18 | Assistant | 索引编辑 Modal 中 useEffect + setFieldsValue 导致 Maximum update depth exceeded：1. 移除 useEffect 和 pendingIndexValues 状态；2. Modal 添加 destroyOnClose；3. Form 使用 initialValues + key 强制重挂载；4. 移除条件渲染隐藏 Form。修复后不再有无限循环警告 |
+| 327 | 交互优化：三个弹窗改为标签页 | 前端 重构 | 2026-05-18 | Assistant | 将 SqliteImportModal/BranchManager/GitConfigPanel 从 Modal 弹窗改为标签页：1. appStore 新增 sqliteImport/branchManagement/gitConfig 三种 tab 类型 + open 方法；2. 新建 SqliteImportTab/BranchManagerTab/GitConfigTab 三个标签页组件；3. App.tsx 移除弹窗 state 和 JSX，按钮改为 openXxxTab()；4. 未选项目时分支管理和 Git 配置按钮提示警告 |
+| 328 | 清理旧弹窗组件文件 | 前端 清理 | 2026-05-18 | Assistant | 删除已被标签页替代的旧文件：SqliteImportModal.tsx / BranchManager.tsx / GitConfigPanel.tsx。零引用验证通过，构建无断裂
+| 329 | 交互优化：TypeConvertModal 改为标签页 | 前端 重构 | 2026-05-19 | Assistant | 将 TypeConvertModal 从 Modal 弹窗改为标签页：1. appStore 新增 typeConvert tab 类型 + openTypeConvertTab 方法；2. 新建 TypeConvertTab.tsx 组件（无 props，内部管理 sourceDb/targetDb/dataType 状态）；3. App.tsx 移除 showTypeConvert state 和 Modal JSX；4. SettingsTab 的 onOpenTypeConvert 回调改为直接调用 openTypeConvertTab；5. 删除旧文件 TypeConvertModal.tsx |
+| 330 | 交互优化：SQLEditor 改为标签页 | 前端 重构 | 2026-05-19 | Assistant | 将 SQLEditor 从 Modal 弹窗改为标签页：1. appStore 新增 sqlEditor tab 类型 + openSQLEditorTab 方法；2. 新建 SQLEditorTab.tsx 组件（无 props，从 useAppStore 获取 currentProject/tables/relationships）；3. App.tsx 移除 showSQLEditor state 和 Modal JSX，工具栏按钮改为 openSQLEditorTab()；4. 删除旧文件 SQLEditor.tsx
+| 331 | GitConfigTab 添加 Spin 加载状态 | 前端 体验 | 2026-05-19 | Assistant | GitConfigTab 初始加载时缺少视觉反馈（仅禁用表单），添加 Spin 组件包裹表单+状态+按钮区域，loading 时显示加载动画
+| 332 | Escape 键关闭逻辑补充 | 前端 修复 | 2026-05-19 | Assistant | App.tsx 键盘处理器中 Escape 逻辑遗漏 showDatabaseSync/showSyncQueue/showAuthModal 三个 modal 的关闭判断，导致这些弹窗无法通过 ESC 键关闭。补充 if-else 链并更新 useEffect 依赖数组 |
 
 ---
 
@@ -359,3 +466,56 @@
 - 2026-05-07: 添加快捷键录制功能修复记录（203）
 - 2026-05-07: 添加字体大小设置优化记录（204）
 - 2026-05-08: 添加SQL编辑器组件记录（221）
+- 2026-05-11: 添加项目启动流程验证记录（227）
+- 2026-05-11: 添加协作服务后端架构记录（228）
+- 2026-05-11: 添加协作服务前端架构记录（229）
+- 2026-05-11: 添加更新日志功能完善记录（230）
+- 2026-05-11: 添加CRDT后端文档管理器记录（231）
+- 2026-05-11: 添加CRDT前端状态Hook记录（232）
+- 2026-05-11: 添加CRDT房间管理集成记录（233）
+- 2026-05-11: 添加CRDT WebSocket服务器集成记录（234）
+- 2026-05-11: 添加CRDT协作服务二进制支持记录（235）
+- 2026-05-11: 添加CRDT协作上下文集成记录（236）
+- 2026-05-11: 添加Phase 3.1二进制消息协议记录（237）
+- 2026-05-11: 添加Phase 3.2消息压缩记录（238）
+- 2026-05-11: 添加Phase 3.3心跳与重连记录（239）
+- 2026-05-11: 添加WebSocket连接错误修复记录（240）
+- 2026-05-11: 添加前置条件分析与规划记录（241）
+- 2026-05-11: 添加User数据模型设计记录（242）
+- 2026-05-11: 添加Team数据模型设计记录（243）
+- 2026-05-11: 添加TeamMember数据模型设计记录（244）
+- 2026-05-11: 添加TeamProject数据模型设计记录（245）
+- 2026-05-11: 添加Prisma Schema关系修复记录（246）
+- 2026-05-11: 添加TypeScript类型安全修复记录（247）
+- 2026-05-11: 添加后端依赖安装记录（248）
+- 2026-05-11: 添加数据库同步记录（249）
+- 2026-05-11: 添加用户服务层实现记录（250）
+- 2026-05-11: 添加用户API控制器实现记录（251）
+- 2026-05-11: 添加用户API路由配置记录（252）
+- 2026-05-11: 添加团队服务层完善记录（253）
+- 2026-05-11: 添加团队API控制器完善记录（254）
+- 2026-05-11: 添加团队API路由配置完善记录（255）
+- 2026-05-11: 添加用户认证前端API记录（256）
+- 2026-05-11: 添加用户认证状态管理记录（257）
+- 2026-05-11: 添加登录注册模态框完善记录（258）
+- 2026-05-11: 添加Header用户状态显示记录（259）
+- 2026-05-11: 添加App.tsx用户认证集成记录（260）
+- 2026-05-11: 添加v1.5.0更新日志添加记录（261）
+- 2026-05-11: 添加前置功能完善完成验证记录（262）
+- 2026-05-11: 添加独立登录注册页面开发记录（263）
+- 2026-05-11: 添加App.tsx权限控制实现记录（264）
+- 2026-05-11: 添加标签页状态管理实现记录（265）
+- 2026-05-11: 添加标签页UI组件实现记录（266）
+- 2026-05-14: 添加EditProjectTab标签页组件实现记录（267）
+- 2026-05-14: 添加VersionManagementTab标签页组件实现记录（268）
+- 2026-05-14: 添加标签页系统完整整改记录（269）
+- 2026-05-17: 添加 LLMTab rowKey 警告修复(305) 和 Ollama 本地大模型支持(306)
+- 2026-05-18: 添加评论与标注功能(313)
+- 2026-05-18: 添加本地数据库可视化SQLite(314)
+- 2026-05-18: 添加增量DDL生成(315)
+- 2026-05-18: 添加分支管理功能(316)
+- 2026-05-18: 分支↔版本/画布联动(P1集成增强)
+- 2026-05-18: 添加Git配置集成(317) — Phase 3 全部完成
+- 2026-05-18: 添加P2重构：llmRoutes拆出Controller(318) + DDL类型映射器抽取(319)
+- 2026-05-19: 添加交互优化：TypeConvertModal改为标签页(329) + SQLEditor改为标签页(330) + GitConfigTab加载状态(331) + Escape键修复(332)
+

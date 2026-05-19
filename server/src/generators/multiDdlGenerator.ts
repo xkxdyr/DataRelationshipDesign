@@ -1,14 +1,8 @@
 import { Column, Table, Relationship, Index } from './ddlGenerator'
+import { DatabaseType, databaseTypeLabels } from './typeConverter'
+import { mapDataType, formatDefaultValue, escapeString } from './ddlTypeMapper'
 
-export type DatabaseType = 'MYSQL' | 'POSTGRESQL' | 'SQLITE' | 'SQLSERVER' | 'ORACLE'
-
-export const databaseTypeLabels: Record<DatabaseType, string> = {
-  MYSQL: 'MySQL',
-  POSTGRESQL: 'PostgreSQL',
-  SQLITE: 'SQLite',
-  SQLSERVER: 'SQL Server',
-  ORACLE: 'Oracle'
-}
+export { DatabaseType, databaseTypeLabels }
 
 export class MultiDDLGenerator {
   private dbType: DatabaseType
@@ -85,7 +79,7 @@ export class MultiDDLGenerator {
     lines.push('\n)')
 
     if (table.comment) {
-      lines.push(` COMMENT='${this.escapeString(table.comment)}'`)
+      lines.push(` COMMENT='${escapeString(table.comment)}'`)
     }
 
     lines.push(';')
@@ -93,7 +87,7 @@ export class MultiDDLGenerator {
   }
 
   private generateMySQLColumnLine(col: Column): string {
-    let line = `  \`${col.name}\` ${this.mapMySQLDataType(col)}`
+    let line = `  \`${col.name}\` ${mapDataType(col, 'MYSQL')}`
 
     if (!col.nullable) {
       line += ' NOT NULL'
@@ -104,7 +98,7 @@ export class MultiDDLGenerator {
     }
 
     if (col.defaultValue !== undefined && col.defaultValue !== null) {
-      line += ` DEFAULT ${this.formatMySQLDefaultValue(col)}`
+      line += ` DEFAULT ${formatDefaultValue(col, 'MYSQL')}`
     }
 
     if (col.unique && !col.primaryKey) {
@@ -112,60 +106,10 @@ export class MultiDDLGenerator {
     }
 
     if (col.comment) {
-      line += ` COMMENT '${this.escapeString(col.comment)}'`
+      line += ` COMMENT '${escapeString(col.comment)}'`
     }
 
     return line
-  }
-
-  private mapMySQLDataType(col: Column): string {
-    const typeMap: Record<string, string> = {
-      'INT': 'INT',
-      'BIGINT': 'BIGINT',
-      'SMALLINT': 'SMALLINT',
-      'TINYINT': 'TINYINT',
-      'VARCHAR': 'VARCHAR',
-      'CHAR': 'CHAR',
-      'TEXT': 'TEXT',
-      'MEDIUMTEXT': 'MEDIUMTEXT',
-      'LONGTEXT': 'LONGTEXT',
-      'DATE': 'DATE',
-      'DATETIME': 'DATETIME',
-      'TIMESTAMP': 'TIMESTAMP',
-      'TIME': 'TIME',
-      'DECIMAL': 'DECIMAL',
-      'NUMERIC': 'NUMERIC',
-      'FLOAT': 'FLOAT',
-      'DOUBLE': 'DOUBLE',
-      'BOOLEAN': 'TINYINT(1)',
-      'BOOL': 'TINYINT(1)',
-      'BLOB': 'BLOB',
-      'JSON': 'JSON',
-      'UUID': 'CHAR(36)'
-    }
-
-    const baseType = typeMap[col.dataType.toUpperCase()] || col.dataType
-
-    if (baseType === 'VARCHAR' || baseType === 'CHAR') {
-      return `${baseType}(${col.length || 255})`
-    }
-
-    if (baseType === 'DECIMAL' || baseType === 'NUMERIC') {
-      const precision = col.precision || 10
-      const scale = col.scale || 2
-      return `${baseType}(${precision},${scale})`
-    }
-
-    return baseType
-  }
-
-  private formatMySQLDefaultValue(col: Column): string {
-    const val = col.defaultValue
-    if (!val) return 'NULL'
-    if (val === 'NULL') return 'NULL'
-    if (val === 'CURRENT_TIMESTAMP') return 'CURRENT_TIMESTAMP'
-    if (!isNaN(Number(val))) return val
-    return `'${this.escapeString(val)}'`
   }
 
   private generateMySQLIndexLine(tableName: string, idx: Index): string {
@@ -225,7 +169,7 @@ export class MultiDDLGenerator {
     lines.push('\n)')
 
     if (table.comment) {
-      lines.push(`\nCOMMENT ON TABLE "${table.name}" IS '${this.escapeString(table.comment)}'`)
+      lines.push(`\nCOMMENT ON TABLE "${table.name}" IS '${escapeString(table.comment)}'`)
     }
 
     lines.push(';')
@@ -233,7 +177,7 @@ export class MultiDDLGenerator {
   }
 
   private generatePostgreSQLColumnLine(col: Column): string {
-    let line = `  "${col.name}" ${this.mapPostgreSQLDataType(col)}`
+    let line = `  "${col.name}" ${mapDataType(col, 'POSTGRESQL')}`
 
     if (!col.nullable) {
       line += ' NOT NULL'
@@ -249,7 +193,7 @@ export class MultiDDLGenerator {
     }
 
     if (col.defaultValue !== undefined && col.defaultValue !== null) {
-      line += ` DEFAULT ${this.formatPostgreSQLDefaultValue(col)}`
+      line += ` DEFAULT ${formatDefaultValue(col, 'POSTGRESQL')}`
     }
 
     if (col.unique && !col.primaryKey) {
@@ -257,56 +201,6 @@ export class MultiDDLGenerator {
     }
 
     return line
-  }
-
-  private mapPostgreSQLDataType(col: Column): string {
-    const typeMap: Record<string, string> = {
-      'INT': 'INTEGER',
-      'BIGINT': 'BIGINT',
-      'SMALLINT': 'SMALLINT',
-      'TINYINT': 'SMALLINT',
-      'VARCHAR': 'VARCHAR',
-      'CHAR': 'CHAR',
-      'TEXT': 'TEXT',
-      'MEDIUMTEXT': 'TEXT',
-      'LONGTEXT': 'TEXT',
-      'DATE': 'DATE',
-      'DATETIME': 'TIMESTAMP',
-      'TIMESTAMP': 'TIMESTAMP',
-      'TIME': 'TIME',
-      'DECIMAL': 'DECIMAL',
-      'NUMERIC': 'NUMERIC',
-      'FLOAT': 'REAL',
-      'DOUBLE': 'DOUBLE PRECISION',
-      'BOOLEAN': 'BOOLEAN',
-      'BOOL': 'BOOLEAN',
-      'BLOB': 'BYTEA',
-      'JSON': 'JSONB',
-      'UUID': 'UUID'
-    }
-
-    const baseType = typeMap[col.dataType.toUpperCase()] || col.dataType
-
-    if (baseType === 'VARCHAR' || baseType === 'CHAR') {
-      return `${baseType}(${col.length || 255})`
-    }
-
-    if (baseType === 'DECIMAL' || baseType === 'NUMERIC') {
-      const precision = col.precision || 10
-      const scale = col.scale || 2
-      return `${baseType}(${precision},${scale})`
-    }
-
-    return baseType
-  }
-
-  private formatPostgreSQLDefaultValue(col: Column): string {
-    const val = col.defaultValue
-    if (!val) return 'NULL'
-    if (val === 'NULL') return 'NULL'
-    if (val === 'CURRENT_TIMESTAMP') return 'CURRENT_TIMESTAMP'
-    if (!isNaN(Number(val))) return val
-    return `'${this.escapeString(val)}'`
   }
 
   private generatePostgreSQLForeignKeyLine(rel: Relationship): string {
@@ -346,7 +240,7 @@ export class MultiDDLGenerator {
     lines.push('\n)')
 
     if (table.comment) {
-      lines.push(`; -- ${this.escapeString(table.comment)}`)
+      lines.push(`; -- ${escapeString(table.comment)}`)
     } else {
       lines.push(';')
     }
@@ -355,14 +249,14 @@ export class MultiDDLGenerator {
   }
 
   private generateSQLiteColumnLine(col: Column): string {
-    let line = `  "${col.name}" ${this.mapSQLiteDataType(col)}`
+    let line = `  "${col.name}" ${mapDataType(col, 'SQLITE')}`
 
     if (!col.nullable) {
       line += ' NOT NULL'
     }
 
     if (col.defaultValue !== undefined && col.defaultValue !== null) {
-      line += ` DEFAULT ${this.formatSQLiteDefaultValue(col)}`
+      line += ` DEFAULT ${formatDefaultValue(col, 'SQLITE')}`
     }
 
     if (col.unique && !col.primaryKey) {
@@ -370,50 +264,6 @@ export class MultiDDLGenerator {
     }
 
     return line
-  }
-
-  private mapSQLiteDataType(col: Column): string {
-    const typeMap: Record<string, string> = {
-      'INT': 'INTEGER',
-      'BIGINT': 'INTEGER',
-      'SMALLINT': 'INTEGER',
-      'TINYINT': 'INTEGER',
-      'VARCHAR': 'TEXT',
-      'CHAR': 'TEXT',
-      'TEXT': 'TEXT',
-      'MEDIUMTEXT': 'TEXT',
-      'LONGTEXT': 'TEXT',
-      'DATE': 'TEXT',
-      'DATETIME': 'TEXT',
-      'TIMESTAMP': 'TEXT',
-      'TIME': 'TEXT',
-      'DECIMAL': 'REAL',
-      'NUMERIC': 'REAL',
-      'FLOAT': 'REAL',
-      'DOUBLE': 'REAL',
-      'BOOLEAN': 'INTEGER',
-      'BOOL': 'INTEGER',
-      'BLOB': 'BLOB',
-      'JSON': 'TEXT',
-      'UUID': 'TEXT'
-    }
-
-    const baseType = typeMap[col.dataType.toUpperCase()] || 'TEXT'
-
-    if ((baseType === 'VARCHAR' || baseType === 'CHAR' || baseType === 'TEXT') && col.length) {
-      return 'TEXT'
-    }
-
-    return baseType
-  }
-
-  private formatSQLiteDefaultValue(col: Column): string {
-    const val = col.defaultValue
-    if (!val) return 'NULL'
-    if (val === 'NULL') return 'NULL'
-    if (val === 'CURRENT_TIMESTAMP') return 'CURRENT_TIMESTAMP'
-    if (!isNaN(Number(val))) return val
-    return `'${this.escapeString(val)}'`
   }
 
   private generateSQLiteForeignKeyLine(rel: Relationship): string {
@@ -455,7 +305,7 @@ export class MultiDDLGenerator {
     lines.push('\n)')
 
     if (table.comment) {
-      lines.push(`\nEXEC sp_addextendedproperty @name = N'MS_Description', @value = N'${this.escapeString(table.comment)}', @level0type = N'SCHEMA', @level0name = N'dbo', @level1type = N'TABLE', @level1name = N'${table.name}';`)
+      lines.push(`\nEXEC sp_addextendedproperty @name = N'MS_Description', @value = N'${escapeString(table.comment)}', @level0type = N'SCHEMA', @level0name = N'dbo', @level1type = N'TABLE', @level1name = N'${table.name}';`)
     }
 
     lines.push('')
@@ -463,7 +313,7 @@ export class MultiDDLGenerator {
   }
 
   private generateSQLServerColumnLine(col: Column): string {
-    let line = `  [${col.name}] ${this.mapSQLServerDataType(col)}`
+    let line = `  [${col.name}] ${mapDataType(col, 'SQLSERVER')}`
 
     if (!col.nullable) {
       line += ' NOT NULL'
@@ -477,7 +327,7 @@ export class MultiDDLGenerator {
     }
 
     if (col.defaultValue !== undefined && col.defaultValue !== null) {
-      line += ` DEFAULT ${this.formatSQLServerDefaultValue(col)}`
+      line += ` DEFAULT ${formatDefaultValue(col, 'SQLSERVER')}`
     }
 
     if (col.unique && !col.primaryKey) {
@@ -485,56 +335,6 @@ export class MultiDDLGenerator {
     }
 
     return line
-  }
-
-  private mapSQLServerDataType(col: Column): string {
-    const typeMap: Record<string, string> = {
-      'INT': 'INT',
-      'BIGINT': 'BIGINT',
-      'SMALLINT': 'SMALLINT',
-      'TINYINT': 'TINYINT',
-      'VARCHAR': 'NVARCHAR',
-      'CHAR': 'NCHAR',
-      'TEXT': 'TEXT',
-      'MEDIUMTEXT': 'TEXT',
-      'LONGTEXT': 'TEXT',
-      'DATE': 'DATE',
-      'DATETIME': 'DATETIME2',
-      'TIMESTAMP': 'DATETIME2',
-      'TIME': 'TIME',
-      'DECIMAL': 'DECIMAL',
-      'NUMERIC': 'NUMERIC',
-      'FLOAT': 'FLOAT',
-      'DOUBLE': 'FLOAT',
-      'BOOLEAN': 'BIT',
-      'BOOL': 'BIT',
-      'BLOB': 'VARBINARY(MAX)',
-      'JSON': 'NVARCHAR(MAX)',
-      'UUID': 'UNIQUEIDENTIFIER'
-    }
-
-    const baseType = typeMap[col.dataType.toUpperCase()] || col.dataType
-
-    if (baseType === 'NVARCHAR' || baseType === 'NCHAR') {
-      return `${baseType}(${col.length || 255})`
-    }
-
-    if (baseType === 'DECIMAL' || baseType === 'NUMERIC') {
-      const precision = col.precision || 10
-      const scale = col.scale || 2
-      return `${baseType}(${precision},${scale})`
-    }
-
-    return baseType
-  }
-
-  private formatSQLServerDefaultValue(col: Column): string {
-    const val = col.defaultValue
-    if (!val) return 'NULL'
-    if (val === 'NULL') return 'NULL'
-    if (val === 'CURRENT_TIMESTAMP') return 'GETDATE()'
-    if (!isNaN(Number(val))) return val
-    return `N'${this.escapeString(val)}'`
   }
 
   private generateSQLServerIndexLine(tableName: string, idx: Index): string {
@@ -592,7 +392,7 @@ export class MultiDDLGenerator {
     lines.push('\n)')
 
     if (table.comment) {
-      lines.push(`\nCOMMENT ON TABLE "${table.name}" IS '${this.escapeString(table.comment)}'`)
+      lines.push(`\nCOMMENT ON TABLE "${table.name}" IS '${escapeString(table.comment)}'`)
     }
 
     lines.push(';')
@@ -600,14 +400,14 @@ export class MultiDDLGenerator {
   }
 
   private generateOracleColumnLine(col: Column): string {
-    let line = `  "${col.name}" ${this.mapOracleDataType(col)}`
+    let line = `  "${col.name}" ${mapDataType(col, 'ORACLE')}`
 
     if (!col.nullable) {
       line += ' NOT NULL'
     }
 
     if (col.defaultValue !== undefined && col.defaultValue !== null) {
-      line += ` DEFAULT ${this.formatOracleDefaultValue(col)}`
+      line += ` DEFAULT ${formatDefaultValue(col, 'ORACLE')}`
     }
 
     if (col.unique && !col.primaryKey) {
@@ -615,56 +415,6 @@ export class MultiDDLGenerator {
     }
 
     return line
-  }
-
-  private mapOracleDataType(col: Column): string {
-    const typeMap: Record<string, string> = {
-      'INT': 'NUMBER(10)',
-      'BIGINT': 'NUMBER(19)',
-      'SMALLINT': 'NUMBER(5)',
-      'TINYINT': 'NUMBER(3)',
-      'VARCHAR': 'VARCHAR2',
-      'CHAR': 'CHAR',
-      'TEXT': 'CLOB',
-      'MEDIUMTEXT': 'CLOB',
-      'LONGTEXT': 'CLOB',
-      'DATE': 'DATE',
-      'DATETIME': 'DATE',
-      'TIMESTAMP': 'TIMESTAMP',
-      'TIME': 'INTERVAL DAY TO SECOND',
-      'DECIMAL': 'NUMBER',
-      'NUMERIC': 'NUMBER',
-      'FLOAT': 'FLOAT',
-      'DOUBLE': 'FLOAT',
-      'BOOLEAN': 'NUMBER(1)',
-      'BOOL': 'NUMBER(1)',
-      'BLOB': 'BLOB',
-      'JSON': 'CLOB',
-      'UUID': 'RAW(16)'
-    }
-
-    const baseType = typeMap[col.dataType.toUpperCase()] || col.dataType
-
-    if (baseType === 'VARCHAR2' || baseType === 'CHAR') {
-      return `${baseType}(${col.length || 255})`
-    }
-
-    if (baseType === 'NUMBER') {
-      const precision = col.precision || 10
-      const scale = col.scale || 2
-      return `${baseType}(${precision},${scale})`
-    }
-
-    return baseType
-  }
-
-  private formatOracleDefaultValue(col: Column): string {
-    const val = col.defaultValue
-    if (!val) return 'NULL'
-    if (val === 'NULL') return 'NULL'
-    if (val === 'CURRENT_TIMESTAMP') return 'SYSTIMESTAMP'
-    if (!isNaN(Number(val))) return val
-    return `'${this.escapeString(val)}'`
   }
 
   private generateOracleForeignKeyLine(rel: Relationship): string {
@@ -682,10 +432,6 @@ export class MultiDDLGenerator {
     }
 
     return line
-  }
-
-  private escapeString(str: string): string {
-    return str.replace(/'/g, "''")
   }
 }
 

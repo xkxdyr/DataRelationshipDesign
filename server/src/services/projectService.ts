@@ -1,4 +1,5 @@
 import { PrismaClient, Prisma } from '@prisma/client'
+import { projectMemberService } from './projectMemberService'
 
 const prisma = new PrismaClient()
 
@@ -14,6 +15,7 @@ export interface UpdateProjectDTO {
   description?: string
   databaseType?: string
   status?: string
+  collaborationEnabled?: boolean
 }
 
 export const projectService = {
@@ -43,7 +45,7 @@ export const projectService = {
   },
 
   async create(data: CreateProjectDTO) {
-    return await prisma.project.create({
+    const project = await prisma.project.create({
       data: {
         name: data.name,
         description: data.description || null,
@@ -51,17 +53,34 @@ export const projectService = {
         createdBy: data.createdBy || 'system'
       }
     })
+
+    if (data.createdBy && data.createdBy !== 'system' && data.createdBy !== '') {
+      await projectMemberService.addMember({
+        projectId: project.id,
+        userId: data.createdBy,
+        userName: '',
+        role: 'owner'
+      })
+    }
+
+    return project
   },
 
   async update(id: string, data: UpdateProjectDTO) {
+    const updateData: any = {
+      name: data.name,
+      description: data.description,
+      databaseType: data.databaseType,
+      status: data.status
+    }
+    
+    if (typeof data.collaborationEnabled !== 'undefined') {
+      updateData.collaborationEnabled = data.collaborationEnabled
+    }
+    
     return await prisma.project.update({
       where: { id },
-      data: {
-        name: data.name,
-        description: data.description,
-        databaseType: data.databaseType,
-        status: data.status
-      }
+      data: updateData
     })
   },
 
@@ -85,6 +104,20 @@ export const projectService = {
         status: 'DRAFT',
         createdBy: 'system'
       }
+    })
+  },
+
+  async findWithMembers(id: string) {
+    return await prisma.project.findUnique({
+      where: { id },
+      include: { projectMembers: true }
+    })
+  },
+
+  async getCollaborationStatus(id: string) {
+    return await prisma.project.findUnique({
+      where: { id },
+      select: { collaborationEnabled: true }
     })
   }
 }

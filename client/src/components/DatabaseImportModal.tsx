@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { Modal, message, Select } from 'antd'
 import { DatabaseOutlined, PlusOutlined } from '@ant-design/icons'
-import { connectionApi, reverseEngineeringApi, TableInfo, ConnectionConfig, Project } from '../services/api'
+import { connectionApi, reverseEngineeringApi, TableInfo, ConnectionConfig } from '../services/api'
+import { Project } from '../types'
 import { DatabaseImportForm, ConnectionFormData } from './DatabaseImportForm'
 
 interface DatabaseImportModalProps {
@@ -92,16 +93,12 @@ export const DatabaseImportModal: React.FC<DatabaseImportModalProps> = ({ visibl
 
     setImportLoading(true)
     try {
-      console.log('Import request data:', { ...data, tables: selectedTables })
       const result = await reverseEngineeringApi.importFromDatabase({
         ...data,
         tables: selectedTables,
       })
-      console.log('Import result:', result)
       if (result.success && result.data) {
-        console.log('result.data:', result.data)
         const tablesToImport = result.data.tables || []
-        console.log('tablesToImport:', tablesToImport)
         if (tablesToImport.length > 0) {
           onImport(tablesToImport, targetProjectId)
           message.success(`成功导入 ${tablesToImport.length} 张表`)
@@ -110,7 +107,6 @@ export const DatabaseImportModal: React.FC<DatabaseImportModalProps> = ({ visibl
         }
         onClose()
       } else {
-        console.log('Import failed or no data:', result)
         message.error(result?.message || '导入失败')
       }
     } catch (error) {

@@ -70,6 +70,7 @@ export interface Project {
   databaseType: string
   status: string
   version: number
+  collaborationEnabled?: boolean
   createdAt: string
   updatedAt: string
   createdBy: string
@@ -93,4 +94,65 @@ export interface ModelConfig {
   isDefault?: boolean
   createdAt: string
   updatedAt: string
+}
+
+export interface User {
+  id: string
+  username: string
+  email: string
+  displayName?: string
+  avatar?: string
+  color?: string
+  createdAt: string
+}
+
+export interface AuthResponse {
+  user: User
+  token: string
+}
+
+export interface RegisterRequest {
+  username: string
+  email: string
+  password: string
+  displayName?: string
+}
+
+export interface LoginRequest {
+  username: string
+  password: string
+}
+
+export interface TeamMember {
+  userId: string
+  userName: string
+  role: 'owner' | 'admin' | 'member'
+  joinedAt: string
+}
+
+export interface Team {
+  id: string
+  name: string
+  description?: string
+  avatar?: string
+  ownerId: string
+  members: TeamMember[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface Comment {
+  id: string
+  projectId: string
+  tableId: string
+  userId: string
+  userName: string
+  userDisplayName?: string
+  userColor?: string
+  content: string
+  parentId?: string
+  status: 'open' | 'resolved'
+  createdAt: string
+  updatedAt: string
+  replies?: Comment[]
 }
