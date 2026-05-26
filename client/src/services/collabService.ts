@@ -100,7 +100,7 @@ export class CollabService {
 
   constructor() {
     // 生成临时用户 ID
-    this.userId = 'user_' + Math.random().toString(36).substr(2, 9)
+    this.userId = 'user_' + Math.random().toString(36).substring(2)
   }
 
   // 获取当前连接状态
@@ -136,13 +136,10 @@ export class CollabService {
       const port = 3001
       const wsUrl = `${protocol}//${host}:${port}/ws/collab?projectId=${projectId}&userId=${this.userId}&userName=${encodeURIComponent(userName)}`
 
-      console.log('连接协作服务:', wsUrl)
-
       try {
         this.ws = new WebSocket(wsUrl)
 
         this.ws.onopen = () => {
-          console.log('协作服务连接成功')
           this.reconnectAttempts = 0
           this.notifyConnectionState(ConnectionState.CONNECTED)
           this.startHeartbeat()
@@ -176,7 +173,7 @@ export class CollabService {
         }
 
         this.ws.onclose = () => {
-          console.log('协作服务连接关闭')
+          console.warn('协作服务连接关闭')
           this.stopHeartbeat()
           this.notifyConnectionState(ConnectionState.DISCONNECTED)
           if (!this.isManualClose) {
@@ -475,8 +472,6 @@ export class CollabService {
 
     this.reconnectAttempts++
     this.notifyConnectionState(ConnectionState.RECONNECTING)
-
-    console.log(`尝试第 ${this.reconnectAttempts} 次重连，延迟 ${delay}ms`)
 
     setTimeout(() => {
       if (this.projectId && !this.isManualClose) {

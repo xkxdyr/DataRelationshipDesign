@@ -220,13 +220,22 @@ DataRelationshipDesign/
 - ✅ 主题系统
 - ✅ MySQL/PostgreSQL/SQLite/SQL Server/Oracle DDL 完整支持
 
-## 🎯 未来计划
+## 🎯 已完成增强功能
 
-- [ ] 数据库同步（MySQL/PostgreSQL/SQLite）
-- [ ] 数据库逆向工程（从现有数据库导入表结构）
-- [ ] 分支管理功能（类似Apifox分支管理）
-- [ ] Git配置集成
-- [ ] 版本可视化对比
+- [x] 数据库同步（MySQL/PostgreSQL/SQLite）
+- [x] 数据库逆向工程（从现有数据库导入表结构）
+- [x] 分支管理功能（类似Apifox分支管理）
+- [x] Git配置集成
+- [x] 版本可视化对比
+- [x] 增量 DDL 生成（ALTER TABLE）
+- [x] 本地 SQLite 文件可视化导入
+- [x] 评论与标注系统
+- [x] 关系线智能避让
+- [x] 字段级协作锁机制
+- [x] 操作历史 JSON/CSV 导出
+- [x] Ollama 本地大模型支持
+- [x] 用户认证与团队管理
+- [x] WebSocket + Yjs CRDT 实时协作
 
 ## 📄 许可证
 

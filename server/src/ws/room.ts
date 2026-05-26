@@ -165,7 +165,7 @@ export class CollabRoom {
     )
 
     if (success) {
-      console.log(`[CollabRoom] 用户 ${userId} 释放了锁`)
+      console.warn(`[CollabRoom] 锁已释放`)
       this.broadcastLockState()
     }
   }

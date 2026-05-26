@@ -16,10 +16,11 @@ import TableNode from './TableNode'
 import { SmartEdge } from './SmartEdge'
 import RelationshipEditor from './RelationshipEditor'
 import { useAppStore } from '../stores/appStore'
-import { Button, Space, Dropdown, message, Modal, Form, Card, Radio, Slider, Select, Input } from 'antd'
-import { PlusOutlined, CodeOutlined, LinkOutlined, ExportOutlined, PictureOutlined, FileImageOutlined, SettingOutlined, ZoomInOutlined, ZoomOutOutlined, RotateLeftOutlined, CompressOutlined, AimOutlined, LockOutlined, DeleteOutlined } from '@ant-design/icons'
+import { Button, Space, Dropdown, message, Modal, Form, Card, Radio, Slider, Select, Input, AutoComplete } from 'antd'
+import { PlusOutlined, CodeOutlined, LinkOutlined, ExportOutlined, PictureOutlined, FileImageOutlined, SettingOutlined, ZoomInOutlined, ZoomOutOutlined, RotateLeftOutlined, CompressOutlined, AimOutlined, LockOutlined, DeleteOutlined, TeamOutlined, WifiOutlined, UndoOutlined, RedoOutlined, AlignLeftOutlined, AlignRightOutlined, AlignCenterOutlined, VerticalAlignMiddleOutlined, ColumnWidthOutlined, VerticalAlignTopOutlined, VerticalAlignBottomOutlined, EditOutlined, SearchOutlined } from '@ant-design/icons'
 import CreateTableModal from './CreateTableModal'
 import { projectApi } from '../services/api'
+import { useCollab } from '../providers/CollabProvider'
 
 interface AutoLayoutOptions {
   layoutType: 'grid' | 'hierarchical' | 'compact'
@@ -54,7 +55,8 @@ const edgeTypes = {
 }
 
 const CanvasContent: React.FC = () => {
-  const { tables, currentProject, updateTablePosition, selectTable, selectedTableId, selectedTableIds, deleteTable, createTable, loadTables, relationships, loadRelationships, canvasZoom, setCanvasZoom, showMiniMap, setShowMiniMap, edgeStyle, showEdgeLabels, updateTable, selectMultipleTables, addSelectedTable, removeSelectedTable, clearSelectedTables } = useAppStore()
+  const { tables, currentProject, updateTablePosition, selectTable, selectedTableId, selectedTableIds, deleteTable, createTable, loadTables, relationships, loadRelationships, canvasZoom, setCanvasZoom, snapToGrid, gridSize, setSnapToGrid, setGridSize, showMiniMap, setShowMiniMap, edgeStyle, showEdgeLabels, updateTable, selectMultipleTables, addSelectedTable, removeSelectedTable, clearSelectedTables, copyTable, pasteTable, copiedTable, undo, redo, canUndo, canRedo, deleteRelationship, createRelationship, updateRelationship } = useAppStore()
+  const { isConnected, onlineUsers } = useCollab()
   const reactFlow = useReactFlow()
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -69,6 +71,19 @@ const CanvasContent: React.FC = () => {
   const [marqueeStart, setMarqueeStart] = useState({ x: 0, y: 0 })
   const [marqueeEnd, setMarqueeEnd] = useState({ x: 0, y: 0 })
   const [marqueeMode, setMarqueeMode] = useState<'contains' | 'intersect'>('contains')
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
+  const [dragInfo, setDragInfo] = useState<{ x: number; y: number; snappedX: number; snappedY: number } | null>(null)
+  const [showShortcuts, setShowShortcuts] = useState(false)
+  const [connectSource, setConnectSource] = useState<{ tableId: string; tableName: string } | null>(null)
+  const [connectTarget, setConnectTarget] = useState<{ tableId: string; tableName: string } | null>(null)
+  const [connectRelType, setConnectRelType] = useState('one-to-many')
+  const [connectSourceCol, setConnectSourceCol] = useState('')
+  const [connectTargetCol, setConnectTargetCol] = useState('')
+  const [editingRelId, setEditingRelId] = useState<string | null>(null)
+  const [editRelName, setEditRelName] = useState('')
+  const [editRelType, setEditRelType] = useState('one-to-many')
+  const [edgeContextMenuPos, setEdgeContextMenuPos] = useState<{ x: number; y: number; edgeId: string } | null>(null)
+  const [searchText, setSearchText] = useState('')
 
   useEffect(() => {
     if (currentProject) {
@@ -196,12 +211,35 @@ const CanvasContent: React.FC = () => {
     isDraggingRef.current = true
   }, [])
 
+  const onNodeDrag = useCallback((event: any, node: Node) => {
+    const rawX = node.position.x
+    const rawY = node.position.y
+    let snappedX = rawX
+    let snappedY = rawY
+
+    if (snapToGrid && gridSize > 0) {
+      snappedX = Math.round(rawX / gridSize) * gridSize
+      snappedY = Math.round(rawY / gridSize) * gridSize
+    }
+
+    setDragInfo({ x: rawX, y: rawY, snappedX, snappedY })
+  }, [snapToGrid, gridSize])
+
   const onNodeDragStop = useCallback((event: any, node: Node) => {
-    updateTablePosition(node.id, node.position.x, node.position.y)
+    let finalX = node.position.x
+    let finalY = node.position.y
+
+    if (snapToGrid && gridSize > 0) {
+      finalX = Math.round(finalX / gridSize) * gridSize
+      finalY = Math.round(finalY / gridSize) * gridSize
+    }
+
+    updateTablePosition(node.id, finalX, finalY)
+    setDragInfo(null)
     setTimeout(() => {
       isDraggingRef.current = false
-    }, 100) // 延长延迟时间，确保 store 更新完成
-  }, [updateTablePosition])
+    }, 100)
+  }, [updateTablePosition, snapToGrid, gridSize])
 
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
     if (marqueeActive) return
@@ -229,14 +267,105 @@ const CanvasContent: React.FC = () => {
 
   const onPaneClick = useCallback((event: React.MouseEvent) => {
     if (marqueeActive) return
-    
-    if (!(event.target as HTMLElement).closest('.react-flow__node')) {
+
+    if (!(event.target as HTMLElement).closest('.react-flow__node') && !(event.target as HTMLElement).closest('.react-flow__edge')) {
       if (event.ctrlKey || event.metaKey) {
         return
       }
       clearSelectedTables()
+      setSelectedEdgeId(null)
     }
   }, [selectTable, clearSelectedTables, marqueeActive])
+
+  const onEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
+    event.stopPropagation()
+    setSelectedEdgeId(prev => prev === edge.id ? null : edge.id)
+  }, [])
+
+  const onEdgeDoubleClick = useCallback((event: React.MouseEvent, edge: Edge) => {
+    event.stopPropagation()
+    const rel = relationships.find(r => r.id === edge.id)
+    if (!rel) return
+    setEditingRelId(edge.id)
+    setEditRelName(rel.name || '')
+    setEditRelType(rel.relationshipType || 'one-to-many')
+  }, [relationships])
+
+  const onEdgeContextMenu = useCallback((event: React.MouseEvent, edge: Edge) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setSelectedEdgeId(edge.id)
+    setEdgeContextMenuPos({ x: event.clientX, y: event.clientY, edgeId: edge.id })
+  }, [])
+
+  const handleEdgeMenuClick = ({ key }: { key: string }) => {
+    if (!edgeContextMenuPos) return
+    const rel = relationships.find(r => r.id === edgeContextMenuPos.edgeId)
+    setEdgeContextMenuPos(null)
+    if (key === 'editRel') {
+      if (!rel) return
+      setEditingRelId(edgeContextMenuPos.edgeId)
+      setEditRelName(rel.name || '')
+      setEditRelType(rel.relationshipType || 'one-to-many')
+    } else if (key === 'deleteRel') {
+      Modal.confirm({
+        title: '确认删除关系',
+        content: '确定要删除这条关系吗？',
+        okText: '删除',
+        cancelText: '取消',
+        okType: 'danger',
+        onOk: async () => {
+          await deleteRelationship(edgeContextMenuPos.edgeId)
+          setSelectedEdgeId(null)
+          message.success('关系已删除')
+        }
+      })
+    }
+  }
+
+  const handleUpdateRel = async () => {
+    if (!editingRelId) return
+    await updateRelationship(editingRelId, {
+      name: editRelName || undefined,
+      relationshipType: editRelType
+    })
+    setEditingRelId(null)
+    message.success('关系已更新')
+  }
+
+  const onConnect = useCallback((connection: any) => {
+    const { source, target } = connection
+    const sourceTable = tables.find(t => t.id === source)
+    const targetTable = tables.find(t => t.id === target)
+    if (!sourceTable || !targetTable) return
+
+    const pkCol = sourceTable.columns.find(c => c.primaryKey)
+    setConnectSourceCol(pkCol?.id || sourceTable.columns[0]?.id || '')
+    const targetPk = targetTable.columns.find(c => c.primaryKey)
+    setConnectTargetCol(targetPk?.id || targetTable.columns[0]?.id || '')
+
+    setConnectSource({ tableId: source, tableName: sourceTable.name })
+    setConnectTarget({ tableId: target, tableName: targetTable.name })
+    setConnectRelType('one-to-many')
+  }, [tables])
+
+  const handleConfirmConnect = async () => {
+    if (!connectSource || !connectTarget || !currentProject) return
+    if (!connectSourceCol || !connectTargetCol) { message.warning('请选择源列和目标列'); return }
+
+    await createRelationship(currentProject.id, {
+      sourceTableId: connectSource.tableId,
+      sourceColumnId: connectSourceCol,
+      targetTableId: connectTarget.tableId,
+      targetColumnId: connectTargetCol,
+      relationshipType: connectRelType,
+      onUpdate: 'NO ACTION',
+      onDelete: 'NO ACTION'
+    })
+    message.success(`已创建关系 "${connectSource.tableName} → ${connectTarget.tableName}"`)
+    setConnectSource(null)
+    setConnectTarget(null)
+  }
 
   const onSelectionChange = useCallback((params: { nodes: any[]; edges: any[] }) => {
     const selectedIds = params.nodes.map((node: any) => node.id)
@@ -337,6 +466,105 @@ const CanvasContent: React.FC = () => {
       }
     })
   }
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable) {
+        return
+      }
+
+      if ((e.key === 'Delete' || e.key === 'Backspace') && (selectedTableIds.length > 0 || selectedEdgeId)) {
+        e.preventDefault()
+        if (selectedEdgeId) {
+          const rel = relationships.find(r => r.id === selectedEdgeId)
+          Modal.confirm({
+            title: '确认删除关系',
+            content: `确定要删除关系 "${rel?.sourceTableId || ''} → ${rel?.targetTableId || ''}" 吗？`,
+            okText: '删除',
+            cancelText: '取消',
+            okType: 'danger',
+            onOk: async () => {
+              await deleteRelationship(selectedEdgeId)
+              setSelectedEdgeId(null)
+            }
+          })
+        } else if (selectedTableIds.length === 1) {
+          Modal.confirm({
+            title: '确认删除表',
+            content: `确定要删除表 "${tables.find(t => t.id === selectedTableIds[0])?.name || ''}" 吗？`,
+            okText: '删除',
+            cancelText: '取消',
+            okType: 'danger',
+            onOk: async () => {
+              await deleteTable(selectedTableIds[0])
+              clearSelectedTables()
+            }
+          })
+        } else {
+          handleBatchDelete()
+        }
+        return
+      }
+
+      if (e.key === 'Escape') {
+        if (selectedTableIds.length > 0) {
+          clearSelectedTables()
+        }
+        if (selectedEdgeId) {
+          setSelectedEdgeId(null)
+        }
+        return
+      }
+
+      if (e.key === 'a' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault()
+        if (tables && tables.length > 0) {
+          selectMultipleTables(tables.map(t => t.id))
+        }
+        return
+      }
+
+      if ((e.key === 'c' || e.key === 'C') && (e.ctrlKey || e.metaKey) && selectedTableIds.length > 0) {
+        if (selectedTableIds.length === 1) {
+          copyTable(selectedTableIds[0])
+          message.success(`已复制表 "${tables.find(t => t.id === selectedTableIds[0])?.name || ''}"`)
+        } else {
+          message.info('批量复制暂仅支持单张表，请选中一张表后重试')
+        }
+        return
+      }
+
+      if ((e.key === 'v' || e.key === 'V') && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault()
+        if (!copiedTable) {
+          message.warning('剪贴板为空，请先复制一张表')
+          return
+        }
+        pasteTable()
+        return
+      }
+
+      if (e.key === 'z' && e.shiftKey && !(e.ctrlKey || e.metaKey)) {
+        e.preventDefault()
+        if (selectedTableIds.length > 0) {
+          reactFlow?.fitView({ nodes: selectedTableIds.map(id => ({ id })), padding: 0.15 })
+        } else {
+          reactFlow?.fitView({ padding: 0.1, includeHiddenNodes: false })
+        }
+        return
+      }
+
+      if (e.key === '?' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault()
+        setShowShortcuts(true)
+        return
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [selectedTableIds, tables, deleteTable, clearSelectedTables, selectMultipleTables, handleBatchDelete, copyTable, pasteTable, copiedTable, selectedEdgeId, relationships, deleteRelationship])
 
   // 没有选择项目时渲染空内容
   if (!currentProject) {
@@ -505,6 +733,70 @@ const CanvasContent: React.FC = () => {
 
   const resetLayoutOptions = () => {
     autoLayoutForm.setFieldsValue(defaultLayoutOptions)
+  }
+
+  const getSelectedTableNodes = () => {
+    return tables.filter(t => selectedTableIds.includes(t.id))
+  }
+
+  const alignTables = (type: 'left' | 'right' | 'top' | 'bottom' | 'hcenter' | 'vcenter' | 'hdistribute' | 'vdistribute') => {
+    const nodes = getSelectedTableNodes()
+    if (nodes.length < 2) { message.warning('请至少选中 2 张表'); return }
+
+    const NODE_WIDTH = 280
+    const NODE_HEIGHT = 200
+
+    switch (type) {
+      case 'left': {
+        const minX = Math.min(...nodes.map(n => n.positionX))
+        nodes.forEach(n => updateTablePosition(n.id, minX, n.positionY))
+        break
+      }
+      case 'right': {
+        const maxX = Math.max(...nodes.map(n => n.positionX + NODE_WIDTH))
+        nodes.forEach(n => updateTablePosition(n.id, maxX - NODE_WIDTH, n.positionY))
+        break
+      }
+      case 'top': {
+        const minY = Math.min(...nodes.map(n => n.positionY))
+        nodes.forEach(n => updateTablePosition(n.id, n.positionX, minY))
+        break
+      }
+      case 'bottom': {
+        const maxY = Math.max(...nodes.map(n => n.positionY + NODE_HEIGHT))
+        nodes.forEach(n => updateTablePosition(n.id, n.positionX, maxY - NODE_HEIGHT))
+        break
+      }
+      case 'hcenter': {
+        const centerX = nodes.reduce((sum, n) => sum + n.positionX + NODE_WIDTH / 2, 0) / nodes.length
+        nodes.forEach(n => updateTablePosition(n.id, centerX - NODE_WIDTH / 2, n.positionY))
+        break
+      }
+      case 'vcenter': {
+        const centerY = nodes.reduce((sum, n) => sum + n.positionY + NODE_HEIGHT / 2, 0) / nodes.length
+        nodes.forEach(n => updateTablePosition(n.id, n.positionX, centerY - NODE_HEIGHT / 2))
+        break
+      }
+      case 'hdistribute': {
+        const sortedByX = [...nodes].sort((a, b) => a.positionX - b.positionX)
+        const leftMost = sortedByX[0].positionX
+        const rightMost = sortedByX[sortedByX.length - 1].positionX + NODE_WIDTH
+        const totalWidth = rightMost - leftMost
+        const gap = totalWidth / nodes.length
+        sortedByX.forEach((n, i) => updateTablePosition(n.id, leftMost + gap * i, n.positionY))
+        break
+      }
+      case 'vdistribute': {
+        const sortedByY = [...nodes].sort((a, b) => a.positionY - b.positionY)
+        const topMost = sortedByY[0].positionY
+        const bottomMost = sortedByY[sortedByY.length - 1].positionY + NODE_HEIGHT
+        const totalHeight = bottomMost - topMost
+        const gap = totalHeight / nodes.length
+        sortedByY.forEach((n, i) => updateTablePosition(n.id, n.positionX, topMost + gap * i))
+        break
+      }
+    }
+    message.success(`已${type === 'left' ? '左对齐' : type === 'right' ? '右对齐' : type === 'top' ? '顶对齐' : type === 'bottom' ? '底对齐' : type === 'hcenter' ? '水平居中' : type === 'vcenter' ? '垂直居中' : type === 'hdistribute' ? '水平分布' : '垂直分布'} ${nodes.length} 张表`)
   }
 
   const handleOpenModal = () => {
@@ -709,6 +1001,29 @@ const CanvasContent: React.FC = () => {
         </Form>
       </div>
       <div style={{ height: '100%', width: '100%', position: 'relative' }} ref={reactFlowWrapper}>
+        <div style={{ position: 'absolute', top: 16, right: 16, zIndex: 10 }}>
+          <AutoComplete
+            style={{ width: 200 }}
+            value={searchText}
+            onSearch={setSearchText}
+            onSelect={(id) => {
+              const table = tables.find(t => t.id === id)
+              if (table) {
+                selectTable(id)
+                reactFlow?.fitView({ nodes: [{ id }], padding: 0.3, duration: 300 })
+                setSearchText('')
+              }
+            }}
+            options={searchText ? tables
+              .filter(t => t.name.toLowerCase().includes(searchText.toLowerCase()))
+              .map(t => ({ value: t.id, label: t.name }))
+              : []}
+            placeholder="搜索表..."
+            allowClear
+          >
+            <Input prefix={<SearchOutlined style={{ color: '#999' }} />} allowClear />
+          </AutoComplete>
+        </div>
         <div style={{ position: 'absolute', top: 16, left: 16, zIndex: 10 }}>
           <Space size="middle">
             <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenModal} size="middle">
@@ -720,6 +1035,68 @@ const CanvasContent: React.FC = () => {
             <Button icon={<SettingOutlined />} onClick={handleAutoLayout} size="middle">
               自动布局
             </Button>
+            <Button
+              icon={<AimOutlined />}
+              size="middle"
+              type={snapToGrid ? 'primary' : 'default'}
+              onClick={() => setSnapToGrid(!snapToGrid)}
+              title={snapToGrid ? '关闭网格吸附 (当前网格: ' + gridSize + 'px)' : '开启网格吸附 (当前网格: ' + gridSize + 'px)'}
+            >
+              吸附
+            </Button>
+            <Button
+              icon={<CompressOutlined />}
+              size="middle"
+              onClick={() => {
+                if (selectedTableIds.length > 0) {
+                  reactFlow?.fitView({ nodes: selectedTableIds.map(id => ({ id })), padding: 0.15 })
+                } else {
+                  reactFlow?.fitView({ padding: 0.1, includeHiddenNodes: false })
+                }
+              }}
+              title={selectedTableIds.length > 0 ? `缩放至选区 (${selectedTableIds.length}张表)` : '缩放至适配 (将所有表节点居中显示)'}
+            >
+              适配
+            </Button>
+            <Button
+              icon={<UndoOutlined />}
+              size="middle"
+              disabled={!canUndo()}
+              onClick={() => undo()}
+              title="撤销 (Ctrl+Z)"
+            />
+            <Dropdown
+              menu={{
+                items: [
+                  { key: 'left', label: '左对齐', icon: <AlignLeftOutlined />, disabled: selectedTableIds.length < 2, onClick: () => alignTables('left') },
+                  { key: 'hcenter', label: '水平居中', icon: <AlignCenterOutlined />, disabled: selectedTableIds.length < 2, onClick: () => alignTables('hcenter') },
+                  { key: 'right', label: '右对齐', icon: <AlignRightOutlined />, disabled: selectedTableIds.length < 2, onClick: () => alignTables('right') },
+                  { type: 'divider' },
+                  { key: 'top', label: '顶对齐', icon: <VerticalAlignTopOutlined />, disabled: selectedTableIds.length < 2, onClick: () => alignTables('top') },
+                  { key: 'vcenter', label: '垂直居中', icon: <VerticalAlignMiddleOutlined />, disabled: selectedTableIds.length < 2, onClick: () => alignTables('vcenter') },
+                  { key: 'bottom', label: '底对齐', icon: <VerticalAlignBottomOutlined />, disabled: selectedTableIds.length < 2, onClick: () => alignTables('bottom') },
+                  { type: 'divider' },
+                  { key: 'hdistribute', label: '水平分布', icon: <ColumnWidthOutlined />, disabled: selectedTableIds.length < 3, onClick: () => alignTables('hdistribute') },
+                  { key: 'vdistribute', label: '垂直分布', icon: <VerticalAlignTopOutlined />, disabled: selectedTableIds.length < 3, onClick: () => alignTables('vdistribute') }
+                ]
+              }}
+              placement="bottomLeft"
+            >
+              <Button
+                size="middle"
+                title={selectedTableIds.length >= 2 ? `对齐 ${selectedTableIds.length} 张表` : '请先选中至少 2 张表'}
+                disabled={selectedTableIds.length < 2}
+              >
+                对齐
+              </Button>
+            </Dropdown>
+            <Button
+              icon={<RedoOutlined />}
+              size="middle"
+              disabled={!canRedo()}
+              onClick={() => redo()}
+              title="重做 (Ctrl+Shift+Z)"
+            />
             <Dropdown menu={{ items: exportMenuItems }} placement="bottomLeft">
               <Button icon={<ExportOutlined />} size="middle">
                 导出
@@ -743,6 +1120,37 @@ const CanvasContent: React.FC = () => {
                 {marqueeMode === 'contains' ? '包含' : '相交'}
               </Button>
             </Dropdown>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '4px 12px',
+              borderRadius: 16,
+              background: isConnected ? 'rgba(82,196,26,0.08)' : 'var(--theme-background-secondary)',
+              border: `1px solid ${isConnected ? '#52c41a' : 'var(--theme-border)'}`,
+              fontSize: 12,
+              color: isConnected ? '#52c41a' : 'var(--theme-text-secondary)',
+              transition: 'all 0.3s ease'
+            }}>
+              <WifiOutlined style={{ fontSize: 12 }} />
+              <span>{isConnected ? '已连接' : '未连接'}</span>
+              {isConnected && onlineUsers.length > 1 && (
+                <span style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 2,
+                  padding: '1px 6px',
+                  borderRadius: 10,
+                  background: '#52c41a',
+                  color: '#fff',
+                  fontSize: 10,
+                  fontWeight: 500
+                }}>
+                  <TeamOutlined style={{ fontSize: 9 }} />
+                  {onlineUsers.length}
+                </span>
+              )}
+            </div>
           </Space>
         </div>
 
@@ -785,6 +1193,253 @@ const CanvasContent: React.FC = () => {
           </div>
         )}
 
+        {selectedEdgeId && (
+          <div style={{
+            position: 'absolute',
+            top: 60,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 10,
+            background: '#fff',
+            border: '1px solid #1890ff',
+            borderRadius: 8,
+            padding: '6px 16px',
+            boxShadow: '0 2px 8px rgba(24,144,255,0.25)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12
+          }}>
+            <span style={{ fontSize: 12, color: '#1890ff', fontWeight: 500 }}>
+              已选中关系线
+            </span>
+            <div style={{ height: 16, width: 1, background: '#e8e8e8' }} />
+            <Button
+              type="text"
+              danger
+              size="small"
+              icon={<DeleteOutlined />}
+              onClick={() => {
+                const rel = relationships.find(r => r.id === selectedEdgeId)
+                Modal.confirm({
+                  title: '确认删除关系',
+                  content: `确定要删除关系吗？`,
+                  okText: '删除',
+                  cancelText: '取消',
+                  okType: 'danger',
+                  onOk: async () => {
+                    await deleteRelationship(selectedEdgeId)
+                    setSelectedEdgeId(null)
+                  }
+                })
+              }}
+            >
+              删除关系
+            </Button>
+            <Button
+              type="text"
+              size="small"
+              onClick={() => setSelectedEdgeId(null)}
+            >
+              取消
+            </Button>
+          </div>
+        )}
+
+        {dragInfo && (
+          <div style={{
+            position: 'fixed',
+            left: '50%',
+            bottom: 24,
+            transform: 'translateX(-50%)',
+            zIndex: 1000,
+            background: 'rgba(0, 0, 0, 0.82)',
+            color: '#fff',
+            borderRadius: 8,
+            padding: '6px 14px',
+            fontSize: 12,
+            fontFamily: 'monospace',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+            pointerEvents: 'none',
+            whiteSpace: 'nowrap'
+          }}>
+            <span style={{ opacity: 0.6 }}>原始:</span>
+            <span>{Math.round(dragInfo.x)}, {Math.round(dragInfo.y)}</span>
+            {snapToGrid && (
+              <>
+                <span style={{ opacity: 0.4, margin: '0 4px' }}>|</span>
+                <span style={{ opacity: 0.6 }}>吸附:</span>
+                <span style={{ color: '#52c41a', fontWeight: 600 }}>{Math.round(dragInfo.snappedX)}, {Math.round(dragInfo.snappedY)}</span>
+              </>
+            )}
+          </div>
+        )}
+
+        <Modal
+          title={
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span>⌨️ 键盘快捷键</span>
+              <span style={{ fontSize: 12, color: '#999', fontWeight: 400 }}>按 ? 键随时打开</span>
+            </div>
+          }
+          open={showShortcuts}
+          onCancel={() => setShowShortcuts(false)}
+          footer={null}
+          width={560}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {[
+              {
+                title: '📋 通用操作',
+                items: [
+                  { key: 'Ctrl + S', desc: '保存项目' },
+                  { key: 'Ctrl + Z', desc: '撤销' },
+                  { key: 'Ctrl + Shift + Z', desc: '重做' },
+                  { key: 'Escape', desc: '清除选中 / 关闭编辑' },
+                  { key: '?', desc: '显示此帮助面板' },
+                ]
+              },
+              {
+                title: '🔲 表节点操作',
+                items: [
+                  { key: 'Delete / Backspace', desc: '删除选中表 / 关系线' },
+                  { key: 'Ctrl + A', desc: '全选所有表' },
+                  { key: 'Ctrl + C', desc: '复制表（含列和索引）' },
+                  { key: 'Ctrl + V', desc: '粘贴表' },
+                  { key: 'Shift + Z', desc: '缩放至适配' },
+                ]
+              },
+              {
+                title: '🖱️ 画布操作',
+                items: [
+                  { key: '鼠标拖拽', desc: '移动表节点（吸附开启时自动对齐网格）' },
+                  { key: '滚轮 / 触控板', desc: '缩放画布' },
+                  { key: '双击表名', desc: '快速编辑表名' },
+                  { key: '双击列名', desc: '快速编辑列名' },
+                  { key: '右键表节点', desc: '上下文菜单（编辑/复制/删除）' },
+                  { key: '拖拽底部Handle', desc: '拖拽连线快速创建关系' },
+                ]
+              }
+            ].map(group => (
+              <div key={group.title}>
+                <div style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: '#333',
+                  marginBottom: 8,
+                  paddingBottom: 6,
+                  borderBottom: '1px solid #f0f0f0'
+                }}>{group.title}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '6px 16px' }}>
+                  {group.items.map(item => (
+                    <React.Fragment key={item.key}>
+                      <kbd style={{
+                        display: 'inline-block',
+                        padding: '2px 8px',
+                        fontSize: 11,
+                        fontFamily: 'monospace',
+                        background: '#f5f5f5',
+                        border: '1px solid #d9d9d9',
+                        borderRadius: 4,
+                        textAlign: 'center',
+                        whiteSpace: 'nowrap'
+                      }}>{item.key}</kbd>
+                      <span style={{ fontSize: 13, color: '#555', lineHeight: '24px' }}>{item.desc}</span>
+                    </React.Fragment>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Modal>
+
+        <Modal
+          title="编辑关系"
+          open={!!editingRelId}
+          onCancel={() => setEditingRelId(null)}
+          onOk={handleUpdateRel}
+          okText="保存"
+          cancelText="取消"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div>
+              <div style={{ fontSize: 12, color: '#999', marginBottom: 4 }}>关系名称</div>
+              <Input
+                placeholder="可选，例如 fk_order_user"
+                value={editRelName}
+                onChange={(e) => setEditRelName(e.target.value)}
+              />
+            </div>
+            <div>
+              <div style={{ fontSize: 12, color: '#999', marginBottom: 4 }}>关系类型</div>
+              <Select
+                style={{ width: '100%' }}
+                value={editRelType}
+                onChange={setEditRelType}
+                options={[
+                  { label: '一对多 (1:N)', value: 'one-to-many' },
+                  { label: '一对一 (1:1)', value: 'one-to-one' },
+                  { label: '多对多 (M:N)', value: 'many-to-many' }
+                ]}
+              />
+            </div>
+          </div>
+        </Modal>
+
+        <Modal
+          title="创建关系"
+          open={!!connectSource && !!connectTarget}
+          onCancel={() => { setConnectSource(null); setConnectTarget(null) }}
+          onOk={handleConfirmConnect}
+          okText="创建关系"
+          cancelText="取消"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ textAlign: 'center', fontSize: 14, color: '#666' }}>
+              {connectSource?.tableName} <span style={{ color: '#1890ff', margin: '0 8px' }}>→</span> {connectTarget?.tableName}
+            </div>
+            <div style={{ display: 'flex', gap: 16 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12, color: '#999', marginBottom: 4 }}>源列 (外键)</div>
+                <Select
+                  style={{ width: '100%' }}
+                  value={connectSourceCol || undefined}
+                  onChange={setConnectSourceCol}
+                  options={tables.find(t => t.id === connectSource?.tableId)?.columns.map(c => ({
+                    label: `${c.name} (${c.dataType})`, value: c.id
+                  })) || []}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12, color: '#999', marginBottom: 4 }}>目标列 (引用)</div>
+                <Select
+                  style={{ width: '100%' }}
+                  value={connectTargetCol || undefined}
+                  onChange={setConnectTargetCol}
+                  options={tables.find(t => t.id === connectTarget?.tableId)?.columns.map(c => ({
+                    label: `${c.name} (${c.dataType})${c.primaryKey ? ' 🔑' : ''}`, value: c.id
+                  })) || []}
+                />
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 12, color: '#999', marginBottom: 4 }}>关系类型</div>
+              <Select
+                style={{ width: '100%' }}
+                value={connectRelType}
+                onChange={setConnectRelType}
+                options={[
+                  { label: '一对多 (One-to-Many)', value: 'one-to-many' },
+                  { label: '一对一 (One-to-One)', value: 'one-to-one' },
+                  { label: '多对多 (Many-to-Many)', value: 'many-to-many' }
+                ]}
+              />
+            </div>
+          </div>
+        </Modal>
+
         {marqueeActive && (
           <div
             style={{
@@ -807,9 +1462,14 @@ const CanvasContent: React.FC = () => {
           onNodesChange={onNodeChange}
           onEdgesChange={onEdgesChange}
           onNodeDragStart={onNodeDragStart}
+          onNodeDrag={onNodeDrag}
           onNodeDragStop={onNodeDragStop}
           onNodeClick={onNodeClick}
           onNodeDoubleClick={onNodeDoubleClick}
+          onEdgeClick={onEdgeClick}
+          onEdgeDoubleClick={onEdgeDoubleClick}
+          onEdgeContextMenu={onEdgeContextMenu}
+          onConnect={onConnect}
           onPaneClick={onPaneClick}
           onMoveEnd={onMoveEnd}
           onSelectionChange={onSelectionChange}
@@ -826,7 +1486,37 @@ const CanvasContent: React.FC = () => {
             e.stopPropagation()
           }}
         >
-          <Background color="#eee" gap={16} size={2} />
+          <Background
+            color={snapToGrid ? '#e0e0e0' : '#f0f0f0'}
+            gap={snapToGrid ? gridSize : 24}
+            size={snapToGrid ? 1 : 2}
+          />
+          {snapToGrid && (
+            <svg
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                pointerEvents: 'none',
+                zIndex: 1
+              }}
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <defs>
+                <pattern
+                  id={`grid-${gridSize}`}
+                  width={gridSize}
+                  height={gridSize}
+                  patternUnits="userSpaceOnUse"
+                >
+                  <circle cx="0" cy="0" r="0.5" fill="#d9d9d9" />
+                </pattern>
+              </defs>
+              <rect width="100%" height="100%" fill={`url(#grid-${gridSize})`} />
+            </svg>
+          )}
           <div style={{ 
             position: 'absolute', 
             top: 10, 
@@ -1023,7 +1713,7 @@ const CanvasContent: React.FC = () => {
         footer={null}
         width={500}
       >
-        <Form form={autoLayoutForm} layout="vertical">
+        <Form form={autoLayoutForm} layout="vertical" initialValues={defaultLayoutOptions}>
           <Card size="small" title="布局类型" style={{ marginBottom: 16 }}>
             <Form.Item name="layoutType">
               <Radio.Group>
@@ -1037,13 +1727,13 @@ const CanvasContent: React.FC = () => {
           <Card size="small" title="布局选项" style={{ marginBottom: 16 }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
               <Form.Item label="水平间距" name="paddingX">
-                <Slider min={20} max={150} defaultValue={defaultLayoutOptions.paddingX} />
+                <Slider min={20} max={150} />
               </Form.Item>
               <Form.Item label="垂直间距" name="paddingY">
-                <Slider min={20} max={150} defaultValue={defaultLayoutOptions.paddingY} />
+                <Slider min={20} max={150} />
               </Form.Item>
               <Form.Item label="最大列数" name="maxColumns">
-                <Select style={{ width: '100%' }} defaultValue={defaultLayoutOptions.maxColumns}>
+                <Select style={{ width: '100%' }}>
                   <Select.Option value={2}>2 列</Select.Option>
                   <Select.Option value={3}>3 列</Select.Option>
                   <Select.Option value={4}>4 列</Select.Option>
@@ -1069,6 +1759,29 @@ const CanvasContent: React.FC = () => {
           </div>
         </Form>
       </Modal>
+
+      <Dropdown
+        menu={{
+          items: [
+            { key: 'editRel', label: '编辑关系', icon: <EditOutlined /> },
+            { key: 'deleteRel', label: '删除关系', icon: <DeleteOutlined />, danger: true }
+          ],
+          onClick: handleEdgeMenuClick
+        }}
+        open={!!edgeContextMenuPos}
+        onOpenChange={(open) => !open && setEdgeContextMenuPos(null)}
+      >
+        {edgeContextMenuPos && (
+          <div style={{
+            position: 'fixed',
+            top: edgeContextMenuPos.y,
+            left: edgeContextMenuPos.x,
+            width: 0,
+            height: 0,
+            pointerEvents: 'none'
+          }} />
+        )}
+      </Dropdown>
     </>
   )
 }

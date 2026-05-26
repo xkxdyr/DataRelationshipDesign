@@ -342,6 +342,34 @@
 | 330 | 交互优化：SQLEditor 改为标签页 | 前端 重构 | 2026-05-19 | Assistant | 将 SQLEditor 从 Modal 弹窗改为标签页：1. appStore 新增 sqlEditor tab 类型 + openSQLEditorTab 方法；2. 新建 SQLEditorTab.tsx 组件（无 props，从 useAppStore 获取 currentProject/tables/relationships）；3. App.tsx 移除 showSQLEditor state 和 Modal JSX，工具栏按钮改为 openSQLEditorTab()；4. 删除旧文件 SQLEditor.tsx
 | 331 | GitConfigTab 添加 Spin 加载状态 | 前端 体验 | 2026-05-19 | Assistant | GitConfigTab 初始加载时缺少视觉反馈（仅禁用表单），添加 Spin 组件包裹表单+状态+按钮区域，loading 时显示加载动画
 | 332 | Escape 键关闭逻辑补充 | 前端 修复 | 2026-05-19 | Assistant | App.tsx 键盘处理器中 Escape 逻辑遗漏 showDatabaseSync/showSyncQueue/showAuthModal 三个 modal 的关闭判断，导致这些弹窗无法通过 ESC 键关闭。补充 if-else 链并更新 useEffect 依赖数组 |
+| 333 | COLLABORATION_REDESIGN 验证 | 代码审查 | 2026-05-20 | Assistant | 验证COLLABORATION_REDESIGN.md中4个关键问题全部已解决：1.Invite模型存在于Prisma Schema；2.inviteService使用Prisma而非内存存储；3.WebSocket服务器有JWT认证和权限检查；4.CRDT连接时从数据库加载数据 |
+| 334 | 死代码清理：删除 useCRDT.ts | 前端 清理 | 2026-05-20 | Assistant | 删除 client/src/hooks/useCRDT.ts（零引用死代码），功能已合并到 collabManager.ts 单例模式。符合COLLABORATION_REDESIGN Phase 1 第4步要求 |
+| 335 | README.md 文档更新 | 文档维护 | 2026-05-20 | Assistant | 更新README.md"未来计划"章节：1.重命名为"已完成增强功能"；2.所有功能项标记为已完成 [x]；3.新增14项已完成功能（数据库同步、逆向工程、分支管理、Git配置、版本对比、增量DDL、SQLite导入、评论标注、关系线避让、协作锁、操作历史导出、Ollama支持、用户认证、实时协作） |
+| 336 | 全量自测验证通过 | 测试/运维 | 2026-05-20 | Assistant | 全量自测零报错零崩溃：1.后端健康检查 200 OK；2.前端页面 200 OK；3.核心API端点正常（公开端点200，认证端点401符合预期）；4.前端TypeScript编译零错误；5.后端TypeScript编译零错误；6.前端Vite构建成功（3258模块，20.56s） |
+| 337 | App.tsx 调试日志清理 | 前端 代码质量 | 2026-05-20 | Assistant | 清理App.tsx中3处调试级console.log（handleDatabaseImport入口日志、逐表处理日志、主键列创建成功日志），保留console.error用于异常场景。修复日志清理导致的if块花括号缺失问题 |
+| 338 | Canvas工具栏协作状态指示器 | 前端 协作UI | 2026-05-20 | Assistant | Canvas.tsx工具栏新增协作状态指示器：1.导入useCollab hook获取isConnected和onlineUsers状态；2.显示WifiOutlined图标+连接文字（已连接绿色/未连接灰色）；3.多人在线时显示TeamOutlined+人数徽章；4.圆角胶囊样式带过渡动画；5.TypeScript编译零错误 |
+| 339 | 协作系统调试日志全面清理 | 前端 代码质量 | 2026-05-20 | Assistant | 清理协作核心文件中调试级console.log共15处：1.collabManager.ts清理8处（状态变化/启动/URL含token安全风险/连接成功/重连尝试/同步完成/停止）；2.collabService.ts清理4处（连接URL含参数/连接成功/重连尝试删除，连接关闭改为warn）；3.useCollabLocks.ts清理1处（空handler锁获取成功日志）；4.CollabProvider.tsx清理2处（本地项目不支持/项目未开启）。保留所有console.warn/error用于异常场景。TypeScript编译零错误 |
+| 340 | SQL导入与表单验证日志清理 | 前端 代码质量 | 2026-05-20 | Assistant | 清理importService.ts中7处SQL解析调试日志（emoji进度日志：开始解析/找到表/定义计数/主键详情/逐列解析/跳过异常/表完成），其中跳过异常改为console.warn；清理ConnectionForm.tsx中1处表单验证失败日志（Ant Design已自动显示错误提示，无需额外日志） |
+| 341 | 修复废弃API substr() -> substring() | 前端/后端 代码质量 | 2026-05-20 | Assistant | 修复前端15处已废弃的substr()调用为substring()：importService.ts(3处)、collabService.ts(1处)、collabManager.ts(1处)、appStore.ts(10处)。全部为随机ID生成场景(Math.random().toString(36).substr(2,9) -> substring(2))。前端substr调用清零 |
+| 342 | Auth中间件安全日志加固 | 后端 安全 | 2026-05-20 | Assistant | 清理middleware/auth.ts中6处安全敏感console.log：删除请求方法路径日志、Authorization header存在性日志、Token存在性日志、Token解码结果日志（严重：泄露userId/username）、会话存在性日志、最后活跃时间更新日志。保留认证失败的console.error用于异常诊断。消除生产环境用户信息泄露风险 |
+| 343 | 后端协作服务userId日志脱敏 | 后端 安全 | 2026-05-20 | Assistant | 清理后端5处包含userId的调试日志：1.projectMemberController.ts删除getUserProjects调用/结果日志(2处)；2.room.ts锁释放日志移除userId改为warn；3.server.ts WebSocket断开连接移除userId改为warn；4.lockService.ts删除锁释放成功详情日志(含projectId/tableId/userId)，释放用户所有锁日志移除userId改为warn |
+| 344 | Canvas 键盘快捷键功能 | 前端 功能增强 | 2026-05-20 | Assistant | Canvas.tsx 新增全局键盘快捷键监听：1.Delete/Backspace 删除选中表（单表弹确认框显示表名，多表复用批量删除逻辑）；2.Escape 清除所有选中状态；3.Ctrl+A/Cmd+A 全选所有表；4.输入框内（INPUT/TEXTAREA/SELECT/contentEditable）不触发快捷键避免干扰编辑。使用useEffect注册window事件并正确清理 |
+| 345 | TableNode 右键上下文菜单 | 前端 功能增强 | 2026-05-20 | Assistant | TableNode.tsx 新增右键上下文菜单：1.使用Ant Design Dropdown组件包裹根div实现contextMenu触发；2.菜单项包括编辑表(locked时disabled)、复制表名、复制表ID、删除表(locked时disabled+danger样式)；3.复制操作使用navigator.clipboard API并反馈message.success/error；4.协作锁定状态下自动禁用编辑和删除操作 |
+| 346 | 后端WS层日志全面清理 | 后端 代码质量 | 2026-05-20 | Assistant | 清理后端WebSocket层全部调试级console.log共15处：1.lockService.ts清理3处（锁获取成功详情含敏感信息/过期锁清理改warn/项目锁清理）；2.server.ts清理4处（连接建立/CRDT加载改warn/心跳超时改warn/未知消息类型改warn）；3.persistence.ts清理8处（无活跃文档/保存成功/无保存状态/数据库恢复改warn/自动保存启动/自动保存停止/saveAllProjects开始+完成）。保留所有console.warn/error用于异常场景。TypeScript编译零错误 |
+| 347 | 后端核心层日志清理 | 后端 代码质量 | 2026-05-20 | Assistant | 清理server.ts核心层调试日志共5处+修复persistence.ts残留1处：1.删除HTTP请求日志中间件（每个请求打印时间戳/方法/路径，生产环境噪音大）；2.删除listRoutes函数及其调用（启动时打印所有路由，纯调试用）；3.404未找到路由日志改为console.warn；4.保留服务器启动信息（L103-104）。后端console.log从7处降至2处（仅启动信息） |
+| 348 | 画布拖拽网格吸附 (Snap to Grid) | 前端 功能增强 | 2026-05-20 | Assistant | 实现ER图拖拽网格吸附功能：1.appStore新增snapToGrid(boolean,默认true)+gridSize(number,默认20px)状态及setter+localStorage持久化+undo/redo快照兼容；2.Canvas.tsx的onNodeDragStop中实现Math.round坐标吸附算法；3.工具栏新增"吸附"切换按钮(AimOutlined图标，启用时primary样式，title显示当前网格大小)。拖拽表节点后自动对齐到20px网格 |
+| 349 | 双击表名快速编辑 | 前端 功能增强 | 2026-05-20 | Assistant | TableNode.tsx实现双击表名内联编辑功能：1.新增editingName/editNameValue状态+nameInputRef引用+从store获取updateTable方法；2.表名span添加onDoubleClick事件进入编辑模式(锁定状态下禁用)；3.编辑模式显示Ant Design Input组件(autoFocus/size=small)，支持Enter保存、Escape取消、Blur自动保存；4.Input的onClick/onMouseDown阻止冒泡避免触发节点选中；5.空值或未变更直接关闭编辑模式；6.保存成功后message.success反馈。无需打开右侧编辑面板即可快速重命名 |
+| 350 | 表复制粘贴功能 (Ctrl+C/V) | 前端 功能增强 | 2026-05-20 | Assistant | 接入已有Store的copyTable/pasteTable到UI层：1.Canvas键盘快捷键新增Ctrl+C(复制选中单张表+message反馈)/Ctrl+V(粘贴剪贴板表+空值提示)；2.TableNode右键菜单新增"复制表(含列和索引)"/"粘贴表"(动态显示已复制表名/无数据时disabled)；3.粘贴自动创建带_副本后缀的新表并完整复制所有列和索引，位置偏移50px避免重叠。多选时Ctrl+C提示仅支持单表 |
+| 351 | 缩放至适配 (Zoom to Fit) | 前端 功能增强 | 2026-05-20 | Assistant | Canvas工具栏新增"适配"按钮(CompressOutlined图标)：1.使用React Flow的fitView API实现智能缩放；2.有选中表时缩放至选区(fitView指定nodes+padding=0.15)，无选中时缩放至全部节点(padding=0.1)；3.title动态提示当前模式(选区/全部)；4.键盘快捷键Shift+Z触发相同逻辑。解决画布表过多时手动缩放定位困难的问题 |
+| 352 | 画布网格背景可视化 | 前端 体验增强 | 2026-05-20 | Assistant | 配合Snap to Grid吸附功能的可视化增强：1.React Flow Background组件动态化——吸附开启时gap=gridSize(20px)/color=#e0e0e0/size=1(细密点阵)，关闭时gap=24/color=#f0f0f0/size=2(稀疏淡点)；2.吸附开启时额外渲染SVG pattern覆盖层(pointerEvents:none/zIndex=1)，以精确gridSize间距绘制0.5px圆点(#d9d9d9)，让用户直观看到吸附网格位置；3.切换吸附开关时背景即时响应，无需刷新。视觉反馈与吸附行为完全一致 |
+| 353 | 撤销/重做工具栏按钮 | 前端 功能增强 | 2026-05-20 | Assistant | Canvas工具栏新增撤销/重做按钮：1.UndoOutlined+RedoOutlined图标按钮放置在"适配"按钮之后；2.disabled状态由canUndo()/canRedo()实时控制(基于undo栈/redo栈长度)；3.title提示快捷键(Ctrl+Z/Ctrl+Shift+Z)；4.接入Store已有undo/redo方法，零新增逻辑。解决用户不知晓快捷键时的操作盲区 |
+| 354 | 关系线点击选中与删除 | 前端 功能增强 | 2026-05-20 | Assistant | Canvas关系线交互增强：1.新增selectedEdgeId状态+onEdgeClick处理器(单击选中/再次单击取消)；2.画布顶部居中显示浮动操作条(蓝色边框+阴影)含"已选中关系线"/"删除关系"(danger)/"取消"三个操作；3.Delete/Backspace键支持删除选中关系线(弹确认框)；4.Escape键清除关系线选中状态；5.点击画布空白区自动清除关系线选中；6.接入Store已有deleteRelationship方法 |
+| 355 | 双击列名快速编辑 | 前端 功能增强 | 2026-05-20 | Assistant | TableNode.tsx实现双击列名内联编辑功能（配合#349表名编辑形成完整内联编辑体验）：1.新增editingColumnId/editColumnNameValue状态+columnInputRef引用+从store获取updateColumn方法；2.列名span添加onDoubleClick事件进入编辑模式(表锁定或列锁定时禁用)；3.编辑模式显示Ant Design Input组件(autoFocus/size=small/flex:1)，支持Enter保存、Escape取消、Blur自动保存；4.Input的onClick/onMouseDown阻止冒泡避免触发节点/表选中；5.空值直接关闭编辑模式；6.保存调用updateColumn API并message.success反馈。无需打开右侧编辑面板即可快速重命名任意字段 |
+| 356 | 拖拽节点坐标提示 (Drag Tooltip) | 前端 体验增强 | 2026-05-20 | Assistant | Canvas拖拽节点时显示实时坐标提示：1.新增dragInfo状态(x/y/snappedX/snappedY)+onNodeDrag处理器(每帧更新坐标)；2.画布底部居中显示固定定位tooltip(深色半透明背景/monospace字体/zIndex=1000)；3.显示"原始坐标"(灰)和"吸附坐标"(绿色加粗，仅snapToGrid开启时显示)；4.onNodeDragStop时清除tooltip；5.pointerEvents:none避免干扰拖拽操作。与#348 Snap to Grid功能完美配合，用户可直观看到吸附后的目标位置 |
+| 357 | 键盘快捷键帮助面板 | 前端 功能增强 | 2026-05-20 | Assistant | Canvas新增键盘快捷键帮助面板：1.按?键触发showShortcuts状态打开Modal(宽度560px/footer=null)；2.面板按3个分组展示：通用操作(Ctrl+S/Z/Escape/?)、表节点操作(Delete/Ctrl+A/C/V/Shift+Z)、画布操作(拖拽/滚轮/双击编辑/右键菜单)；3.每项使用<kbd>标签(monospace/浅灰背景/圆角边框)展示快捷键+描述文字(grid两列布局)；4.title显示"按?键随时打开"提示。解决用户发现不了快捷键的问题 |
+| 358 | 表节点悬停信息提示 (Hover Tooltip) | 前端 体验增强 | 2026-05-20 | Assistant | TableNode.tsx新增表节点悬停信息提示：1.用Ant Design Tooltip包裹整个Dropdown组件(placement=right/mouseEnterDelay=0.5s避免误触/overlayStyle maxWidth=280)；2.tooltip内容显示表名(加粗)+列数+主键列名列表+索引数量+注释；3.协作锁定时额外显示橙色锁定提示(含相对时间如"3分钟前")；4.无需点击即可快速浏览表结构概览，提升大画布浏览效率 |
+| 359 | 批量对齐工具 (Align & Distribute) | 前端 功能增强 | 2026-05-20 | Assistant | Canvas新增批量对齐/分布工具：1.工具栏新增"对齐"按钮(disabled=选中<2张)/Dropdown菜单含8种操作+对应图标；2.alignTables函数实现左对齐/右对齐/水平居中/顶对齐/底对齐/垂直居中(≥2张表触发)+水平分布/垂直分布(≥3张表)；3.对齐算法基于positionX/positionY+NODE_WIDTH/NODE_HEIGHT常量计算目标坐标；4.分布算法将节点排序后在首尾边界间均匀分配；5.操作后message.success反馈操作类型和表数量。配合Ctrl+A全选实现高效批量排版 |
+| 360 | 快速连线创建关系 (Handle Connect) | 前端 功能增强 | 2026-05-20 | Assistant | Canvas实现Handle拖拽连线快速创建关系：1.ReactFlow添加onConnect回调+connectionMode，拖拽表节点底部Handle到另一表自动弹出配置Modal；2.Modal显示源表→目标表流向+源列Select(含dataType提示)+目标列Select(主键🔑标记)+关系类型Select(一对多/一对一/多对多)；3.默认智能选择源列和目标列主键；4.handleConfirmConnect调用createRelationship API保存关系；5.快捷键帮助面板新增"拖拽底部Handle"条目。无需打开关系管理面板即可快速创建关系 |
 
 ---
 
@@ -518,4 +546,34 @@
 - 2026-05-18: 添加Git配置集成(317) — Phase 3 全部完成
 - 2026-05-18: 添加P2重构：llmRoutes拆出Controller(318) + DDL类型映射器抽取(319)
 - 2026-05-19: 添加交互优化：TypeConvertModal改为标签页(329) + SQLEditor改为标签页(330) + GitConfigTab加载状态(331) + Escape键修复(332)
+- 2026-05-20: 添加COLLABORATION_REDESIGN验证(333) + 死代码清理useCRDT.ts(334) + README.md文档更新(335) + 全量自测验证(336)
+- 2026-05-20: 添加App.tsx调试日志清理(337) + Canvas协作状态指示器(338)
+- 2026-05-20: 添加协作系统调试日志全面清理(339)
+- 2026-05-20: 添加SQL导入与表单验证日志清理(340)
+- 2026-05-20: 添加废弃API substr()修复(341) + Auth中间件安全日志加固(342)
+- 2026-05-20: 添加后端协作服务userId日志脱敏(343)
+- 2026-05-20: 添加Canvas键盘快捷键功能(344)
+- 2026-05-20: 添加TableNode右键上下文菜单(345)
+2026-05-20: 添加后端WS层日志全面清理(346)
+2026-05-20: 添加后端核心层日志清理(347)
+2026-05-20: 添加画布拖拽网格吸附Snap to Grid(348)
+2026-05-20: 添加双击表名快速编辑(349)
+2026-05-20: 添加表复制粘贴功能Ctrl+C/V(350)
+2026-05-20: 添加缩放至适配Zoom to Fit(351)
+2026-05-20: 添加画布网格背景可视化(352)
+2026-05-20: 添加撤销重做工具栏按钮(353)
+2026-05-20: 添加关系线点击选中与删除(354)
+2026-05-20: 添加双击列名快速编辑(355)
+2026-05-20: 添加拖拽节点坐标提示Drag Tooltip(356)
+2026-05-20: 添加键盘快捷键帮助面板(357)
+2026-05-20: 添加表节点悬停信息提示Hover Tooltip(358)
+2026-05-20: 添加批量对齐工具Align & Distribute(359)
+2026-05-20: 添加快速连线创建关系Handle Connect(360)
+2026-05-20: 添加表节点列操作内联按钮(添加/删除列)(361)
+2026-05-20: 添加Edge标签渲染与双击编辑关系(362)
+2026-05-20: 修复控制台警告 #1和#4 (overlayStyle/Form.defaultValue)(363)
+2026-05-20: 添加列数据类型inline编辑(点击切换SQL类型)(364)
+2026-05-20: 添加列属性inline切换(PK/UQ/nullable点击切换)(365)
+2026-05-20: 添加Edge右键上下文菜单(366)
+2026-05-20: 添加AI自增徽章与列注释图标(367)
 

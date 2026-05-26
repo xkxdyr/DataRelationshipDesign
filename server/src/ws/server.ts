@@ -186,8 +186,6 @@ export class CollabWebSocketServer {
 
   private init() {
     this.wss.on('connection', async (ws, req) => {
-      console.log('WebSocket 连接建立')
-
       const url = new URL(req.url || '', `http://${req.headers.host}`)
       const projectId = url.searchParams.get('projectId')
       const userId = url.searchParams.get('userId')
@@ -248,7 +246,7 @@ export class CollabWebSocketServer {
           const crdtManager = room.getCRDTManager()
           const doc = crdtManager.getDoc()
           populateCRDTDoc(doc, projectData)
-          console.log(`已从数据库加载项目 ${projectId} 数据到 CRDT`)
+          console.warn(`[WebSocket] 项目数据已加载到 CRDT`)
         } catch (error) {
           console.error('加载项目数据失败:', error)
         }
@@ -295,7 +293,7 @@ export class CollabWebSocketServer {
       })
 
       ws.on('close', () => {
-        console.log('WebSocket 连接断开:', userId)
+        console.warn('[WebSocket] 连接断开')
         this.stopHeartbeat(ws)
         room!.removeClient(userId)
 
@@ -351,7 +349,7 @@ export class CollabWebSocketServer {
         ws.ping()
 
         const timeout = setTimeout(() => {
-          console.log('心跳超时，关闭连接')
+          console.warn('[WebSocket] 心跳超时，关闭连接')
           ws.terminate()
         }, HEARTBEAT_TIMEOUT)
 
@@ -402,7 +400,7 @@ export class CollabWebSocketServer {
         break
 
       default:
-        console.log('未知消息类型:', message.type)
+        console.warn('[WebSocket] 未知消息类型:', message.type)
     }
   }
 

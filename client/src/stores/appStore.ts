@@ -65,6 +65,8 @@ interface AppState {
   themeMode: ThemeMode
   compactMode: boolean
   canvasZoom: number
+  snapToGrid: boolean
+  gridSize: number
   showMiniMap: boolean
   autoSaveInterval: number
   edgeStyle: 'straight' | 'step' | 'smooth' | 'smart'
@@ -146,6 +148,8 @@ interface AppStore extends AppState {
   setThemeMode: (mode: ThemeMode) => void
   setCompactMode: (compact: boolean) => void
   setCanvasZoom: (zoom: number) => void
+  setSnapToGrid: (snap: boolean) => void
+  setGridSize: (size: number) => void
   setShowMiniMap: (show: boolean) => void
   setAutoSaveInterval: (interval: number) => void
   setEdgeStyle: (style: 'straight' | 'step' | 'smooth' | 'smart') => void
@@ -247,6 +251,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   themeMode: 'light',
   compactMode: false,
   canvasZoom: 1,
+  snapToGrid: true,
+  gridSize: 20,
   showMiniMap: true,
   autoSaveInterval: 30000,
   edgeStyle: 'smooth',
@@ -388,6 +394,14 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({ canvasZoom: zoom })
     localStorageService.setMeta('canvasZoom', zoom)
   },
+  setSnapToGrid: (snap: boolean) => {
+    set({ snapToGrid: snap })
+    localStorageService.setMeta('snapToGrid', snap)
+  },
+  setGridSize: (size: number) => {
+    set({ gridSize: size })
+    localStorageService.setMeta('gridSize', size)
+  },
   setShowMiniMap: (show: boolean) => {
     set({ showMiniMap: show })
     localStorageService.setMeta('showMiniMap', show)
@@ -453,6 +467,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const savedCanvasZoom = await localStorageService.getMeta<number>('canvasZoom')
     if (savedCanvasZoom !== undefined) {
       set({ canvasZoom: savedCanvasZoom })
+    }
+
+    const savedSnapToGrid = await localStorageService.getMeta<boolean>('snapToGrid')
+    if (savedSnapToGrid !== undefined) {
+      set({ snapToGrid: savedSnapToGrid })
+    }
+
+    const savedGridSize = await localStorageService.getMeta<number>('gridSize')
+    if (savedGridSize !== undefined) {
+      set({ gridSize: savedGridSize })
     }
 
     const savedShowMiniMap = await localStorageService.getMeta<boolean>('showMiniMap')
@@ -824,6 +848,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
       themeMode: get().themeMode,
       compactMode: get().compactMode,
       canvasZoom: get().canvasZoom,
+      snapToGrid: get().snapToGrid,
+      gridSize: get().gridSize,
       showMiniMap: get().showMiniMap,
       autoSaveInterval: get().autoSaveInterval,
       edgeStyle: get().edgeStyle,
@@ -900,6 +926,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
       themeMode: get().themeMode,
       compactMode: get().compactMode,
       canvasZoom: get().canvasZoom,
+      snapToGrid: get().snapToGrid,
+      gridSize: get().gridSize,
       showMiniMap: get().showMiniMap,
       autoSaveInterval: get().autoSaveInterval,
       edgeStyle: get().edgeStyle,
@@ -1300,7 +1328,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       } else {
         // 离线或是本地项目时，本地创建
         newTable = {
-          id: `local_table_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          id: `local_table_${Date.now()}_${Math.random().toString(36).substring(2)}`,
           projectId,
           name: data.name || '新表',
           comment: data.comment,
@@ -1336,7 +1364,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         } else {
           // 离线或是本地项目时，本地创建列
           const localColumn: LocalColumn = {
-            id: `local_col_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            id: `local_col_${Date.now()}_${Math.random().toString(36).substring(2)}`,
             tableId: newTable.id,
             ...idColumnData,
             createdAt: new Date().toISOString(),
@@ -1735,7 +1763,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       }
     } else {
       const localColumn: LocalColumn = {
-        id: `local_col_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        id: `local_col_${Date.now()}_${Math.random().toString(36).substring(2)}`,
         tableId,
         name: data.name || '新列',
         dataType: data.dataType || 'VARCHAR',
@@ -1945,7 +1973,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         }
       } else {
         const localRelationship: LocalRelationship = {
-          id: `local_rel_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          id: `local_rel_${Date.now()}_${Math.random().toString(36).substring(2)}`,
           projectId,
           sourceTableId: data.sourceTableId || '',
           sourceColumnId: data.sourceColumnId || '',
@@ -2090,7 +2118,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         }
       } else {
         const localIndex: LocalIndex = {
-          id: `local_idx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          id: `local_idx_${Date.now()}_${Math.random().toString(36).substring(2)}`,
           tableId,
           name: data.name || '新索引',
           columns: data.columns || [],
@@ -2846,7 +2874,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       const columnIdMap = new Map<string, string>() // 原列ID -> 新本地列ID映射
       
       for (const table of tablesData || []) {
-        const localTableId = `local_table_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        const localTableId = `local_table_${Date.now()}_${Math.random().toString(36).substring(2)}`
         tableIdMap.set(table.id, localTableId)
         
         const localTable: any = {
@@ -2867,7 +2895,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         }
         
         for (const col of columns || []) {
-          const localColumnId = `local_col_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+          const localColumnId = `local_col_${Date.now()}_${Math.random().toString(36).substring(2)}`
           columnIdMap.set(col.id, localColumnId)
           
           const localColumn: any = {
@@ -2889,7 +2917,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         }
         
         for (const idx of indexes || []) {
-          const localIndexId = `local_idx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+          const localIndexId = `local_idx_${Date.now()}_${Math.random().toString(36).substring(2)}`
           const mappedColumns = idx.columns.map(colId => columnIdMap.get(colId) || colId)
           
           const localIndex: any = {
@@ -2905,7 +2933,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       
       // 保存关系到本地
       for (const rel of relationshipsData || []) {
-        const localRelationshipId = `local_rel_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        const localRelationshipId = `local_rel_${Date.now()}_${Math.random().toString(36).substring(2)}`
         const mappedSourceTableId = tableIdMap.get(rel.sourceTableId) || rel.sourceTableId
         const mappedSourceColumnId = columnIdMap.get(rel.sourceColumnId) || rel.sourceColumnId
         const mappedTargetTableId = tableIdMap.get(rel.targetTableId) || rel.targetTableId
@@ -2926,7 +2954,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       
       // 保存版本到本地
       for (const ver of versionsData || []) {
-        const localVersionId = `local_ver_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        const localVersionId = `local_ver_${Date.now()}_${Math.random().toString(36).substring(2)}`
         const localVersion: any = {
           ...ver,
           id: localVersionId,

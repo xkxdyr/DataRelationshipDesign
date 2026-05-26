@@ -92,9 +92,7 @@ function parseDataType(typeStr: string): { dataType: string; length?: number; pr
 function parseCreateTable(sql: string): ParsedTable[] {
   const tables: ParsedTable[] = []
   const upperSql = sql.toUpperCase()
-  
-  console.log('🔍 开始解析 SQL...')
-  
+
   const sqlWithoutComments = sql.replace(/\/\*[\s\S]*?\*\//g, '')
   const statements = sqlWithoutComments.split(';')
   
@@ -110,8 +108,7 @@ function parseCreateTable(sql: string): ParsedTable[] {
         continue
       }
       const tableName = tableNameMatch[1]
-      console.log(`📋 找到表: ${tableName}`)
-      
+
       const columnsStart = trimmedStmt.indexOf('(')
       const columnsEnd = trimmedStmt.lastIndexOf(')')
       if (columnsStart === -1 || columnsEnd === -1) {
@@ -142,9 +139,7 @@ function parseCreateTable(sql: string): ParsedTable[] {
       if (current.trim()) {
         definitions.push(current.trim())
       }
-      
-      console.log(`  找到 ${definitions.length} 个定义`)
-      
+
       for (const def of definitions) {
         if (!def.trim()) continue
         
@@ -155,7 +150,6 @@ function parseCreateTable(sql: string): ParsedTable[] {
           if (pkMatch) {
             const pkCols = pkMatch[1].split(',').map(col => col.trim().replace(/`/g, ''))
             primaryKeys.push(...pkCols)
-            console.log(`  🔑 主键: ${pkCols.join(', ')}`)
           }
           continue
         }
@@ -229,10 +223,8 @@ function parseCreateTable(sql: string): ParsedTable[] {
             defaultValue,
             comment
           })
-          
-          console.log(`  ✅ 列: ${colName} (${typeInfo.dataType})`)
         } catch (e) {
-          console.log(`  ❌ 跳过: ${def.substring(0, 50)}...`)
+          console.warn(`跳过无法解析的列定义: ${def.substring(0, 50)}`)
         }
       }
       
@@ -255,8 +247,6 @@ function parseCreateTable(sql: string): ParsedTable[] {
         columns,
         indexes
       })
-      
-      console.log(`✅ 表 ${tableName} 完成！${columns.length} 列`)
     } catch (e) {
       console.error(`解析表失败`, e)
     }
@@ -281,17 +271,17 @@ export const importService = {
       
       const tables: Partial<Table>[] = data.tables.map((t: any) => ({
         ...t,
-        id: t.id || `import_table_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        id: t.id || `import_table_${Date.now()}_${Math.random().toString(36).substring(2)}`
       }))
       
       const columns: Partial<Column>[] = (data.columns || []).map((c: any) => ({
         ...c,
-        id: c.id || `import_col_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        id: c.id || `import_col_${Date.now()}_${Math.random().toString(36).substring(2)}`
       }))
       
       const relationships: Partial<Relationship>[] = (data.relationships || []).map((r: any) => ({
         ...r,
-        id: r.id || `import_rel_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        id: r.id || `import_rel_${Date.now()}_${Math.random().toString(36).substring(2)}`
       }))
       
       const project: Partial<Project> = {

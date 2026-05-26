@@ -33,44 +33,8 @@ import { CollabWebSocketServer } from './ws/server'
 const app = express()
 const PORT = parseInt(process.env.PORT || '3001', 10)
 
-// 调试中间件 - 记录所有请求
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`)
-  next()
-})
-
 app.use(cors())
 app.use(express.json())
-
-// 调试: 列出所有已注册的路由
-const listRoutes = (app: any) => {
-  const routes: string[] = []
-  const stack = app._router?.stack
-  if (stack) {
-    stack.forEach((layer: any) => {
-      if (layer.route) {
-        const path = layer.route.path
-        const methods = Object.keys(layer.route.methods)
-        routes.push(`${methods.join(',')} ${path}`)
-      }
-      if (layer.name === 'router') {
-        layer.handle.stack.forEach((handler: any) => {
-          if (handler.route) {
-            const path = layer.regexp.source
-              .replace('^\\', '')
-              .replace('(?=\\/|$)', '')
-              .replace('\\/?$', '')
-            const routePath = path + handler.route.path
-            const methods = Object.keys(handler.route.methods)
-            routes.push(`${methods.join(',')} ${routePath}`)
-          }
-        })
-      }
-    })
-  }
-  console.log('📋 已注册的路由:')
-  routes.forEach(r => console.log(`  ${r}`))
-}
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: '数据库可视化设计工具后端运行正常' })
@@ -123,7 +87,7 @@ app.use('/api/sqlite', authMiddleware, sqliteReaderRoutes)
 
 // 404处理器 - 捕获所有未匹配的路由
 app.use((req, res) => {
-  console.log(`❌ 404 - 未找到路由: ${req.method} ${req.path}`)
+  console.warn(`404 - 未找到路由: ${req.method} ${req.path}`)
   res.status(404).json({ 
     success: false, 
     error: `路由未找到: ${req.method} ${req.path}` 
@@ -138,6 +102,4 @@ new CollabWebSocketServer(server)
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 服务器运行在 http://0.0.0.0:${PORT} (可通过 IP 访问)`)
   console.log(`🔌 WebSocket 协作服务已启动: ws://0.0.0.0:${PORT}/ws/collab`)
-  // 列出所有路由
-  listRoutes(app)
 })

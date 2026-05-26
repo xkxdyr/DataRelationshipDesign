@@ -90,9 +90,7 @@ export const projectMemberController = {
 
   async getUserProjects(req: AuthenticatedRequest, res: Response) {
     try {
-      console.log('[ProjectMemberController] getUserProjects called, userId:', req.user?.userId)
       const projects = await projectMemberService.getUserProjects(req.user?.userId || '')
-      console.log('[ProjectMemberController] getUserProjects result:', projects.length, 'projects')
       res.json({ success: true, data: projects })
     } catch (error) {
       console.error('获取用户项目失败:', error)

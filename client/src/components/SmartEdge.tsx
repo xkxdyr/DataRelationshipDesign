@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react'
-import { BaseEdge, EdgeProps, getBezierPath, getStraightPath, Edge } from 'reactflow'
+import { BaseEdge, EdgeLabelRenderer, EdgeProps, getBezierPath, getStraightPath, Edge } from 'reactflow'
 import { useAppStore } from '../stores/appStore'
 
 function getNodeBounds(node: any) {
@@ -147,12 +147,48 @@ export function SmartEdge(props: EdgeProps) {
     return computeSmartPath(sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition, source || '', target || '')
   }, [sourceX, sourceY, targetX, targetY, source, target])
 
+  const labelX = (sourceX + targetX) / 2
+  const labelY = (sourceY + targetY) / 2
+
   return (
-    <BaseEdge
-      path={path}
-      style={style}
-      markerEnd={markerEnd}
-    />
+    <>
+      <BaseEdge
+        path={path}
+        style={style}
+        markerEnd={markerEnd}
+      />
+      {label && (
+        <EdgeLabelRenderer>
+          <div
+            style={{
+              position: 'absolute',
+              transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+              fontSize: 11,
+              pointerEvents: 'all',
+              ...labelStyle
+            } as React.CSSProperties}
+            className="nodrag nopan"
+          >
+            {labelShowBg && (
+              <div
+                style={{
+                  position: 'absolute',
+                  background: '#ffffffcc',
+                  borderRadius: labelBgBorderRadius || 3,
+                  padding: labelBgPadding || 3,
+                  width: '100%',
+                  height: '100%',
+                  ...labelBgStyle
+                } as React.CSSProperties}
+              />
+            )}
+            <span style={{ position: 'relative', zIndex: 1, padding: '1px 3px' }}>
+              {typeof label === 'string' ? label : ''}
+            </span>
+          </div>
+        </EdgeLabelRenderer>
+      )}
+    </>
   )
 }
 

@@ -15,7 +15,6 @@ class CollabPersistence {
     try {
       const manager = crdtFactory.getManager(projectId)
       if (!manager) {
-        console.log(`项目 ${projectId} 没有活跃的 CRDT 文档，跳过保存`)
         return
       }
 
@@ -42,8 +41,7 @@ class CollabPersistence {
         }
       })
 
-      console.log(`项目 ${projectId} 已保存到数据库`)
-    } catch (error) {
+      } catch (error) {
       console.error(`保存项目 ${projectId} 失败:`, error)
     }
   }
@@ -60,7 +58,6 @@ class CollabPersistence {
       })
 
       if (!version || !version.data) {
-        console.log(`项目 ${projectId} 没有找到保存的协作状态`)
         return false
       }
 
@@ -68,7 +65,7 @@ class CollabPersistence {
       const data = JSON.parse(version.data)
       manager.fromJSON(data)
 
-      console.log(`项目 ${projectId} 已从数据库恢复`)
+      console.warn(`[Persistence] 项目 ${projectId} 已从数据库恢复`)
       return true
     } catch (error) {
       console.error(`加载项目 ${projectId} 失败:`, error)
@@ -84,7 +81,6 @@ class CollabPersistence {
     }, SAVE_INTERVAL)
 
     this.saveIntervals.set(projectId, interval)
-    console.log(`项目 ${projectId} 自动保存已启动 (间隔 ${SAVE_INTERVAL / 1000}秒)`)
   }
 
   stopAutoSave(projectId: string): void {
@@ -92,17 +88,13 @@ class CollabPersistence {
     if (interval) {
       clearInterval(interval)
       this.saveIntervals.delete(projectId)
-      console.log(`项目 ${projectId} 自动保存已停止`)
     }
   }
 
   async saveAllProjects(): Promise<void> {
     const projectIds = Array.from(this.saveIntervals.keys())
-    console.log(`开始保存 ${projectIds.length} 个项目...`)
 
     await Promise.all(projectIds.map(id => this.saveProject(id)))
-
-    console.log(`已保存 ${projectIds.length} 个项目`)
   }
 
   disable(): void {

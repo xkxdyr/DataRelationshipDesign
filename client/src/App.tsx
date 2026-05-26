@@ -407,8 +407,6 @@ function AppContent() {
   }, [fontConfig])
 
   const handleDatabaseImport = async (importedTables: TableInfo[], targetProjectId?: string) => {
-    console.log('handleDatabaseImport called with:', importedTables, 'targetProjectId:', targetProjectId)
-    
     const projectId = targetProjectId || currentProject?.id
     if (!projectId) {
       message.error('请先选择或创建项目')
@@ -421,7 +419,6 @@ function AppContent() {
     
     for (let index = 0; index < importedTables.length; index++) {
       const tableInfo = importedTables[index]
-      console.log('Processing table:', tableInfo.name, 'columns:', tableInfo.columns)
       
       await createTable(projectId, {
         name: tableInfo.name,
@@ -556,12 +553,9 @@ function AppContent() {
         }
         
         const updatedTable = useAppStore.getState().tables.find(t => t.id === newTable.id)
-        if (updatedTable && updatedTable.columns) {
-          const pkColumns = updatedTable.columns.filter(c => c.primaryKey)
-          console.log(`表 ${updatedTable.name} 创建成功，主键列:`, pkColumns.map(c => c.name))
+        if (!updatedTable || !updatedTable.columns) {
+          console.error(`创建表 ${tableSuggestion.tableName} 后未找到`)
         }
-      } else {
-        console.error(`创建表 ${tableSuggestion.tableName} 后未找到`)
       }
       
       x += 250

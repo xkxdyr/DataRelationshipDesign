@@ -255,12 +255,10 @@ export function CollabProvider({ children }: CollabProviderProps) {
     
     const isLocalProject = currentProject.id.startsWith('local_') || currentProject.createdBy === 'local'
     if (isLocalProject) {
-      console.log('[CollabProvider] 本地项目不支持协作')
       return
     }
     
     if (!currentProject.collaborationEnabled) {
-      console.log('[CollabProvider] 项目协作未开启')
       return
     }
     

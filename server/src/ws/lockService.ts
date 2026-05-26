@@ -188,8 +188,6 @@ class LockService {
     }
     tableLockSet.add(lockId)
 
-    console.log(`[LockService] 锁获取成功: project=${projectId}, type=${lockType}, table=${tableId}, column=${columnId || '-'}, user=${userName}`)
-
     return { success: true, lockInfo }
   }
 
@@ -236,8 +234,6 @@ class LockService {
       }
     }
 
-    console.log(`[LockService] 锁释放成功: project=${projectId}, type=${lockType}, table=${tableId}, user=${userId}`)
-
     return true
   }
 
@@ -272,7 +268,7 @@ class LockService {
     // 清空用户锁
     userLocks.delete(userId)
 
-    console.log(`[LockService] 释放用户 ${userId} 所有锁: ${locksToRelease.length} 个`)
+    console.warn(`[LockService] 已释放用户所有锁: ${locksToRelease.length} 个`)
   }
 
   // 续租锁（更新过期时间）
@@ -349,7 +345,7 @@ class LockService {
       }
 
       if (locksToRemove.length > 0) {
-        console.log(`[LockService] 清理 ${projectId} 的过期锁: ${locksToRemove.length} 个`)
+        console.warn(`[LockService] 清理过期锁: ${locksToRemove.length} 个`)
 
         const userLocks = this.getUserLocks(projectId)
         const tableLocks = this.getTableLocks(projectId)
@@ -412,7 +408,6 @@ class LockService {
     this.projectLocks.delete(projectId)
     this.userLocks.delete(projectId)
     this.tableLocks.delete(projectId)
-    console.log(`[LockService] 清理项目 ${projectId} 所有锁`)
   }
 }
 

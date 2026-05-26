@@ -28,8 +28,8 @@ export function useCollabLocks() {
     }
 
     // 锁获取成功
-    const handleLockGranted = (lock: LockInfo) => {
-      console.log('[useCollabLocks] 锁获取成功:', lock)
+    const handleLockGranted = (_lock: LockInfo) => {
+      // 锁状态已通过 handleLockState 统一更新
     }
 
     // 锁获取失败

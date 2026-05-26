@@ -76,8 +76,8 @@ export const ConnectionForm: React.FC<ConnectionFormProps> = ({
   const handleSubmit = () => {
     form.validateFields().then(values => {
       onSubmit(values)
-    }).catch(info => {
-      console.log('Validation failed:', info)
+    }).catch(() => {
+      // 表单验证失败，Ant Design 已自动显示错误提示
     })
   }
 

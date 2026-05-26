@@ -94,7 +94,7 @@ class CollabManager {
   private userListHandlers: Set<UserListHandler> = new Set()
   
   private constructor() {
-    this.userId = 'user_' + Math.random().toString(36).substr(2, 9)
+    this.userId = 'user_' + Math.random().toString(36).substring(2)
   }
   
   static getInstance(): CollabManager {
@@ -133,8 +133,7 @@ class CollabManager {
     if (oldState === newState) return
     
     this.state = newState
-    console.log(`[CollabManager] 状态变化: ${oldState} -> ${newState}${reason ? ` (${reason})` : ''}`)
-    
+
     const change: CollabStateChange = { oldState, newState, reason }
     
     this.stateHandlers.forEach(handler => handler(newState))
@@ -190,8 +189,7 @@ class CollabManager {
     this.reconnectAttempts = 0
     
     this.setState(CollabState.INITIALIZING, '开始初始化协作')
-    console.log(`[CollabManager] 启动协作: projectId=${projectId}, userName=${userName}`)
-    
+
     this.initCRDT()
     
     this.setState(CollabState.CONNECTING, '连接服务器')
@@ -241,14 +239,11 @@ class CollabManager {
         if (this.token) {
           wsUrl += `&token=${encodeURIComponent(this.token)}`
         }
-        
-        console.log('[CollabManager] WebSocket URL:', wsUrl)
-        
+
         this.ws = new WebSocket(wsUrl)
         this.ws.binaryType = 'arraybuffer'
         
         this.ws.onopen = () => {
-          console.log('[CollabManager] WebSocket 连接成功')
           this.reconnectAttempts = 0
           this.startHeartbeat()
           this.requestSync()
@@ -265,7 +260,7 @@ class CollabManager {
         }
         
         this.ws.onclose = (event) => {
-          console.log('[CollabManager] WebSocket 关闭:', event.code, event.reason)
+          console.warn('[CollabManager] WebSocket 关闭:', event.code, event.reason)
           this.stopHeartbeat()
           this.handleDisconnect(event.reason)
         }
@@ -293,8 +288,7 @@ class CollabManager {
     )
     
     this.setState(CollabState.RECONNECTING, `第 ${this.reconnectAttempts} 次重连 (${delay}ms)`)
-    console.log(`[CollabManager] 尝试第 ${this.reconnectAttempts} 次重连，延迟 ${delay}ms`)
-    
+
     setTimeout(() => {
       if (!this.isManualDisconnect && this.projectId) {
         this.connect().catch(err => {
@@ -390,7 +384,6 @@ class CollabManager {
       const state = new Uint8Array(data.state)
       Y.applyUpdate(this.doc, state, 'remote')
       this.setState(CollabState.READY, '同步完成')
-      console.log('[CollabManager] 初始同步完成')
     } catch (err) {
       console.error('[CollabManager] 同步失败:', err)
       this.setState(CollabState.ERROR, '同步失败')
@@ -506,7 +499,6 @@ class CollabManager {
   }
   
   stop(): void {
-    console.log('[CollabManager] 停止协作')
     this.isManualDisconnect = true
     this.stopHeartbeat()
     
