@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react'
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { Layout, Typography, Badge, Tooltip, Button, message, Avatar, Dropdown, Tabs } from 'antd'
 import { MessageOutlined, DatabaseOutlined, CloseOutlined, CloudOutlined, CloudSyncOutlined, CloudUploadOutlined, SyncOutlined, WifiOutlined, DisconnectOutlined, SettingOutlined, LeftOutlined, RightOutlined, TeamOutlined, CodeOutlined, UserOutlined, LogoutOutlined, LoginOutlined, BranchesOutlined, GithubOutlined } from '@ant-design/icons'
 import { useAppStore } from './stores/appStore'
@@ -36,6 +36,169 @@ import localStorageService from './services/localStorageService'
 const { Header, Content } = Layout
 const { Title } = Typography
 
+const LAYOUT = {
+  LEFT_INITIAL_WIDTH: 350,
+  LEFT_MIN_WIDTH: 250,
+  LEFT_MAX_WIDTH: 500,
+  RIGHT_INITIAL_WIDTH: 900,
+  RIGHT_MIN_WIDTH: 400,
+  RIGHT_MAX_WIDTH: 1200,
+  COLLAPSED_WIDTH: 36,
+  DRAG_HANDLE_WIDTH: 4,
+  HEADER_HEIGHT: 36,
+  TABLE_EDITOR_HEADER_HEIGHT: 36,
+  CENTER_MIN_WIDTH: 300,
+}
+
+const ZOOM = {
+  MIN: 0.5,
+  MAX: 2,
+  STEP: 0.05,
+} as const
+
+const TABLE_GRID = {
+  START_X: 100,
+  START_Y: 100,
+  X_STEP: 250,
+  Y_STEP: 200,
+  COLUMNS_PER_ROW: 3,
+} as const
+
+const TIME = {
+  JUST_NOW_MS: 60000,
+  HOUR_MS: 3600000,
+  STATUS_REFRESH_INTERVAL: 5000,
+  TABLE_CREATE_DELAY_MS: 50,
+  LLM_TABLE_CREATE_DELAY_MS: 100,
+} as const
+
+const DragHandle = React.memo(({ 
+  isDragging, 
+  onMouseDown, 
+  tooltipTitle, 
+  onClick 
+}: { 
+  isDragging: boolean
+  onMouseDown: (e: React.MouseEvent) => void
+  tooltipTitle: string
+  onClick: () => void
+}) => (
+  <div style={{
+    width: LAYOUT.DRAG_HANDLE_WIDTH,
+    background: isDragging ? 'var(--theme-primary)' : 'var(--theme-border)',
+    cursor: 'col-resize',
+    flexShrink: 0,
+    transition: 'background 0.1s',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center'
+  }}
+    onMouseDown={onMouseDown}
+  >
+    <Tooltip title={tooltipTitle}>
+      <Button 
+        type="text" 
+        size="small"
+        icon={<LeftOutlined style={{ color: 'var(--theme-text-secondary)', fontSize: 12 }} />} 
+        onClick={onClick}
+        style={{ 
+          padding: '4px 2px', 
+          position: 'absolute',
+          zIndex: 1
+        }}
+      />
+    </Tooltip>
+  </div>
+))
+DragHandle.displayName = 'DragHandle'
+
+const TabContentRenderer = React.memo(({ 
+  activeTab, 
+  onOpenTypeConvert, 
+  onOpenLLM, 
+  setShowConnections,
+  handleApplyLLMTables,
+  currentProject,
+  selectProject 
+}: { 
+  activeTab: any
+  onOpenTypeConvert: () => void
+  onOpenLLM: () => void
+  setShowConnections: (v: boolean) => void
+  handleApplyLLMTables: (tables: TableSuggestion[]) => Promise<void>
+  currentProject: any
+  selectProject: (id: string) => Promise<any>
+}) => {
+  if (!activeTab) return <Canvas />
+  
+  switch (activeTab.type) {
+    case 'settings':
+      return (
+        <SettingsTab
+          onOpenTypeConvert={onOpenTypeConvert}
+          onOpenLLM={onOpenLLM}
+          onOpenConnections={() => setShowConnections(true)}
+        />
+      )
+    case 'members':
+      return (
+        <ProjectMemberTab
+          projectId={activeTab.projectId || ''}
+          projectName={activeTab.title.replace(' - 成员管理', '')}
+        />
+      )
+    case 'createProject':
+      return <CreateProjectTab />
+    case 'importExport':
+      return <ImportExportTab />
+    case 'teamManagement':
+      return <TeamManagementTab />
+    case 'llm':
+      return <LLMTab onApplyTables={handleApplyLLMTables} />
+    case 'editProject':
+      return (
+        <EditProjectTab
+          projectId={activeTab.projectId || ''}
+        />
+      )
+    case 'versionManagement':
+      return (
+        <VersionManagementTab
+          projectId={activeTab.projectId || ''}
+          projectName={activeTab.title.replace('版本 - ', '')}
+        />
+      )
+    case 'comments':
+      return <CommentTab />
+    case 'sqliteImport':
+      return <SqliteImportTab />
+    case 'branchManagement':
+      return (
+        <BranchManagerTab
+          projectId={activeTab.projectId || ''}
+          onBranchChange={() => {
+            if (currentProject?.id) {
+              selectProject(currentProject.id)
+            }
+          }}
+        />
+      )
+    case 'gitConfig':
+      return (
+        <GitConfigTab
+          projectId={activeTab.projectId || ''}
+        />
+      )
+    case 'typeConvert':
+      return <TypeConvertTab />
+    case 'sqlEditor':
+      return <SQLEditorTab />
+    default:
+      return <Canvas />
+  }
+})
+TabContentRenderer.displayName = 'TabContentRenderer'
+
 function AppContent() {
   const { theme, themeOptions, setTheme, fontConfig, colors } = useTheme()
   const { currentProject, projects, loadProjects, selectedTableId, selectedTableIds, tables, selectTable, undo, redo, canUndo, canRedo, isOnline, isSyncing, lastSaved, loadSettings, loadShortcuts, loadFontConfig, createTable, createColumn, createIndex, createRelationship, saveToLocal, deleteTable, setCanvasZoom, canvasZoom, copyTable, pasteTable, selectAllTables, shortcuts, loadUpdateLogs, addUpdateLog, updateLogs, setOnline, refreshSyncQueueCount, syncQueueCount, currentUser, authToken, authLoading, checkAuth, logout, openTabs, activeTabId, openProjectTab, closeTab, setActiveTab, openSettingsTab, openMemberTab, openCreateProjectTab, openImportExportTab, openTeamManagementTab, openLLMTab, openEditProjectTab, openVersionManagementTab, openCommentTab, openSqliteImportTab, openBranchManagementTab, openGitConfigTab, selectProject, openTypeConvertTab, openSQLEditorTab } = useAppStore()
@@ -57,12 +220,12 @@ function AppContent() {
   // 定期刷新同步队列计数
   React.useEffect(() => {
     refreshSyncQueueCount()
-    const timer = setInterval(refreshSyncQueueCount, 5000)
+    const timer = setInterval(refreshSyncQueueCount, TIME.STATUS_REFRESH_INTERVAL)
     return () => clearInterval(timer)
   }, [refreshSyncQueueCount])
   
-  const [leftWidth, setLeftWidth] = useState(350)
-  const [rightWidth, setRightWidth] = useState(900)
+  const [leftWidth, setLeftWidth] = useState(LAYOUT.LEFT_INITIAL_WIDTH)
+  const [rightWidth, setRightWidth] = useState(LAYOUT.RIGHT_INITIAL_WIDTH)
   const [isDraggingLeft, setIsDraggingLeft] = useState(false)
   const [isDraggingRight, setIsDraggingRight] = useState(false)
   const [showConnections, setShowConnections] = useState(false)
@@ -76,8 +239,8 @@ function AppContent() {
   const startXRef = useRef(0)
   const startLeftWidthRef = useRef(0)
   const startRightWidthRef = useRef(0)
-  const [leftLastWidth, setLeftLastWidth] = useState(350)
-  const [rightLastWidth, setRightLastWidth] = useState(900)
+  const [leftLastWidth, setLeftLastWidth] = useState(LAYOUT.LEFT_INITIAL_WIDTH)
+  const [rightLastWidth, setRightLastWidth] = useState(LAYOUT.RIGHT_INITIAL_WIDTH)
   
   // 使用 ref 跟踪最新的 leftCollapsed 状态，避免闭包陷阱
   const leftCollapsedRef = useRef(leftCollapsed)
@@ -86,23 +249,19 @@ function AppContent() {
   }, [leftCollapsed])
 
   useEffect(() => {
-    const ZOOM_MIN = 0.5
-    const ZOOM_MAX = 2
-    const ZOOM_STEP = 0.05
-
     const getCurrentZoom = () => {
       return useAppStore.getState().canvasZoom || 1
     }
 
     const zoomIn = () => {
       const currentZoom = getCurrentZoom()
-      const newZoom = Math.min(currentZoom + ZOOM_STEP, ZOOM_MAX)
+      const newZoom = Math.min(currentZoom + ZOOM.STEP, ZOOM.MAX)
       setCanvasZoom(Math.round(newZoom * 100) / 100)
     }
 
     const zoomOut = () => {
       const currentZoom = getCurrentZoom()
-      const newZoom = Math.max(currentZoom - ZOOM_STEP, ZOOM_MIN)
+      const newZoom = Math.max(currentZoom - ZOOM.STEP, ZOOM.MIN)
       setCanvasZoom(Math.round(newZoom * 100) / 100)
     }
 
@@ -406,15 +565,15 @@ function AppContent() {
     document.documentElement.style.fontSize = `${fontConfig.base}px`
   }, [fontConfig])
 
-  const handleDatabaseImport = async (importedTables: TableInfo[], targetProjectId?: string) => {
+  const handleDatabaseImport = useCallback(async (importedTables: TableInfo[], targetProjectId?: string) => {
     const projectId = targetProjectId || currentProject?.id
     if (!projectId) {
       message.error('请先选择或创建项目')
       return
     }
     
-    let x = 100
-    let y = 100
+    let x = TABLE_GRID.START_X
+    let y = TABLE_GRID.START_Y
     const tableMap = new Map<string, { tableId: string; columnMap: Map<string, string> }>()
     
     for (let index = 0; index < importedTables.length; index++) {
@@ -427,7 +586,7 @@ function AppContent() {
         positionY: y,
       }, true)
       
-      await new Promise(resolve => setTimeout(resolve, 50))
+      await new Promise(resolve => setTimeout(resolve, TIME.TABLE_CREATE_DELAY_MS))
       
       const newTable = tables.find(t => t.name === tableInfo.name && t.projectId === projectId)
       if (newTable) {
@@ -447,7 +606,7 @@ function AppContent() {
             order: colIndex,
           })
           
-          await new Promise(resolve => setTimeout(resolve, 50))
+          await new Promise(resolve => setTimeout(resolve, TIME.TABLE_CREATE_DELAY_MS))
           const updatedTable = tables.find(t => t.id === newTable.id)
           const createdColumn = updatedTable?.columns.find(c => c.name === col.name)
           if (createdColumn) {
@@ -475,10 +634,10 @@ function AppContent() {
         }
       }
       
-      x += 250
-      if (index > 0 && index % 3 === 0) {
-        x = 100
-        y += 200
+      x += TABLE_GRID.X_STEP
+      if (index > 0 && index % TABLE_GRID.COLUMNS_PER_ROW === 0) {
+        x = TABLE_GRID.START_X
+        y += TABLE_GRID.Y_STEP
       }
     }
     
@@ -508,16 +667,16 @@ function AppContent() {
     }
     
     message.success(`成功导入 ${importedTables.length} 张表，已添加到画布`)
-  }
+  }, [currentProject, tables, createTable, createColumn, createIndex, createRelationship])
 
-  const handleApplyLLMTables = async (suggestedTables: TableSuggestion[]) => {
+  const handleApplyLLMTables = useCallback(async (suggestedTables: TableSuggestion[]) => {
     if (!currentProject) {
       message.error('请先选择或创建项目')
       return
     }
 
-    let x = 100
-    let y = 100
+    let x = TABLE_GRID.START_X
+    let y = TABLE_GRID.START_Y
 
     for (let index = 0; index < suggestedTables.length; index++) {
       const tableSuggestion = suggestedTables[index]
@@ -529,7 +688,7 @@ function AppContent() {
         positionY: y,
       }, true)
       
-      await new Promise(resolve => setTimeout(resolve, 100))
+      await new Promise(resolve => setTimeout(resolve, TIME.LLM_TABLE_CREATE_DELAY_MS))
       
       const updatedTables = useAppStore.getState().tables
       const newTable = updatedTables.find(t => t.name === tableSuggestion.tableName && t.projectId === currentProject.id)
@@ -549,7 +708,7 @@ function AppContent() {
             order: colIndex,
           })
           
-          await new Promise(resolve => setTimeout(resolve, 100))
+          await new Promise(resolve => setTimeout(resolve, TIME.LLM_TABLE_CREATE_DELAY_MS))
         }
         
         const updatedTable = useAppStore.getState().tables.find(t => t.id === newTable.id)
@@ -558,15 +717,15 @@ function AppContent() {
         }
       }
       
-      x += 250
-      if (index > 0 && index % 3 === 0) {
-        x = 100
-        y += 200
+      x += TABLE_GRID.X_STEP
+      if (index > 0 && index % TABLE_GRID.COLUMNS_PER_ROW === 0) {
+        x = TABLE_GRID.START_X
+        y += TABLE_GRID.Y_STEP
       }
     }
     
     message.success(`成功添加 ${suggestedTables.length} 张表到画布`)
-  }
+  }, [currentProject, createTable, createColumn])
 
   const selectedTable = tables.find(t => t.id === selectedTableId)
   const shouldShowTableEditor = selectedTableId !== null && selectedTableIds.length <= 1
@@ -591,12 +750,12 @@ function AppContent() {
     const handleMouseMove = (e: MouseEvent) => {
       if (isDraggingLeft) {
         const delta = e.clientX - startXRef.current
-        const newWidth = Math.max(250, Math.min(500, startLeftWidthRef.current + delta))
+        const newWidth = Math.max(LAYOUT.LEFT_MIN_WIDTH, Math.min(LAYOUT.LEFT_MAX_WIDTH, startLeftWidthRef.current + delta))
         setLeftWidth(newWidth)
       }
       if (isDraggingRight) {
         const delta = e.clientX - startXRef.current
-        const newWidth = Math.max(400, Math.min(1200, startRightWidthRef.current - delta))
+        const newWidth = Math.max(LAYOUT.RIGHT_MIN_WIDTH, Math.min(LAYOUT.RIGHT_MAX_WIDTH, startRightWidthRef.current - delta))
         setRightWidth(newWidth)
       }
       
@@ -622,38 +781,15 @@ function AppContent() {
     }
   }, [isDraggingLeft, isDraggingRight])
 
-  const getLastSavedText = () => {
+  const lastSavedText = useMemo(() => {
     if (!lastSaved) return '未保存'
     const diff = Date.now() - lastSaved
-    if (diff < 60000) return '刚刚保存'
-    if (diff < 3600000) return `${Math.floor(diff / 60000)} 分钟前保存`
-    return `${Math.floor(diff / 3600000)} 小时前保存`
-  }
+    if (diff < TIME.JUST_NOW_MS) return '刚刚保存'
+    if (diff < TIME.HOUR_MS) return `${Math.floor(diff / TIME.JUST_NOW_MS)} 分钟前保存`
+    return `${Math.floor(diff / TIME.HOUR_MS)} 小时前保存`
+  }, [lastSaved])
 
-  const toggleLeftCollapse = () => {
-    const currentCollapsed = leftCollapsedRef.current
-    if (currentCollapsed) {
-      setLeftWidth(leftLastWidth)
-      setLeftCollapsed(false)
-    } else {
-      setLeftLastWidth(leftWidth)
-      setLeftWidth(36)
-      setLeftCollapsed(true)
-    }
-  }
-
-  const toggleRightCollapse = () => {
-    if (rightCollapsed) {
-      setRightWidth(rightLastWidth)
-      setRightCollapsed(false)
-    } else {
-      setRightLastWidth(rightWidth)
-      setRightWidth(36)
-      setRightCollapsed(true)
-    }
-  }
-
-  const userMenuItems = currentUser ? [
+  const userMenuItems = useMemo(() => currentUser ? [
     {
       key: 'profile',
       label: (
@@ -676,7 +812,54 @@ function AppContent() {
         message.success('已退出登录')
       },
     },
-  ] : []
+  ] : [], [currentUser, logout])
+
+  const toggleLeftCollapse = useCallback(() => {
+    const currentCollapsed = leftCollapsedRef.current
+    if (currentCollapsed) {
+      setLeftWidth(leftLastWidth)
+      setLeftCollapsed(false)
+    } else {
+      setLeftLastWidth(leftWidth)
+      setLeftWidth(LAYOUT.COLLAPSED_WIDTH)
+      setLeftCollapsed(true)
+    }
+  }, [leftWidth, leftLastWidth])
+
+  const toggleRightCollapse = useCallback(() => {
+    if (rightCollapsed) {
+      setRightWidth(rightLastWidth)
+      setRightCollapsed(false)
+    } else {
+      setRightLastWidth(rightWidth)
+      setRightWidth(LAYOUT.COLLAPSED_WIDTH)
+      setRightCollapsed(true)
+    }
+  }, [rightCollapsed, rightWidth, rightLastWidth])
+
+  const tabItems = useMemo(() => openTabs.map(tab => ({
+    key: tab.id,
+    label: tab.title
+  })), [openTabs])
+
+  const handleTabChange = useCallback((key: string) => {
+    const tab = openTabs.find(t => t.id === key)
+    if (tab) {
+      setActiveTab(key)
+      if (tab.type === 'project' && tab.projectId) {
+        selectProject(tab.projectId).catch(err => {
+          console.error('Error switching project:', err)
+          message.error('切换项目失败')
+        })
+      }
+    }
+  }, [openTabs, setActiveTab, selectProject])
+
+  const handleTabEdit = useCallback((targetKey: React.MouseEvent | React.KeyboardEvent | string, action: 'add' | 'remove') => {
+    if (action === 'remove') {
+      closeTab(targetKey as string)
+    }
+  }, [closeTab])
 
   return (
     <div style={{ height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif', backgroundColor: 'var(--theme-background)' }}>
@@ -687,7 +870,7 @@ function AppContent() {
         padding: '0 16px',
         display: 'flex',
         alignItems: 'center',
-        height: 36,
+        height: LAYOUT.HEADER_HEIGHT,
         flexShrink: 0,
         minWidth: 'auto'
       }}>
@@ -711,7 +894,7 @@ function AppContent() {
             </Badge>
           </Tooltip>
 
-          <Tooltip title={isSyncing ? `正在同步...` : (syncQueueCount > 0 ? `待同步 ${syncQueueCount} 项 - 点击查看` : getLastSavedText())}>
+          <Tooltip title={isSyncing ? `正在同步...` : (syncQueueCount > 0 ? `待同步 ${syncQueueCount} 项 - 点击查看` : lastSavedText)}>
             <Button
               type="text"
               style={{ 
@@ -981,41 +1164,19 @@ function AppContent() {
         </div>
 
         {!leftCollapsed && (
-          <div style={{
-            width: 4,
-            background: isDraggingLeft ? 'var(--theme-primary)' : 'var(--theme-border)',
-            cursor: 'col-resize',
-            flexShrink: 0,
-            transition: 'background 0.1s',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
+          <DragHandle
+            isDragging={isDraggingLeft}
             onMouseDown={handleLeftDragStart}
-          >
-            {!leftCollapsed && (
-              <Tooltip title={leftCollapsed ? "展开项目列表" : "折叠项目列表"}>
-                <Button 
-                  type="text" 
-                  size="small"
-                  icon={<LeftOutlined style={{ color: 'var(--theme-text-secondary)', fontSize: 12 }} />} 
-                  onClick={toggleLeftCollapse}
-                  style={{ 
-                    padding: '4px 2px', 
-                    position: 'absolute',
-                    zIndex: 1
-                  }}
-                />
-              </Tooltip>
-            )}
-          </div>
+            tooltipTitle={leftCollapsed ? "展开项目列表" : "折叠项目列表"}
+            onClick={toggleLeftCollapse}
+          />
         )}
 
         <div style={{
           flex: 1,
           background: 'var(--theme-background)',
           overflow: 'hidden',
-          minWidth: 300,
+          minWidth: LAYOUT.CENTER_MIN_WIDTH,
           display: 'flex',
           flexDirection: 'column'
         }}>
@@ -1023,100 +1184,21 @@ function AppContent() {
             <>
               <Tabs
                 activeKey={activeTabId || ''}
-                onChange={(key) => {
-                  const tab = openTabs.find(t => t.id === key)
-                  if (tab) {
-                    setActiveTab(key)
-                    if (tab.type === 'project' && tab.projectId) {
-                      selectProject(tab.projectId).catch(err => {
-                        console.error('Error switching project:', err)
-                        message.error('切换项目失败')
-                      })
-                    }
-                  }
-                }}
+                onChange={handleTabChange}
                 type="editable-card"
-                onEdit={(targetKey, action) => {
-                  if (action === 'remove') {
-                    closeTab(targetKey as string)
-                  }
-                }}
-                items={openTabs.map(tab => ({
-                  key: tab.id,
-                  label: tab.title
-                }))}
+                onEdit={handleTabEdit}
+                items={tabItems}
               />
               <div style={{ flex: 1, overflow: 'hidden' }}>
-                {(() => {
-                  const activeTab = activeTabId ? openTabs.find(t => t.id === activeTabId) : null
-                  if (!activeTab) return <Canvas />
-                  
-                  switch (activeTab.type) {
-                    case 'settings':
-                      return (
-                        <SettingsTab
-                          onOpenTypeConvert={openTypeConvertTab}
-                          onOpenLLM={openLLMTab}
-                          onOpenConnections={() => setShowConnections(true)}
-                        />
-                      )
-                    case 'members':
-                      return (
-                        <ProjectMemberTab
-                          projectId={activeTab.projectId || ''}
-                          projectName={activeTab.title.replace(' - 成员管理', '')}
-                        />
-                      )
-                    case 'createProject':
-                      return <CreateProjectTab />
-                    case 'importExport':
-                      return <ImportExportTab />
-                    case 'teamManagement':
-                      return <TeamManagementTab />
-                    case 'llm':
-                      return <LLMTab onApplyTables={handleApplyLLMTables} />
-                    case 'editProject':
-                      return (
-                        <EditProjectTab
-                          projectId={activeTab.projectId || ''}
-                        />
-                      )
-                    case 'versionManagement':
-                      return (
-                        <VersionManagementTab
-                          projectId={activeTab.projectId || ''}
-                          projectName={activeTab.title.replace('版本 - ', '')}
-                        />
-                      )
-                    case 'comments':
-                      return <CommentTab />
-                    case 'sqliteImport':
-                      return <SqliteImportTab />
-                    case 'branchManagement':
-                      return (
-                        <BranchManagerTab
-                          projectId={activeTab.projectId || ''}
-                          onBranchChange={(branchId) => {
-                            if (currentProject?.id) {
-                              selectProject(currentProject.id)
-                            }
-                          }}
-                        />
-                      )
-                    case 'gitConfig':
-                      return (
-                        <GitConfigTab
-                          projectId={activeTab.projectId || ''}
-                        />
-                      )
-                    case 'typeConvert':
-                      return <TypeConvertTab />
-                    case 'sqlEditor':
-                      return <SQLEditorTab />
-                    default:
-                      return <Canvas />
-                  }
-                })()}
+                <TabContentRenderer
+                  activeTab={activeTabId ? openTabs.find(t => t.id === activeTabId) : null}
+                  onOpenTypeConvert={openTypeConvertTab}
+                  onOpenLLM={openLLMTab}
+                  setShowConnections={setShowConnections}
+                  handleApplyLLMTables={handleApplyLLMTables}
+                  currentProject={currentProject}
+                  selectProject={selectProject}
+                />
               </div>
             </>
           ) : (
@@ -1139,32 +1221,12 @@ function AppContent() {
         {shouldShowTableEditor && (
           <>
             {!rightCollapsed && (
-              <div style={{
-                width: 4,
-                background: isDraggingRight ? 'var(--theme-primary)' : 'var(--theme-border)',
-                cursor: 'col-resize',
-                flexShrink: 0,
-                transition: 'background 0.1s',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
+              <DragHandle
+                isDragging={isDraggingRight}
                 onMouseDown={handleRightDragStart}
-              >
-                <Tooltip title={rightCollapsed ? "展开表编辑器" : "折叠表编辑器"}>
-                  <Button 
-                    type="text" 
-                    size="small"
-                    icon={<RightOutlined style={{ color: 'var(--theme-text-secondary)', fontSize: 12 }} />} 
-                    onClick={toggleRightCollapse}
-                    style={{ 
-                      padding: '4px 2px',
-                      position: 'absolute',
-                      zIndex: 1
-                    }}
-                  />
-                </Tooltip>
-              </div>
+                tooltipTitle={rightCollapsed ? "展开表编辑器" : "折叠表编辑器"}
+                onClick={toggleRightCollapse}
+              />
             )}
 
             <div style={{
@@ -1185,7 +1247,7 @@ function AppContent() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    height: 36,
+                    height: LAYOUT.TABLE_EDITOR_HEADER_HEIGHT,
                     flexShrink: 0,
                     backgroundColor: 'var(--theme-background-secondary)'
                   }}>
@@ -1206,7 +1268,7 @@ function AppContent() {
                       />
                     </div>
                   </div>
-                  <div style={{ height: 'calc(100% - 36px)', overflow: 'auto' }}>
+                  <div style={{ height: `calc(100% - ${LAYOUT.TABLE_EDITOR_HEADER_HEIGHT}px)`, overflow: 'auto' }}>
                     {selectedTable && <TableEditor table={selectedTable} onClose={() => selectTable(null)} />}
                   </div>
                 </>

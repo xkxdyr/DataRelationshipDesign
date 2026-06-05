@@ -370,10 +370,35 @@
 | 358 | 表节点悬停信息提示 (Hover Tooltip) | 前端 体验增强 | 2026-05-20 | Assistant | TableNode.tsx新增表节点悬停信息提示：1.用Ant Design Tooltip包裹整个Dropdown组件(placement=right/mouseEnterDelay=0.5s避免误触/overlayStyle maxWidth=280)；2.tooltip内容显示表名(加粗)+列数+主键列名列表+索引数量+注释；3.协作锁定时额外显示橙色锁定提示(含相对时间如"3分钟前")；4.无需点击即可快速浏览表结构概览，提升大画布浏览效率 |
 | 359 | 批量对齐工具 (Align & Distribute) | 前端 功能增强 | 2026-05-20 | Assistant | Canvas新增批量对齐/分布工具：1.工具栏新增"对齐"按钮(disabled=选中<2张)/Dropdown菜单含8种操作+对应图标；2.alignTables函数实现左对齐/右对齐/水平居中/顶对齐/底对齐/垂直居中(≥2张表触发)+水平分布/垂直分布(≥3张表)；3.对齐算法基于positionX/positionY+NODE_WIDTH/NODE_HEIGHT常量计算目标坐标；4.分布算法将节点排序后在首尾边界间均匀分配；5.操作后message.success反馈操作类型和表数量。配合Ctrl+A全选实现高效批量排版 |
 | 360 | 快速连线创建关系 (Handle Connect) | 前端 功能增强 | 2026-05-20 | Assistant | Canvas实现Handle拖拽连线快速创建关系：1.ReactFlow添加onConnect回调+connectionMode，拖拽表节点底部Handle到另一表自动弹出配置Modal；2.Modal显示源表→目标表流向+源列Select(含dataType提示)+目标列Select(主键🔑标记)+关系类型Select(一对多/一对一/多对多)；3.默认智能选择源列和目标列主键；4.handleConfirmConnect调用createRelationship API保存关系；5.快捷键帮助面板新增"拖拽底部Handle"条目。无需打开关系管理面板即可快速创建关系 |
+| 361 | 修复AI助手数据模拟生成类型不匹配 | 后端 Bug修复 | 2026-05-27 | Assistant | 修复llmDataMockService.ts中generateValueByType函数列名语义优先于数据类型判断的缺陷：1.新增isIntegerType/isFloatType/isDateType/isBooleanType/isBlobType/isUUIDType/isJSONType/isEnumType精确类型判断函数；2.核心重构：数据类型优先判断——先判数据类型再在类内按列名生成语义值；3.值生成拆分为generateStringValue(字符串列)/generateIntegerValue(整数列)/generateFloatValue(浮点列)三个独立函数；4.新增ENUM/SET枚举类型支持：解析DDL中枚举列表随机选取；5.修复效果：VARCHAR严格返回字符串、INT严格返回整数、DECIMAL/FLOAT严格返回浮点数、BOOLEAN严格返回布尔、DATETIME严格返回ISO时间戳、ENUM严格返回枚举值。前后端TypeScript编译零错误、Vite构建成功、API测试11种类型全通过 |
+| 362 | 数据模拟引擎领域感知重构 | 后端 功能增强 | 2026-05-27 | Assistant | 重构llmDataMockService.ts实现数据模拟内容方向准确性：1.前后端MockDataRequest新增tableComment字段，LLMTab.tsx传递table.comment；2.新增inferTableDomain()从表名+描述推断10大领域(person/product/order/blog/finance/inventory/logistics/game/medical/education)；3.新增domainData领域词典，每领域含专属names/statuses/categories/descriptions；4.新增makeFullContext()合并列名+列注释+表名+表描述为完整上下文供所有生成函数使用；5.重构isPersonalName()，仅当表属于person领域时name列才生成人名；6.generateStringValue/Integer/Float全部追加tableName/tableComment参数；7.新增payments/shipping/brands/jobTitles词典；8.6个领域API实测验证通过 |
+| 363 | 全量自测验证与position列Bug排查 | 测试/验证 | 2026-05-28 | Assistant | 全量自测通过：后端TS编译零错误、前端TS编译零错误、健康检查200、前端页面200、前端Vite构建成功(3259模块,9.91s)。排查position列(根因: PowerShell中文编码损坏导致测试误判)：通过Node.js发送正确UTF-8请求确认position列正确生成"产品经理"、"高级工程师"等职位名称，数据模拟引擎3个领域API测试全部通过 |
+| 364 | TableNode协作锁机制集成 | 前端 功能增强 | 2026-05-28 | Assistant | TableNode.tsx修复requestTableLock/releaseTableLock/requestColumnLock/releaseColumnLock导入但未调用的问题：1.双击表名编辑时获取表锁，保存/取消/Escape时释放；2.双击列名编辑时获取字段锁，保存/取消/Escape时释放；3.数据类型切换时获取/释放字段锁；4.PK/UQ/nullable切换时获取/释放表锁；5.添加列/删除列时获取/释放表锁；6.useEffect卸载清理所有锁；7.formatLockTime增强支持天级显示。前后端TS编译零错误、Vite构建成功(3259模块) |
+| 365 | 可视化布局优化：边智能绕路+高亮淡化 | 前端 功能增强 | 2026-05-28 | Assistant | SmartEdge.tsx重构路由算法：1.新增buildBezierPath通用多段贝塞尔路径构建器；2.新增routeAroundNode围绕阻挡节点四角智能绕路（计算阻挡节点四角偏移点、检测每个绕路角的双段碰撞、选择最小绕行成本的路径）；3.新增lineCrossesAnyNode批量碰撞检测辅助；4.新增pointDist欧氏距离函数。Canvas.tsx新增边高亮/淡化效果：1.hoveredNodeId状态追踪当前悬停表节点；2.displayEdges useMemo计算（关联边加粗+主题色+动画、无关边opacity:0.15淡化）；3.ReactFlow onNodeMouseEnter/Leave事件绑定。前后端TS编译零错误、Vite构建成功(3259模块,9.61s)、零诊断 |
+| 366 | 表节点折叠/展开 | 前端 功能增强 | 2026-05-28 | Assistant | TableNode.tsx新增collapsed状态+UpOutlined/DownOutlined折叠按钮（表头右侧，阻止事件冒泡）。展开模式：正常显示全部列+添加列按钮。折叠模式：显示关键列摘要（按PK绿>UQ黄>普通列优先级展示前4列）+列名+数据类型+AI自增徽章+"共N列(含M主键)"摘要行+空表显示"暂无列" - Assistant |
+| 367 | 折叠视图增强：关键列摘要 | 前端 功能增强 | 2026-05-29 | Assistant | TableNode.tsx折叠模式增强——按优先级展示前4列（主键PK绿>唯一键UQ黄>普通列）、列名+数据类型+AI自增徽章、底部摘要行显示"共N列(含M主键)"、空表显示"暂无列"。前后端TS编译零错误、Vite构建成功(3259模块,30.15s)、零诊断 - Assistant |
+| 368 | 全量自测验证通过 | 测试/运维 | 2026-05-29 | Assistant | 全量自测零报错零崩溃：前端TS编译零错误、后端TS编译零错误、Vite构建成功(3259模块,30.15s)、后端健康检查200、前端页面200、三大核心组件(TableNode/SmartEdge/Canvas)零诊断 - Assistant |
+| 369 | 项目启动全量自测验证 | 测试/运维 | 2026-05-31 | Assistant | 项目启动全量自测验证通过：端口占用检查并强制终止残留进程(3001 PID 2560/3002 PID 16244)→后端启动(ts-node, 0.0.0.0:3001, WebSocket协作服务正常)→前端启动(vite, 0.0.0.0:3002)→后端健康检查200→前端页面200→DDL API 200→类型转换API 200→后端TS编译零错误→前端TS编译零错误→零崩溃零报错项目完整正常运行 |
+| 370 | 功能明细对照代码审计与全量自测 | 审计/运维 | 2026-05-31 | Assistant | 逐模块对照功能明细审计核心代码与UI/UX：App.tsx(1337行)-状态管理/快捷键/标签页/认证流/面板拖拽完整; Canvas.tsx(1866行)-ReactFlow/框选/吸附/对齐/导出/SVG/PNG/DDL/协作光标/边高亮淡化/缩放锁定/自动布局; TableNode.tsx(979行)-列级锁/紧凑模式/内联编辑/右键菜单/折叠视图/列属性切换/组件卸载锁释放; SettingsTab.tsx(757行)-确认规则#6更新日志Timeline入口已实现。全量自测通过：健康检查200→DDL API 200→类型转换API 200(23映射)→后端TS编译零错误→前端TS编译零错误→Vite构建成功→零诊断→零崩溃零报错项目完整正常运行 |
+| 371 | 项目启动全量自测验证(第二轮) | 测试/运维 | 2026-05-31 | Assistant | 项目启动全量自测验证通过：端口空闲无需终止→后端启动(ts-node, 0.0.0.0:3001, WebSocket协作服务正常)→前端启动(vite, 0.0.0.0:3002, 689ms)→健康检查200→类型转换API 200(5种数据库)→前端页面200→后端TS编译零错误→前端TS编译零错误→Vite构建成功(3261模块, 11.74s)→三大核心组件零诊断→规则#6更新日志Timeline入口确认完整→零崩溃零报错项目完整正常运行 |
+| 372 | 项目启动全量自测验证(第三轮) | 测试/运维 | 2026-06-03 | 丸子 | 项目启动全量自测验证通过：端口3001被占用进程38536已强制停止→后端启动(ts-node, 0.0.0.0:3001, WebSocket协作服务正常)→前端启动(vite, 0.0.0.0:3002, 682ms)→健康检查200→DDL API 200(5种数据库)→类型转换API 200(23映射)→前端页面200→后端TS编译零错误→前端TS编译零错误→Vite构建成功(3260模块, 23.16s)→规则#6更新日志Timeline入口确认完整→更新日志已写入logs/update.log→零崩溃零报错项目完整正常运行 |
+| 373 | CRDT数据同步到appStore修复 | 协作/修复 | 2026-06-03 | 丸子 | 修复CRDT协作数据未同步到appStore的问题：collabManager.ts Yjs observer改为本地和远程更新都通知crdtUpdateHandlers→CollabProvider.tsx updateFromDocData新增appStore同步逻辑（仅collaborationEnabled时执行）→类型转换(ColumnData.type→Column.dataType, isNotNull→!nullable)→扁平CRDT列/索引→嵌套Table.columns/indexes组装→后端TS零错误→前端TS零错误→Vite构建成功(3260模块, 17.01s)→API健康检查200→前端页面200 |
+| 374 | CRDT同步防抖与竞态条件修复 | 协作/优化 | 2026-06-03 | 丸子 | 循环依赖竞态分析：无循环依赖(useAppStore.setState不经过Y.Doc)→无CRDT回写(CollabProvider CRDT方法零调用)→无React重绘触发CRDT→无useEffect死循环→修复竞态：100ms防抖避免快速CRDT更新频繁重绘→防抖回调中重新从Y.Doc提取最新数据→定时器在effect cleanup中正确清理→前端TS零错误→Vite构建成功(3260模块, 19.90s) |
+| 375 | 死代码清理：collabService.ts | 前端 清理 | 2026-06-03 | 丸子 | 删除client/src/services/collabService.ts（零引用死代码），功能已合并到collabManager.ts单例模式。前端TS零错误、Vite构建成功 |
+| 376 | v1.11.1 协作修复：增量同步+光标跟随viewport | 协作/修复 | 2026-06-04 | 丸子 | 两个协作缺陷修复：1.syncFullState全量替换→增量更新（tables/columns/relationships/indexes四个Map改为复用已有Y.Map增量更新，Yjs可在字段级合并并发编辑避免后写入者覆盖前者）；2.CollabCursors光标跟随ReactFlow viewport变换（useStore订阅transform[tX,tY,zoom]，screenX=flowX*zoom+tX，画布平移/缩放时光标正确跟随）。前端TS零错误、后端TS零错误、Vite构建成功(22.74s)、API健康检查200、更新日志写入logs/update.log |
+| 377 | v1.11.2 syncFullState竞态条件修复 | 协作/修复 | 2026-06-04 | 丸子 | 移除syncFullState中四个数据类型的增量删除逻辑（tables/columns/relationships/indexes），消除快照时间窗口导致远程新增数据被误删的竞态条件。syncFullState现在仅做新增和更新，删除操作应由独立delete事件驱动。新增竞态条件测试文件syncFullState_race.test.ts（8个测试用例全通过）。前端TS零错误、后端TS零错误、Vite构建成功(10.16s)、全量36测试通过 |
+| 378 | v1.11.3 CRDT删除操作功能缺口修复 | 协作/修复 | 2026-06-04 | 丸子 | 补全v1.11.2移除删除逻辑后的功能缺口：1.collabManager新增syncDeleteTable/syncDeleteColumn/syncDeleteRelationship/syncDeleteIndex四个CRDT删除方法（doc.transact内直接Y.Map.delete）；2.appStore四个delete方法在syncToCRDT之前调用对应CRDT删除。删除流程：REST删除→appStore更新→CRDT独立删除→syncFullState增量同步其余数据。前端TS零错误、后端TS零错误、Vite构建成功(10.28s)、全量36测试通过 |
 
 ---
-
 ## 变更记录
+- 2026-06-04: 添加死代码清理归档（375）+ v1.11.1协作修复归档（376）+ v1.11.2竞态条件修复归档（377）
+- 2026-06-03: 添加项目启动全量自测验证(第三轮)归档（372）+ CRDT数据同步到appStore修复归档（373）+ CRDT同步防抖与竞态条件修复归档（374）
+- 2026-05-31: 添加项目启动全量自测验证归档（369）+ 功能明细对照代码审计与全量自测归档（370）+ 项目启动全量自测验证(第二轮)归档（371）
+- 2026-05-29: 添加折叠视图增强：关键列摘要归档（367）+ 全量自测验证通过归档（368）
+- 2026-05-28: 添加表节点折叠/展开归档（366）
+- 2026-05-28: 添加可视化布局优化归档（365）
+- 2026-05-28: 添加TableNode协作锁机制集成归档（364）
+- 2026-05-28: 添加全量自测验证与position列Bug排查结果归档（363）
 - 2026-05-04: 文档初始化
 - 2026-05-04: 添加 Phase 2、Phase 3 和前端开发完成记录
 - 2026-05-04: 添加 UI 全面检查和 API 端口修复记录
@@ -576,4 +601,9 @@
 2026-05-20: 添加列属性inline切换(PK/UQ/nullable点击切换)(365)
 2026-05-20: 添加Edge右键上下文菜单(366)
 2026-05-20: 添加AI自增徽章与列注释图标(367)
+2026-05-26: 修复TableNode findDOMNode控制台警告 - 解除Tooltip+Dropdown双层嵌套(368)
+2026-05-26: 实现协作光标同步(369)
+2026-05-26: 实现断点续传Y.Doc快照缓存 - localStorage存储/5秒防抖自动保存/初始化时恢复/销毁时保存(370)
+2026-05-27: 修复AI助手数据模拟生成类型不匹配(361)
+2026-05-27: 数据模拟引擎领域感知重构(362)
 

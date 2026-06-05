@@ -4,6 +4,7 @@ import { Project, Table, Column, Relationship, Index, Version, ModelConfig, User
 import { projectApi, tableApi, columnApi, relationshipApi, indexApi, versionApi, userApi, ProjectWithRole, teamApi, updateLogApi, commentApi } from '../services/api'
 import { localStorageService, LocalProject, LocalTable, LocalColumn, LocalRelationship, LocalIndex, LocalVersion } from '../services/localStorageService'
 import { ThemeMode } from '../theme/types'
+import { collabManager, SyncFullStateInput } from '../services/collabManager'
 
 interface ShortcutConfig {
   undo: string[]
@@ -218,6 +219,74 @@ const startAutoSaveTimer = (store: AppStore) => {
   autoSaveTimer = setTimeout(() => {
     store.saveToLocal()
   }, store.autoSaveInterval)
+}
+
+/**
+ * 将当前 appStore 中的表/列/关系/索引状态写入 CRDT
+ * REST API 写操作成功后调用，广播给协作房间内其他用户
+ */
+function syncToCRDT(state: {
+  tables: Table[]
+  relationships: Relationship[]
+  currentProject: Project | null
+}) {
+  if (!state.currentProject?.collaborationEnabled) return
+  const doc = collabManager.getDoc()
+  if (!doc) return
+  try {
+    // 从嵌套的 table.columns / table.indexes 中提取扁平数据
+    const flatColumns = state.tables.flatMap(t => t.columns || [])
+    const flatIndexes = state.tables.flatMap(t => t.indexes || [])
+
+    const input: SyncFullStateInput = {
+      tables: state.tables.map(t => ({
+        id: t.id,
+        name: t.name,
+        comment: t.comment,
+        positionX: t.positionX,
+        positionY: t.positionY,
+        projectId: t.projectId,
+      })),
+      columns: flatColumns.map(c => ({
+        id: c.id,
+        tableId: c.tableId,
+        name: c.name,
+        dataType: c.dataType,
+        length: c.length,
+        precision: c.precision,
+        scale: c.scale,
+        nullable: c.nullable,
+        defaultValue: c.defaultValue,
+        autoIncrement: c.autoIncrement,
+        primaryKey: c.primaryKey,
+        unique: c.unique,
+        comment: c.comment,
+        order: c.order,
+      })),
+      relationships: state.relationships.map(r => ({
+        id: r.id,
+        projectId: r.projectId,
+        sourceTableId: r.sourceTableId,
+        sourceColumnId: r.sourceColumnId,
+        targetTableId: r.targetTableId,
+        targetColumnId: r.targetColumnId,
+        relationshipType: r.relationshipType,
+        onUpdate: r.onUpdate,
+        onDelete: r.onDelete,
+      })),
+      indexes: flatIndexes.map(i => ({
+        id: i.id,
+        tableId: i.tableId,
+        name: i.name,
+        columns: i.columns,
+        unique: i.unique,
+        type: i.type,
+      })),
+    }
+    collabManager.syncFullState(input)
+  } catch (err) {
+    console.error('[appStore] CRDT同步失败:', err)
+  }
 }
 
 export const useAppStore = create<AppStore>((set, get) => ({
@@ -1227,6 +1296,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
           }
         }
       }
+      // CRDT 同步：广播项目更新给协作用户
+      syncToCRDT(get())
     } finally {
       set({ loading: false })
     }
@@ -1388,6 +1459,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
           data: newTable
         })
       }
+      // CRDT 同步：广播新建表给协作用户
+      syncToCRDT(get())
     } finally {
       set({ loading: false })
     }
@@ -1434,6 +1507,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
           }
         }
       }
+      // CRDT 同步：广播表变更给协作用户
+      syncToCRDT(get())
     } finally {
       set({ loading: false })
     }
@@ -1479,6 +1554,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
             })
           }
         }
+        // CRDT 同步：广播位置变更给协作用户
+        syncToCRDT(get())
       } catch (error) {
         console.error('Failed to update table position:', error)
       }
@@ -1512,6 +1589,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
         tables: state.tables.filter(t => t.id !== id),
         selectedTableId: state.selectedTableId === id ? null : state.selectedTableId
       }))
+      // CRDT 同步：广播删除表给协作用户
+      collabManager.syncDeleteTable(id)
+      syncToCRDT(get())
     } finally {
       set({ loading: false })
     }
@@ -1801,6 +1881,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
         })
       }
     }
+    // CRDT 同步：广播新建列给协作用户
+    syncToCRDT(get())
   },
 
   updateColumn: async (id: string, data: Partial<Column>) => {
@@ -1855,6 +1937,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
         }
       }
     }
+    // CRDT 同步：广播列更新给协作用户
+    syncToCRDT(get())
   },
 
   deleteColumn: async (id: string) => {
@@ -1898,6 +1982,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
         }
       }
     }
+    // CRDT 同步：广播列删除给协作用户
+    collabManager.syncDeleteColumn(id)
+    syncToCRDT(get())
   },
 
   updateColumnOrder: async (tableId: string, columnIds: string[]) => {
@@ -1998,6 +2085,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
           })
         }
       }
+      // CRDT 同步：广播新建关系给协作用户
+      syncToCRDT(get())
     } finally {
       set({ loading: false })
     }
@@ -2039,6 +2128,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
           }
         }
       }
+      // CRDT 同步：广播关系更新给协作用户
+      syncToCRDT(get())
     } finally {
       set({ loading: false })
     }
@@ -2069,6 +2160,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
       set(state => ({
         relationships: state.relationships.filter(r => r.id !== id)
       }))
+      // CRDT 同步：广播删除关系给协作用户
+      collabManager.syncDeleteRelationship(id)
+      syncToCRDT(get())
     } finally {
       set({ loading: false })
     }
@@ -2140,6 +2234,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
           })
         }
       }
+      // CRDT 同步：广播新建索引给协作用户
+      syncToCRDT(get())
     } finally {
       set({ loading: false })
     }
@@ -2192,6 +2288,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
           }
         }
       }
+      // CRDT 同步：广播索引更新给协作用户
+      syncToCRDT(get())
     } finally {
       set({ loading: false })
     }
@@ -2226,6 +2324,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
           })
         }
       }
+      // CRDT 同步：广播索引删除给协作用户
+      collabManager.syncDeleteIndex(id)
+      syncToCRDT(get())
     } finally {
       set({ loading: false })
     }

@@ -1,15 +1,116 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
-import { List, Button, Card, Empty, Space, Popconfirm, Tag, Modal, Typography, Table, Divider, Statistic, Row, Col, Descriptions, Tooltip, Menu, message, Spin, Skeleton, Select, Input } from 'antd'
-import { PlusOutlined, DeleteOutlined, FolderOutlined, EditOutlined, HistoryOutlined, ImportOutlined, ExportOutlined, EyeOutlined, TableOutlined, LinkOutlined, AppstoreOutlined, CopyOutlined, RotateLeftOutlined, CloudOutlined, DatabaseOutlined, CloudUploadOutlined, SaveOutlined, TeamOutlined, UserOutlined, FilterOutlined, KeyOutlined } from '@ant-design/icons'
+import { List, Button, Card, Empty, Space, Popconfirm, Tag, Typography, Tooltip, Menu, message, Skeleton, Select } from 'antd'
+import { PlusOutlined, DeleteOutlined, FolderOutlined, EditOutlined, HistoryOutlined, ImportOutlined, ExportOutlined, EyeOutlined, TableOutlined, LinkOutlined, AppstoreOutlined, CloudOutlined, DatabaseOutlined, CloudUploadOutlined, SaveOutlined, TeamOutlined, UserOutlined, FilterOutlined, KeyOutlined } from '@ant-design/icons'
 import { useAppStore } from '../stores/appStore'
-import { Project as ProjectType, Table as TableType, Relationship, Column, Index } from '../types'
+import { Project as ProjectType, Table as TableType, Relationship } from '../types'
+import { PreviewProjectModal } from './PreviewProjectModal'
+import { JoinProjectModal } from './JoinProjectModal'
 
-const { Text, Paragraph } = Typography
-const { Option } = Select
+const { Text } = Typography
 
 type ContainerWidth = 'extra-narrow' | 'narrow' | 'medium' | 'wide'
 
 export type ProjectFilterType = 'all' | 'local' | 'cloud-personal' | 'team' | 'shared'
+
+const WIDTH_BREAKPOINTS = {
+  EXTRA_NARROW: 200,
+  NARROW: 280,
+  MEDIUM: 380,
+} as const
+
+const FILTER_OPTIONS = [
+  { value: 'all', label: '全部项目', icon: <FolderOutlined /> },
+  { value: 'local', label: '本地项目', icon: <DatabaseOutlined /> },
+  { value: 'cloud-personal', label: '云端个人', icon: <CloudOutlined /> },
+  { value: 'team', label: '团队项目', icon: <TeamOutlined /> },
+  { value: 'shared', label: '有权项目', icon: <UserOutlined /> },
+]
+
+const PROJECT_COLORS = {
+  LOCAL: '#faad14',
+  CLOUD: '#1890ff',
+  SELECTED_LOCAL_BG: 'rgba(250, 173, 20, 0.15)',
+  SELECTED_CLOUD_BG: 'rgba(24, 144, 255, 0.15)',
+  LOCAL_BG: 'rgba(250, 173, 20, 0.05)',
+  CLOUD_BG: 'rgba(24, 144, 255, 0.03)',
+  LOCAL_HOVER_BG: 'rgba(250, 173, 20, 0.1)',
+  CLOUD_HOVER_BG: 'rgba(24, 144, 255, 0.08)',
+  LOCAL_BORDER: 'rgba(250, 173, 20, 0.2)',
+  CLOUD_BORDER: 'rgba(24, 144, 255, 0.1)',
+  LOCAL_SHADOW: 'rgba(250, 173, 20, 0.2)',
+  CLOUD_SHADOW: 'rgba(24, 144, 255, 0.2)',
+  HINT_TEXT: '#8c8c8c',
+  WHITE: '#ffffff',
+  BLUE_LIGHT: '#a8c8ed',
+}
+
+function getStatusColor(status: string) {
+  return status === 'PUBLISHED' ? 'success' : 'default'
+}
+
+function isLocalProject(project: ProjectType) {
+  return project.id.startsWith('local_') || project.createdBy === 'local'
+}
+
+function isCloudProject(project: ProjectType) {
+  return !project.id.startsWith('local_') && project.createdBy !== 'local'
+}
+
+function getDatabaseTypeColor(type: string) {
+  switch(type) {
+    case 'MYSQL': return 'blue'
+    case 'POSTGRESQL': return 'purple'
+    case 'SQLITE': return 'orange'
+    default: return 'default'
+  }
+}
+
+const ProjectContextMenu = React.memo(({ 
+  project, 
+  position, 
+  menuItems, 
+  onAction, 
+  onClose 
+}: {
+  project: ProjectType | null
+  position: { x: number; y: number }
+  menuItems: any[]
+  onAction: (key: string) => void
+  onClose: () => void
+}) => {
+  if (!project) return null
+
+  return (
+    <>
+      <div
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 9998
+        }}
+        onClick={onClose}
+      />
+      <div
+        style={{
+          position: 'fixed',
+          left: position.x,
+          top: position.y,
+          zIndex: 9999
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <Menu
+          items={menuItems}
+          onClick={({ key }) => onAction(key)}
+          style={{ minWidth: 160 }}
+        />
+      </div>
+    </>
+  )
+})
 
 const ProjectList: React.FC = () => {
   const { 
@@ -17,17 +118,14 @@ const ProjectList: React.FC = () => {
     deleteProject, 
     selectProject, 
     currentProject, 
-    loadProjects, 
     tables,
     relationships,
     fontConfig,
-    isLocalMode,
     isOnline,
     uploadProjectToCloud,
     saveProjectToLocal,
     projectListLoading,
     isAuthenticated,
-    currentUser,
     openProjectTab,
     openCreateProjectTab,
     openImportExportTab,
@@ -43,8 +141,6 @@ const ProjectList: React.FC = () => {
   const [containerWidth, setContainerWidth] = useState<ContainerWidth>('medium')
   const [filterType, setFilterType] = useState<ProjectFilterType>('all')
   const [isJoinProjectModalOpen, setIsJoinProjectModalOpen] = useState(false)
-  const [inviteCodeInput, setInviteCodeInput] = useState('')
-  const [joiningProject, setJoiningProject] = useState(false)
   
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -131,10 +227,6 @@ const ProjectList: React.FC = () => {
     openMemberTab(project.id, project.name)
   }, [openMemberTab])
 
-  const isCloudProject = useCallback((project: ProjectType) => {
-    return !project.id.startsWith('local_') && project.createdBy !== 'local'
-  }, [])
-
   const handleContextMenu = useCallback((e: React.MouseEvent, project: ProjectType) => {
     e.preventDefault()
     e.stopPropagation()
@@ -172,47 +264,6 @@ const ProjectList: React.FC = () => {
     }
   }, [saveProjectToLocal])
 
-  const handleJoinProject = useCallback(async () => {
-    if (!inviteCodeInput.trim()) {
-      message.error('请输入邀请码')
-      return
-    }
-    
-    if (!isAuthenticated) {
-      message.error('请先登录')
-      return
-    }
-    
-    setJoiningProject(true)
-    try {
-      const cleanCode = inviteCodeInput.replace(/-/g, '').toUpperCase().trim()
-      const response = await fetch(`${window.location.protocol}//${window.location.hostname}:3001/api/projects/invites/join`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-        },
-        body: JSON.stringify({ inviteCode: cleanCode })
-      })
-      const data = await response.json()
-      if (data.success) {
-        message.success('加入项目成功！')
-        setIsJoinProjectModalOpen(false)
-        setInviteCodeInput('')
-        loadProjects()
-        if (data.data && data.data.id) {
-          openProjectTab(data.data)
-        }
-      } else {
-        message.error(data.message || '加入项目失败')
-      }
-    } catch (error) {
-      message.error('加入项目失败: ' + (error as Error).message)
-    } finally {
-      setJoiningProject(false)
-    }
-  }, [inviteCodeInput, isAuthenticated, loadProjects, openProjectTab])
-
   useEffect(() => {
     if (!containerRef.current) return
 
@@ -220,11 +271,11 @@ const ProjectList: React.FC = () => {
       for (let entry of entries) {
         const width = entry.contentRect.width
         let newWidth: ContainerWidth
-        if (width < 200) {
+        if (width < WIDTH_BREAKPOINTS.EXTRA_NARROW) {
           newWidth = 'extra-narrow'
-        } else if (width < 280) {
+        } else if (width < WIDTH_BREAKPOINTS.NARROW) {
           newWidth = 'narrow'
-        } else if (width < 380) {
+        } else if (width < WIDTH_BREAKPOINTS.MEDIUM) {
           newWidth = 'medium'
         } else {
           newWidth = 'wide'
@@ -237,24 +288,7 @@ const ProjectList: React.FC = () => {
     return () => resizeObserver.disconnect()
   }, [])
 
-  const getStatusColor = (status: string) => {
-    return status === 'PUBLISHED' ? 'success' : 'default'
-  }
-
-  const isLocalProject = (project: ProjectType) => {
-    return project.id.startsWith('local_') || project.createdBy === 'local'
-  }
-
-  const getDatabaseTypeColor = (type: string) => {
-    switch(type) {
-      case 'MYSQL': return 'blue'
-      case 'POSTGRESQL': return 'purple'
-      case 'SQLITE': return 'orange'
-      default: return 'default'
-    }
-  }
-
-  const getContextMenuItems = useCallback(() => {
+  const contextMenuItems = useMemo(() => {
     if (!contextMenuProject) return []
     
     const isLocal = isLocalProject(contextMenuProject)
@@ -318,7 +352,7 @@ const ProjectList: React.FC = () => {
         danger: true
       }
     ]
-  }, [contextMenuProject, isOnline])
+  }, [contextMenuProject, isAuthenticated, isOnline])
 
   const handleContextMenuAction = useCallback((action: string) => {
     if (!contextMenuProject) return
@@ -357,31 +391,6 @@ const ProjectList: React.FC = () => {
     
     closeContextMenu()
   }, [contextMenuProject, selectProject, deleteProject, handleUploadToCloud, handleSaveToLocal, closeContextMenu, openProjectTab, openEditProjectTab, openVersionManagementTab, openMemberTab])
-
-  const getVisibleActions = useCallback(() => visibleActions, [visibleActions])
-  const showStats = useCallback(() => shouldShowStats, [shouldShowStats])
-  const showDescription = useCallback(() => shouldShowDescription, [shouldShowDescription])
-
-  const getProjectPreviewData = useCallback((projectId: string) => {
-    const project = projects.find(p => p.id === projectId)
-    if (!project) return null
-    
-    const stats = projectStatsMap.get(projectId)
-    if (!stats) return null
-    
-    let totalIndexes = 0
-    stats.tables.forEach(table => {
-      totalIndexes += (table.indexes?.length || 0)
-    })
-    
-    return {
-      project,
-      tables: stats.tables,
-      relationships: stats.relationships,
-      totalColumns: stats.totalColumns,
-      totalIndexes
-    }
-  }, [projects, projectStatsMap])
 
   return (
     <div ref={containerRef} style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -466,13 +475,7 @@ const ProjectList: React.FC = () => {
               onChange={setFilterType}
               style={{ width: 160 }}
               size="small"
-              options={[
-                { value: 'all', label: '全部项目', icon: <FolderOutlined /> },
-                { value: 'local', label: '本地项目', icon: <DatabaseOutlined /> },
-                { value: 'cloud-personal', label: '云端个人', icon: <CloudOutlined /> },
-                { value: 'team', label: '团队项目', icon: <TeamOutlined /> },
-                { value: 'shared', label: '有权项目', icon: <UserOutlined /> }
-              ]}
+              options={FILTER_OPTIONS}
             />
           </div>
         )}
@@ -502,12 +505,12 @@ const ProjectList: React.FC = () => {
               return (
             <List.Item
               style={{ 
-                backgroundColor: isSelected ? 'rgba(24, 144, 255, 0.15)' : (isLocal ? 'rgba(250, 173, 20, 0.05)' : 'rgba(24, 144, 255, 0.03)'),
+                backgroundColor: isSelected ? PROJECT_COLORS.SELECTED_CLOUD_BG : (isLocal ? PROJECT_COLORS.LOCAL_BG : PROJECT_COLORS.CLOUD_BG),
                 cursor: 'pointer',
                 borderRadius: 4,
                 marginBottom: 2,
                 padding: containerWidth === 'extra-narrow' ? '6px 8px' : '8px 12px',
-                border: isSelected ? `2px solid var(--theme-primary)` : `1px solid ${isLocal ? 'rgba(250, 173, 20, 0.2)' : 'rgba(24, 144, 255, 0.1)'}` ,
+                border: isSelected ? `2px solid var(--theme-primary)` : `1px solid ${isLocal ? PROJECT_COLORS.LOCAL_BORDER : PROJECT_COLORS.CLOUD_BORDER}` ,
                 transition: 'background-color 0.1s ease, border-color 0.1s ease',
                 boxShadow: 'none',
                 position: 'relative',
@@ -517,12 +520,12 @@ const ProjectList: React.FC = () => {
               }}
               onMouseEnter={(e) => {
                 if (!isSelected) {
-                  e.currentTarget.style.backgroundColor = isLocal ? 'rgba(250, 173, 20, 0.1)' : 'rgba(24, 144, 255, 0.08)';
+                  e.currentTarget.style.backgroundColor = isLocal ? PROJECT_COLORS.LOCAL_HOVER_BG : PROJECT_COLORS.CLOUD_HOVER_BG
                 }
               }}
               onMouseLeave={(e) => {
                 if (!isSelected) {
-                  e.currentTarget.style.backgroundColor = isLocal ? 'rgba(250, 173, 20, 0.05)' : 'rgba(24, 144, 255, 0.03)';
+                  e.currentTarget.style.backgroundColor = isLocal ? PROJECT_COLORS.LOCAL_BG : PROJECT_COLORS.CLOUD_BG
                 }
               }}
               onContextMenu={(e) => handleContextMenu(e, project)}
@@ -681,13 +684,13 @@ const ProjectList: React.FC = () => {
                     {isLocalProject(project) ? (
                       <DatabaseOutlined style={{ 
                         fontSize: 16, 
-                        color: isSelected ? 'var(--theme-primary)' : '#faad14',
+                        color: isSelected ? 'var(--theme-primary)' : PROJECT_COLORS.LOCAL,
                         flexShrink: 0
                       }} />
                     ) : (
                       <CloudOutlined style={{ 
                         fontSize: 16, 
-                        color: isSelected ? 'var(--theme-primary)' : '#1890ff',
+                        color: isSelected ? 'var(--theme-primary)' : PROJECT_COLORS.CLOUD,
                         flexShrink: 0
                       }} />
                     )}
@@ -718,7 +721,7 @@ const ProjectList: React.FC = () => {
                         {project.name}
                       </Text>
                     </Tooltip>
-                    {showDescription() && project.description && (
+                    {shouldShowDescription && project.description && (
                       <Tooltip title={project.description} placement="topLeft">
                         <Text style={{ 
                           fontSize: 11, 
@@ -765,7 +768,7 @@ const ProjectList: React.FC = () => {
                         border: 'none',
                         height: 'auto',
                         lineHeight: 1.4,
-                        boxShadow: isLocalProject(project) ? '0 1px 2px rgba(250, 173, 20, 0.2)' : '0 1px 2px rgba(24, 144, 255, 0.2)'
+                        boxShadow: isLocalProject(project) ? `0 1px 2px ${PROJECT_COLORS.LOCAL_SHADOW}` : `0 1px 2px ${PROJECT_COLORS.CLOUD_SHADOW}`
                       }}
                     >
                       {isLocalProject(project) ? (
@@ -817,8 +820,8 @@ const ProjectList: React.FC = () => {
                         )}
                         {(containerWidth === 'wide' || containerWidth === 'medium') && (
                           <>
-                            <span style={{ fontWeight: 500, color: isSelected ? '#ffffff' : 'var(--theme-text)' }}>v{project.version}</span>
-                            <span style={{ color: isSelected ? '#a8c8ed' : 'var(--theme-text-tertiary)' }}>
+                            <span style={{ fontWeight: 500, color: isSelected ? PROJECT_COLORS.WHITE : 'var(--theme-text)' }}>v{project.version}</span>
+                            <span style={{ color: isSelected ? PROJECT_COLORS.BLUE_LIGHT : 'var(--theme-text-tertiary)' }}>
                               {new Date(project.createdAt).toLocaleDateString('zh-CN', {
                                 month: '2-digit',
                                 day: '2-digit'
@@ -840,238 +843,24 @@ const ProjectList: React.FC = () => {
 
 
       
-      {contextMenuProject && (
-        <>
-          <div
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              zIndex: 9998
-            }}
-            onClick={closeContextMenu}
-          />
-          <div
-            style={{
-              position: 'fixed',
-              left: contextMenuPosition.x,
-              top: contextMenuPosition.y,
-              zIndex: 9999
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Menu
-              items={getContextMenuItems()}
-              onClick={({ key }) => handleContextMenuAction(key)}
-              style={{ minWidth: 160 }}
-            />
-          </div>
-        </>
-      )}
+      <ProjectContextMenu
+        project={contextMenuProject}
+        position={contextMenuPosition}
+        menuItems={contextMenuItems}
+        onAction={handleContextMenuAction}
+        onClose={closeContextMenu}
+      />
       
-      <Modal
-        title={
-          <Space>
-            <EyeOutlined />
-            <span>项目预览</span>
-          </Space>
-        }
+      <PreviewProjectModal 
         open={isPreviewModalOpen}
-        onCancel={() => setIsPreviewModalOpen(false)}
-        footer={[
-          <Button key="close-preview" onClick={() => setIsPreviewModalOpen(false)}>
-            关闭
-          </Button>,
-          <Button 
-            key="open-project" 
-            type="primary" 
-            onClick={() => {
-              if (previewProjectId) {
-                const project = projects.find(p => p.id === previewProjectId)
-                if (project) {
-                  openProjectTab(project)
-                  setIsPreviewModalOpen(false)
-                }
-              }
-            }}
-          >
-            打开项目
-          </Button>
-        ]}
-        width={800}
-      >
-        {(() => {
-          const previewData = previewProjectId ? getProjectPreviewData(previewProjectId) : null
-          
-          if (!previewData) {
-            return <Empty description="无法获取预览数据" />
-          }
-          
-          return (
-            <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
-              <Descriptions title="项目信息" bordered column={2} style={{ marginBottom: 24 }}>
-                <Descriptions.Item label="项目名称">{previewData.project.name}</Descriptions.Item>
-                <Descriptions.Item label="数据库类型">
-                  <Tag color={getDatabaseTypeColor(previewData.project.databaseType)}>
-                    {previewData.project.databaseType}
-                  </Tag>
-                </Descriptions.Item>
-                <Descriptions.Item label="状态" span={2}>
-                  <Tag color={getStatusColor(previewData.project.status)}>
-                    {previewData.project.status}
-                  </Tag>
-                </Descriptions.Item>
-                <Descriptions.Item label="创建时间" span={2}>
-                  {new Date(previewData.project.createdAt).toLocaleString()}
-                </Descriptions.Item>
-                {previewData.project.description && (
-                  <Descriptions.Item label="描述" span={2}>
-                    {previewData.project.description}
-                  </Descriptions.Item>
-                )}
-              </Descriptions>
-              
-              <Divider orientation="left">
-                <Space>
-                  <AppstoreOutlined />
-                  <span>统计信息</span>
-                </Space>
-              </Divider>
-              <Row gutter={16} style={{ marginBottom: 24 }}>
-                <Col span={6}>
-                  <Card>
-                    <Statistic
-                      title="表数量"
-                      value={previewData.tables.length}
-                      prefix={<TableOutlined />}
-                    />
-                  </Card>
-                </Col>
-                <Col span={6}>
-                  <Card>
-                    <Statistic
-                      title="列总数"
-                      value={previewData.totalColumns}
-                      prefix={<LinkOutlined />}
-                    />
-                  </Card>
-                </Col>
-                <Col span={6}>
-                  <Card>
-                    <Statistic
-                      title="关系数量"
-                      value={previewData.relationships.length}
-                      prefix={<LinkOutlined />}
-                    />
-                  </Card>
-                </Col>
-                <Col span={6}>
-                  <Card>
-                    <Statistic
-                      title="索引总数"
-                      value={previewData.totalIndexes}
-                      prefix={<TableOutlined />}
-                    />
-                  </Card>
-                </Col>
-              </Row>
-              
-              {previewData.tables.length > 0 && (
-                <>
-                  <Divider orientation="left">
-                    <Space>
-                      <TableOutlined />
-                      <span>表列表</span>
-                    </Space>
-                  </Divider>
-                  <Table
-                    dataSource={previewData.tables}
-                    rowKey="id"
-                    pagination={{ pageSize: 5 }}
-                    size="small"
-                    columns={[
-                      {
-                        title: '表名',
-                        dataIndex: 'name',
-                        key: 'name',
-                        render: (text: string) => <Text strong>{text}</Text>
-                      },
-                      {
-                        title: '列数',
-                        key: 'columnCount',
-                        render: (_: any, record: TableType) => record.columns?.length || 0,
-                        width: 80
-                      },
-                      {
-                        title: '索引数',
-                        key: 'indexCount',
-                        render: (_: any, record: TableType) => record.indexes?.length || 0,
-                        width: 80
-                      },
-                      {
-                        title: '注释',
-                        dataIndex: 'comment',
-                        key: 'comment',
-                        ellipsis: true
-                      }
-                    ]}
-                  />
-                </>
-              )}
-            </div>
-          )
-        })()}
-      </Modal>
+        projectId={previewProjectId}
+        onClose={() => setIsPreviewModalOpen(false)}
+      />
 
-      <Modal
-        title={
-          <Space>
-            <KeyOutlined />
-            <span>加入项目</span>
-          </Space>
-        }
+      <JoinProjectModal 
         open={isJoinProjectModalOpen}
-        onCancel={() => {
-          setIsJoinProjectModalOpen(false)
-          setInviteCodeInput('')
-        }}
-        footer={[
-          <Button 
-            key="cancel" 
-            onClick={() => {
-              setIsJoinProjectModalOpen(false)
-              setInviteCodeInput('')
-            }}
-          >
-            取消
-          </Button>,
-          <Button 
-            key="join" 
-            type="primary" 
-            onClick={handleJoinProject}
-            loading={joiningProject}
-            disabled={!inviteCodeInput.trim()}
-          >
-            加入
-          </Button>
-        ]}
-        width={500}
-      >
-        <div style={{ marginBottom: 16 }}>
-          <p style={{ color: '#8c8c8c', marginBottom: 16 }}>请输入邀请码加入项目。邀请码格式：XXXX-XXXX-XXXX-XXXX</p>
-          <Input
-            placeholder="请输入邀请码（如：8K2F-9Q4X-Z3N5-7A6C）"
-            value={inviteCodeInput}
-            onChange={(e) => setInviteCodeInput(e.target.value.toUpperCase())}
-            prefix={<KeyOutlined />}
-            size="large"
-            style={{ textAlign: 'center', fontFamily: 'monospace', fontSize: '18px', letterSpacing: '2px' }}
-            maxLength={23}
-          />
-        </div>
-      </Modal>
+        onClose={() => setIsJoinProjectModalOpen(false)}
+      />
     </div>
   )
 }

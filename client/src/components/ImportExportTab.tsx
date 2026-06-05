@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { Form, Input, Select, Button, Upload, message, Alert, Space, Typography, Switch, Card, Tag, Descriptions, Badge, Modal } from 'antd'
 import { DownloadOutlined, UploadOutlined, FileTextOutlined, DatabaseOutlined, CheckCircleOutlined, SettingOutlined, PlusOutlined, FileWordOutlined, SafetyCertificateOutlined, InfoCircleOutlined, XOutlined } from '@ant-design/icons'
 import { useAppStore } from '../stores/appStore'
@@ -20,6 +20,208 @@ const databaseTypeOptions = [
   { value: 'SQLSERVER', label: 'SQL Server' },
   { value: 'ORACLE', label: 'Oracle' }
 ]
+
+const UI_COLORS = {
+  BORDER: '#e8e8e8',
+  DIVIDER: '#f0f0f0',
+  GREEN: '#52c41a',
+  GREEN_DARK: '#389e0d',
+  BLUE: '#1890ff',
+  BLUE_DARK: '#096dd9',
+  PURPLE_END: '#764ba2',
+  DASHED_BORDER: '#d9d9d9',
+  BG_LIGHT: '#fafafa',
+}
+
+interface ImportFileCardProps {
+  accept: string
+  title: string
+  subtitle: string
+  icon: React.ReactNode
+  gradientFrom: string
+  gradientTo: string
+  onImport: (file: File) => Promise<boolean>
+  disabled: boolean
+}
+
+const ImportFileCard = React.memo(({
+  accept, title, subtitle, icon, gradientFrom, gradientTo, onImport, disabled
+}: ImportFileCardProps) => (
+  <Card
+    size="small"
+    style={{
+      borderRadius: 12,
+      border: `2px dashed ${UI_COLORS.DASHED_BORDER}`,
+      background: UI_COLORS.BG_LIGHT,
+      cursor: 'pointer',
+      transition: 'all 0.3s'
+    }}
+    styles={{ body: { padding: 0 } }}
+    hoverable
+  >
+    <Upload
+      accept={accept}
+      showUploadList={false}
+      beforeUpload={onImport}
+      disabled={disabled}
+    >
+      <div style={{ padding: '32px 20px', textAlign: 'center' }}>
+        <div style={{
+          width: 56, height: 56, borderRadius: 12, margin: '0 auto 16px',
+          background: `linear-gradient(135deg, ${gradientFrom} 0%, ${gradientTo} 100%)`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center'
+        }}>
+          {icon}
+        </div>
+        <Text strong style={{ fontSize: 14, display: 'block', marginBottom: 4 }}>{title}</Text>
+        <Text type="secondary" style={{ fontSize: 12 }}>{subtitle}</Text>
+      </div>
+    </Upload>
+  </Card>
+))
+
+interface ImportConfirmModalProps {
+  open: boolean
+  importResult: ImportResult | null
+  importing: boolean
+  importForm: any
+  onCancel: () => void
+  onOk: () => void
+}
+
+const ImportConfirmModal = React.memo(({
+  open, importResult, importing, importForm, onCancel, onOk
+}: ImportConfirmModalProps) => (
+  <Modal
+    title={
+      <Space>
+        <CheckCircleOutlined style={{ color: UI_COLORS.GREEN }} />
+        <span>确认导入</span>
+      </Space>
+    }
+    open={open}
+    onCancel={onCancel}
+    onOk={onOk}
+    confirmLoading={importing}
+    width={520}
+    okText="确认导入"
+    cancelText="取消"
+  >
+    {importResult && importResult.success ? (
+      <div>
+        <Alert
+          message="导入预览"
+          description={
+            <Descriptions column={2} size="small" style={{ marginTop: 8 }}>
+              <Descriptions.Item label="项目名称">
+                <Text strong>{importResult.project?.name}</Text>
+              </Descriptions.Item>
+              <Descriptions.Item label="数据库类型">
+                <Tag color="blue">{importResult.project?.databaseType}</Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="表数量">
+                <Badge count={importResult.tables?.length || 0} style={{ backgroundColor: UI_COLORS.BLUE }} />
+              </Descriptions.Item>
+              <Descriptions.Item label="关系数量">
+                <Badge count={importResult.relationships?.length || 0} style={{ backgroundColor: UI_COLORS.GREEN }} />
+              </Descriptions.Item>
+            </Descriptions>
+          }
+          type="info"
+          showIcon
+          style={{ marginBottom: 20, borderRadius: 8 }}
+        />
+        {importResult.warnings && importResult.warnings.length > 0 && (
+          <Alert
+            message="警告信息"
+            description={importResult.warnings.join('；')}
+            type="warning"
+            showIcon
+            style={{ marginBottom: 16, borderRadius: 8 }}
+          />
+        )}
+        <Form form={importForm} layout="vertical">
+          <Form.Item
+            label="项目名称"
+            name="projectName"
+            rules={[{ required: true, message: '请输入项目名称' }]}
+          >
+            <Input placeholder="请输入项目名称" size="large" />
+          </Form.Item>
+          <Form.Item label="数据库类型" name="databaseType">
+            <Select style={{ width: '100%' }} size="large">
+              {databaseTypeOptions.map(option => (
+                <Option key={option.value} value={option.value}>
+                  {option.label}
+                </Option>
+              ))}
+            </Select>
+          </Form.Item>
+        </Form>
+      </div>
+    ) : (
+      <div>
+        <Alert message="无导入数据" type="warning" showIcon />
+      </div>
+    )}
+  </Modal>
+))
+
+interface ExportFormatCardProps {
+  title: string
+  subtitle: string
+  icon: React.ReactNode
+  gradientFrom: string
+  gradientTo: string
+  buttonText: string
+  buttonIcon: React.ReactNode
+  buttonType?: 'primary' | 'default'
+  onExport: () => void
+  loading: boolean
+  disabled?: boolean
+}
+
+const ExportFormatCard = React.memo(({
+  title, subtitle, icon, gradientFrom, gradientTo,
+  buttonText, buttonIcon, buttonType = 'default',
+  onExport, loading, disabled
+}: ExportFormatCardProps) => (
+  <Card
+    size="small"
+    style={{ borderRadius: 12, border: `1px solid ${UI_COLORS.BORDER}` }}
+    styles={{ body: { padding: 0 } }}
+  >
+    <div style={{ padding: '20px 20px 16px 20px', borderBottom: `1px solid ${UI_COLORS.DIVIDER}` }}>
+      <Space>
+        <div style={{
+          width: 40, height: 40, borderRadius: 10,
+          background: `linear-gradient(135deg, ${gradientFrom} 0%, ${gradientTo} 100%)`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center'
+        }}>
+          {icon}
+        </div>
+        <div>
+          <Text strong style={{ fontSize: 14, display: 'block' }}>{title}</Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>{subtitle}</Text>
+        </div>
+      </Space>
+    </div>
+    <div style={{ padding: '16px 20px' }}>
+      <Button
+        type={buttonType}
+        icon={buttonIcon}
+        onClick={onExport}
+        loading={loading}
+        block
+        size="large"
+        disabled={disabled}
+        style={{ borderRadius: 8, height: 44 }}
+      >
+        {buttonText}
+      </Button>
+    </div>
+  </Card>
+))
 
 interface ImportExportTabProps {
   initialTab?: 'import' | 'export'
@@ -314,7 +516,7 @@ export const ImportExportTab: React.FC<ImportExportTabProps> = ({ initialTab = '
     message.success('导入成功')
   }
 
-  const handleExportJSON = () => {
+  const handleExportJSON = useCallback(() => {
     if (!currentProject) {
       message.warning('请先选择一个项目')
       return
@@ -331,9 +533,9 @@ export const ImportExportTab: React.FC<ImportExportTabProps> = ({ initialTab = '
     } finally {
       setExporting(false)
     }
-  }
+  }, [currentProject, tables, relationships, versions])
 
-  const handleExportSQL = async () => {
+  const handleExportSQL = useCallback(async () => {
     if (!currentProject) {
       message.warning('请先选择一个项目')
       return
@@ -361,9 +563,9 @@ export const ImportExportTab: React.FC<ImportExportTabProps> = ({ initialTab = '
     } finally {
       setExporting(false)
     }
-  }
+  }, [currentProject, tables, relationships, form])
 
-  const handleImportJSON = async (file: File) => {
+  const handleImportJSON = useCallback(async (file: File) => {
     setPendingImportFile(file)
     setPendingImportType('json')
     setDetectedDatabaseType('MYSQL')
@@ -387,9 +589,9 @@ export const ImportExportTab: React.FC<ImportExportTabProps> = ({ initialTab = '
     }
 
     return false
-  }
+  }, [])
 
-  const handleImportSQL = async (file: File) => {
+  const handleImportSQL = useCallback(async (file: File) => {
     setPendingImportFile(file)
     setPendingImportType('sql')
 
@@ -421,9 +623,9 @@ export const ImportExportTab: React.FC<ImportExportTabProps> = ({ initialTab = '
     }
 
     return false
-  }
+  }, [])
 
-  const confirmImport = async () => {
+  const confirmImport = useCallback(async () => {
     if (!importResult || !importResult.success) {
       return
     }
@@ -449,16 +651,16 @@ export const ImportExportTab: React.FC<ImportExportTabProps> = ({ initialTab = '
     } finally {
       setImporting(false)
     }
-  }
+  }, [importResult, importForm])
 
-  const cancelImport = () => {
+  const cancelImport = useCallback(() => {
     setShowImportConfirm(false)
     setPendingImportFile(null)
     setPendingImportType(null)
     setImportResult(null)
-  }
+  }, [])
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     if (onClose) {
       const importExportTab = openTabs.find(tab => tab.type === 'importExport')
       if (importExportTab) {
@@ -466,7 +668,7 @@ export const ImportExportTab: React.FC<ImportExportTabProps> = ({ initialTab = '
       }
       onClose()
     }
-  }
+  }, [onClose, openTabs, closeTab])
 
   const renderExport = () => (
     <div style={{ padding: '8px 0 24px 0' }}>
@@ -485,7 +687,7 @@ export const ImportExportTab: React.FC<ImportExportTabProps> = ({ initialTab = '
             size="small"
             style={{
               marginBottom: 20,
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              background: 'linear-gradient(135deg, #667eea 0%, ' + UI_COLORS.PURPLE_END + ' 100%)',
               border: 'none',
               borderRadius: 12
             }}
@@ -510,75 +712,30 @@ export const ImportExportTab: React.FC<ImportExportTabProps> = ({ initialTab = '
           </Card>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <Card
-              size="small"
-              style={{ borderRadius: 12, border: '1px solid #e8e8e8' }}
-              styles={{ body: { padding: 0 } }}
-            >
-              <div style={{ padding: '20px 20px 16px 20px', borderBottom: '1px solid #f0f0f0' }}>
-                <Space>
-                  <div style={{
-                    width: 40, height: 40, borderRadius: 10,
-                    background: 'linear-gradient(135deg, #52c41a 0%, #389e0d 100%)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center'
-                  }}>
-                    <FileWordOutlined style={{ fontSize: 20, color: '#fff' }} />
-                  </div>
-                  <div>
-                    <Text strong style={{ fontSize: 14, display: 'block' }}>JSON 格式</Text>
-                    <Text type="secondary" style={{ fontSize: 12 }}>完整项目备份</Text>
-                  </div>
-                </Space>
-              </div>
-              <div style={{ padding: '16px 20px' }}>
-                <Button
-                  type="primary"
-                  icon={<DownloadOutlined />}
-                  onClick={handleExportJSON}
-                  loading={exporting}
-                  block
-                  size="large"
-                  style={{ borderRadius: 8, height: 44 }}
-                >
-                  导出 JSON
-                </Button>
-              </div>
-            </Card>
-
-            <Card
-              size="small"
-              style={{ borderRadius: 12, border: '1px solid #e8e8e8' }}
-              styles={{ body: { padding: 0 } }}
-            >
-              <div style={{ padding: '20px 20px 16px 20px', borderBottom: '1px solid #f0f0f0' }}>
-                <Space>
-                  <div style={{
-                    width: 40, height: 40, borderRadius: 10,
-                    background: 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center'
-                  }}>
-                    <SafetyCertificateOutlined style={{ fontSize: 20, color: '#fff' }} />
-                  </div>
-                  <div>
-                    <Text strong style={{ fontSize: 14, display: 'block' }}>SQL DDL</Text>
-                    <Text type="secondary" style={{ fontSize: 12 }}>数据库脚本</Text>
-                  </div>
-                </Space>
-              </div>
-              <div style={{ padding: '16px 20px' }}>
-                <Button
-                  icon={<DownloadOutlined />}
-                  onClick={handleExportSQL}
-                  loading={exporting}
-                  block
-                  size="large"
-                  disabled={exporting}
-                  style={{ borderRadius: 8, height: 44 }}
-                >
-                  导出 SQL
-                </Button>
-              </div>
-            </Card>
+            <ExportFormatCard
+              title="JSON 格式"
+              subtitle="完整项目备份"
+              icon={<FileWordOutlined style={{ fontSize: 20, color: '#fff' }} />}
+              gradientFrom={UI_COLORS.GREEN}
+              gradientTo={UI_COLORS.GREEN_DARK}
+              buttonText="导出 JSON"
+              buttonIcon={<DownloadOutlined />}
+              buttonType="primary"
+              onExport={handleExportJSON}
+              loading={exporting}
+            />
+            <ExportFormatCard
+              title="SQL DDL"
+              subtitle="数据库脚本"
+              icon={<SafetyCertificateOutlined style={{ fontSize: 20, color: '#fff' }} />}
+              gradientFrom={UI_COLORS.BLUE}
+              gradientTo={UI_COLORS.BLUE_DARK}
+              buttonText="导出 SQL"
+              buttonIcon={<DownloadOutlined />}
+              onExport={handleExportSQL}
+              loading={exporting}
+              disabled={exporting}
+            />
           </div>
 
           <Card size="small" title={<Space><SettingOutlined /><Text strong>导出选项</Text></Space>} style={{ marginTop: 20, borderRadius: 12 }} styles={{ body: { padding: '0 20px 20px 20px' } }}>
@@ -681,73 +838,26 @@ export const ImportExportTab: React.FC<ImportExportTabProps> = ({ initialTab = '
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        <Card
-          size="small"
-          style={{
-            borderRadius: 12,
-            border: '2px dashed #d9d9d9',
-            background: '#fafafa',
-            cursor: 'pointer',
-            transition: 'all 0.3s'
-          }}
-          styles={{ body: { padding: 0 } }}
-          hoverable
-        >
-          <Upload
-            accept=".json"
-            showUploadList={false}
-            beforeUpload={handleImportJSON}
-            disabled={importing}
-          >
-            <div style={{ padding: '32px 20px', textAlign: 'center' }}>
-              <div style={{
-                width: 56, height: 56, borderRadius: 12, margin: '0 auto 16px',
-                background: 'linear-gradient(135deg, #52c41a 0%, #389e0d 100%)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center'
-              }}>
-                <FileWordOutlined style={{ fontSize: 28, color: '#fff' }} />
-              </div>
-              <Text strong style={{ fontSize: 14, display: 'block', marginBottom: 4 }}>JSON 文件</Text>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                完整项目备份格式
-              </Text>
-            </div>
-          </Upload>
-        </Card>
-
-        <Card
-          size="small"
-          style={{
-            borderRadius: 12,
-            border: '2px dashed #d9d9d9',
-            background: '#fafafa',
-            cursor: 'pointer',
-            transition: 'all 0.3s'
-          }}
-          styles={{ body: { padding: 0 } }}
-          hoverable
-        >
-          <Upload
-            accept=".sql"
-            showUploadList={false}
-            beforeUpload={handleImportSQL}
-            disabled={importing}
-          >
-            <div style={{ padding: '32px 20px', textAlign: 'center' }}>
-              <div style={{
-                width: 56, height: 56, borderRadius: 12, margin: '0 auto 16px',
-                background: 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center'
-              }}>
-                <DatabaseOutlined style={{ fontSize: 28, color: '#fff' }} />
-              </div>
-              <Text strong style={{ fontSize: 14, display: 'block', marginBottom: 4 }}>SQL DDL 文件</Text>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                CREATE TABLE 语句
-              </Text>
-            </div>
-          </Upload>
-        </Card>
+        <ImportFileCard
+          accept=".json"
+          title="JSON 文件"
+          subtitle="完整项目备份格式"
+          icon={<FileWordOutlined style={{ fontSize: 28, color: '#fff' }} />}
+          gradientFrom={UI_COLORS.GREEN}
+          gradientTo={UI_COLORS.GREEN_DARK}
+          onImport={handleImportJSON}
+          disabled={importing}
+        />
+        <ImportFileCard
+          accept=".sql"
+          title="SQL DDL 文件"
+          subtitle="CREATE TABLE 语句"
+          icon={<DatabaseOutlined style={{ fontSize: 28, color: '#fff' }} />}
+          gradientFrom={UI_COLORS.BLUE}
+          gradientTo={UI_COLORS.BLUE_DARK}
+          onImport={handleImportSQL}
+          disabled={importing}
+        />
       </div>
 
       <Alert
@@ -764,83 +874,14 @@ export const ImportExportTab: React.FC<ImportExportTabProps> = ({ initialTab = '
         style={{ marginTop: 20, borderRadius: 8 }}
       />
 
-      <Modal
-        title={
-          <Space>
-            <CheckCircleOutlined style={{ color: '#52c41a' }} />
-            <span>确认导入</span>
-          </Space>
-        }
+      <ImportConfirmModal
         open={showImportConfirm}
+        importResult={importResult}
+        importing={importing}
+        importForm={importForm}
         onCancel={cancelImport}
         onOk={confirmImport}
-        confirmLoading={importing}
-        width={520}
-        okText="确认导入"
-        cancelText="取消"
-      >
-        {importResult && importResult.success ? (
-          <div>
-            <Alert
-              message="导入预览"
-              description={
-                <Descriptions column={2} size="small" style={{ marginTop: 8 }}>
-                  <Descriptions.Item label="项目名称">
-                    <Text strong>{importResult.project?.name}</Text>
-                  </Descriptions.Item>
-                  <Descriptions.Item label="数据库类型">
-                    <Tag color="blue">{importResult.project?.databaseType}</Tag>
-                  </Descriptions.Item>
-                  <Descriptions.Item label="表数量">
-                    <Badge count={importResult.tables?.length || 0} style={{ backgroundColor: '#1890ff' }} />
-                  </Descriptions.Item>
-                  <Descriptions.Item label="关系数量">
-                    <Badge count={importResult.relationships?.length || 0} style={{ backgroundColor: '#52c41a' }} />
-                  </Descriptions.Item>
-                </Descriptions>
-              }
-              type="info"
-              showIcon
-              style={{ marginBottom: 20, borderRadius: 8 }}
-            />
-            {importResult.warnings && importResult.warnings.length > 0 && (
-              <Alert
-                message="警告信息"
-                description={importResult.warnings.join('；')}
-                type="warning"
-                showIcon
-                style={{ marginBottom: 16, borderRadius: 8 }}
-              />
-            )}
-            <Form form={importForm} layout="vertical">
-              <Form.Item
-                label="项目名称"
-                name="projectName"
-                rules={[{ required: true, message: '请输入项目名称' }]}
-              >
-                <Input placeholder="请输入项目名称" size="large" />
-              </Form.Item>
-              <Form.Item label="数据库类型" name="databaseType">
-                <Select style={{ width: '100%' }} size="large">
-                  {databaseTypeOptions.map(option => (
-                    <Option key={option.value} value={option.value}>
-                      {option.label}
-                    </Option>
-                  ))}
-                </Select>
-              </Form.Item>
-            </Form>
-          </div>
-        ) : (
-          <div>
-            <Alert
-              message="无导入数据"
-              type="warning"
-              showIcon
-            />
-          </div>
-        )}
-      </Modal>
+      />
     </div>
   )
 

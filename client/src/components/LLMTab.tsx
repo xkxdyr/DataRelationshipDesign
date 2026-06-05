@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { Form, Input, Button, Space, Typography, Select, Card, message, List, Tag, Divider, Alert, Popconfirm, Modal, Radio, Tabs, Table, Switch } from 'antd'
 import { RobotOutlined, SettingOutlined, ThunderboltOutlined, CheckCircleOutlined, ClockCircleOutlined, DeleteOutlined, RotateLeftOutlined, XOutlined, PlusOutlined, DatabaseOutlined, KeyOutlined, TeamOutlined, UserOutlined, SafetyCertificateOutlined, ExclamationCircleOutlined } from '@ant-design/icons'
 import { llmApi, TableSuggestion, LLMConfigInfo, MockDataResult, MockDataRequest, ConnectionTestResult } from '../services/api'
@@ -14,6 +14,134 @@ interface LLMTabProps {
   onClose?: () => void
 }
 
+const UI_COLORS = {
+  BORDER: '#e8e8e8',
+  BLUE: '#1890ff',
+  YELLOW: '#faad14',
+  GREEN: '#52c41a',
+  RED: '#ff4d4f',
+}
+
+interface TestResultModalProps {
+  testResult: ConnectionTestResult | null
+  onClose: () => void
+}
+
+const TestResultModal = React.memo(({ testResult, onClose }: TestResultModalProps) => {
+  if (!testResult) return null
+  return (
+    <Modal
+      title="连接测试报告"
+      open={true}
+      onCancel={onClose}
+      footer={<Button onClick={onClose}>关闭</Button>}
+      width={650}
+      destroyOnHidden
+    >
+      <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+        <Alert
+          type={testResult.success ? 'success' : 'error'}
+          message={testResult.success ? '连接测试通过' : '连接测试失败'}
+          description={testResult.success ? `模型: ${testResult.model || '未知'}` : testResult.error || '未知错误'}
+          showIcon
+          icon={testResult.success ? <CheckCircleOutlined /> : <ExclamationCircleOutlined />}
+        />
+
+        {testResult.security && (
+          <Card size="small" title={
+            <Space>
+              <SafetyCertificateOutlined style={{ color: testResult.security.score === 'safe' ? '#52c41a' : testResult.security.score === 'warning' ? '#faad14' : '#ff4d4f' }} />
+              <span>安全性评估</span>
+              <Tag color={testResult.security.score === 'safe' ? 'success' : testResult.security.score === 'warning' ? 'warning' : 'error'}>
+                {testResult.security.score === 'safe' ? '安全' : testResult.security.score === 'warning' ? '注意' : '危险'}
+              </Tag>
+            </Space>
+          }>
+            <Space direction="vertical" size="small" style={{ width: '100%' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <Text type="secondary">传输加密：</Text>
+                <Tag color={testResult.security.isHttps ? 'success' : (testResult.security.isLocalhost ? 'warning' : 'error')}>
+                  {testResult.security.isHttps ? 'HTTPS 加密' : (testResult.security.isLocalhost ? 'HTTP (本地)' : 'HTTP 明文')}
+                </Tag>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <Text type="secondary">连接类型：</Text>
+                <Tag color={testResult.security.isLocalhost ? 'processing' : 'default'}>
+                  {testResult.security.isLocalhost ? '本地连接' : '远程连接'}
+                </Tag>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <Text type="secondary">密钥信息：</Text>
+                <Text code>{testResult.security.apiKeyMasked || '无'}</Text>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <Text type="secondary">密钥强度：</Text>
+                <Tag color={
+                  testResult.security.apiKeyStrength === 'strong' ? 'success' :
+                  testResult.security.apiKeyStrength === 'good' ? 'processing' :
+                  testResult.security.apiKeyStrength === 'weak' ? 'warning' : 'default'
+                }>
+                  {testResult.security.apiKeyStrength === 'strong' ? '强' :
+                   testResult.security.apiKeyStrength === 'good' ? '良好' :
+                   testResult.security.apiKeyStrength === 'weak' ? '弱' : '无'}
+                </Tag>
+              </div>
+              {testResult.security.warnings.length > 0 && (
+                <div>
+                  <Text type="secondary">安全警告：</Text>
+                  {testResult.security.warnings.map((w, i) => (
+                    <Alert key={i} message={w} type="warning" showIcon style={{ marginTop: 4 }} />
+                  ))}
+                </div>
+              )}
+              <div style={{ marginTop: 4 }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>{testResult.security.summary}</Text>
+              </div>
+            </Space>
+          </Card>
+        )}
+
+        {testResult.availability && (
+          <Card size="small" title={
+            <Space>
+              <ThunderboltOutlined style={{ color: testResult.availability.capable ? '#52c41a' : '#ff4d4f' }} />
+              <span>可用性评估</span>
+              <Tag color={testResult.availability.capable ? 'success' : 'error'}>
+                {testResult.availability.capable ? '可用' : testResult.availability.tested ? '不可用' : '未测试'}
+              </Tag>
+            </Space>
+          }>
+            <Space direction="vertical" size="small" style={{ width: '100%' }}>
+              {testResult.availability.tested ? (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Text type="secondary">响应时间：</Text>
+                    <Tag color={testResult.availability.responseTimeMs < 1000 ? 'success' : testResult.availability.responseTimeMs < 5000 ? 'warning' : 'error'}>
+                      {testResult.availability.responseTimeMs}ms
+                    </Tag>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Text type="secondary">模型确认：</Text>
+                    <Tag color={testResult.availability.modelConfirmed ? 'success' : 'warning'}>
+                      {testResult.availability.modelConfirmed ? '已确认' : '未确认（使用请求模型）'}
+                    </Tag>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Text type="secondary">服务器模型：</Text>
+                    <Text code>{testResult.availability.modelReported || '-'}</Text>
+                  </div>
+                  <Text type="secondary" style={{ fontSize: 12 }}>{testResult.availability.details}</Text>
+                </>
+              ) : (
+                <Text type="secondary">连接未成功，无法进行可用性测试</Text>
+              )}
+            </Space>
+          </Card>
+        )}
+      </Space>
+    </Modal>
+  )
+})
 interface CacheEntry {
   id: string
   description: string
@@ -86,6 +214,182 @@ const defaultEndpoints: Record<string, string> = {
 
 const rowCountOptions = [10, 50, 100, 500, 1000]
 
+interface ConfigListCardProps {
+  userConfigs: LLMConfigInfo[]
+  selectedConfigId: string
+  onSelectConfig: (id: string) => void
+  onDeleteConfig: (id: string) => void
+  onCreateConfig: () => void
+}
+
+const ConfigListCard = React.memo(({
+  userConfigs,
+  selectedConfigId,
+  onSelectConfig,
+  onDeleteConfig,
+  onCreateConfig,
+}: ConfigListCardProps) => (
+  <Card size="small" title={
+    <Space>
+      <KeyOutlined />
+      <span>模型配置管理</span>
+    </Space>
+  } extra={
+    <Button
+      type="primary"
+      icon={<PlusOutlined />}
+      onClick={onCreateConfig}
+    >
+      新建配置
+    </Button>
+  }>
+    {userConfigs.length === 0 ? (
+      <Alert
+        message="暂无配置"
+        description="点击「新建配置」添加您的大模型配置"
+        type="info"
+        showIcon
+      />
+    ) : (
+      <List
+        dataSource={userConfigs}
+        renderItem={(config) => (
+          <List.Item
+            key={config.id}
+            actions={[
+              <Button
+                key="select"
+                type={selectedConfigId === config.id ? 'primary' : 'default'}
+                onClick={() => onSelectConfig(config.id)}
+              >
+                {selectedConfigId === config.id ? '已选择' : '选择'}
+              </Button>,
+              <Popconfirm
+                key="delete"
+                title="确定删除此配置？"
+                onConfirm={() => onDeleteConfig(config.id)}
+              >
+                <Button danger icon={<DeleteOutlined />}>删除</Button>
+              </Popconfirm>
+            ]}
+          >
+            <List.Item.Meta
+              title={
+                <Space>
+                  {config.name}
+                  {config.isDefault && <Tag color="blue">默认</Tag>}
+                  <Tag color={config.ownerType === 'user' ? 'green' : 'purple'}>
+                    {config.ownerType === 'user' ? <UserOutlined /> : <TeamOutlined />}
+                    {' '}{config.ownerType === 'user' ? '个人' : '团队'}
+                  </Tag>
+                  <Tag>{config.provider}</Tag>
+                </Space>
+              }
+              description={
+                <Space>
+                  <Text type="secondary">模型: {config.model}</Text>
+                  <Text type="secondary">端点: {config.endpoint}</Text>
+                  {config.description && <Text type="secondary">{config.description}</Text>}
+                </Space>
+              }
+            />
+          </List.Item>
+        )}
+      />
+    )}
+  </Card>
+))
+
+interface ConfigFormCardProps {
+  configForm: any
+  configScope: 'user' | 'team'
+  setConfigScope: (scope: 'user' | 'team') => void
+  selectedProvider: string
+  handleProviderChange: (value: string) => void
+  onFinish: () => void
+  testingConnection: boolean
+  onTestConnection: () => void
+  loading: boolean
+  onCancel: () => void
+}
+
+const ConfigFormCard = React.memo(({
+  configForm,
+  configScope,
+  setConfigScope,
+  selectedProvider,
+  handleProviderChange,
+  onFinish,
+  testingConnection,
+  onTestConnection,
+  loading,
+  onCancel,
+}: ConfigFormCardProps) => (
+  <Card size="small" title="新建配置">
+    <Form form={configForm} layout="vertical" onFinish={onFinish}>
+      <Form.Item label="配置范围">
+        <Radio.Group value={configScope} onChange={(e) => setConfigScope(e.target.value)}>
+          <Radio value="user"><UserOutlined /> 个人配置（仅自己可见）</Radio>
+          <Radio value="team" disabled><TeamOutlined /> 团队配置（成员共享）</Radio>
+        </Radio.Group>
+      </Form.Item>
+
+      <Form.Item name="name" label="配置名称" rules={[{ required: true, message: '请输入配置名称' }]}>
+        <Input placeholder="例如：我的 OpenAI 配置" />
+      </Form.Item>
+
+      <Form.Item name="provider" label="服务提供商" rules={[{ required: true }]}>
+        <Select options={providerOptions} onChange={handleProviderChange} />
+      </Form.Item>
+
+      <Form.Item name="model" label="模型名称" rules={[{ required: true }]}>
+        <Select
+          options={modelOptions[selectedProvider] || []}
+          placeholder="选择或输入模型名称"
+          mode="tags"
+          maxTagCount={1}
+        />
+      </Form.Item>
+
+      <Form.Item name="endpoint" label="API 端点" rules={[{ required: true, message: '请输入API端点' }]}>
+        <Input placeholder="https://api.openai.com/v1" />
+      </Form.Item>
+
+      <Form.Item name="apiKey" label="API 密钥" rules={[{ required: selectedProvider !== 'ollama', message: '请输入API密钥' }]}>
+        <Input.Password placeholder={selectedProvider === 'ollama' ? 'Ollama 本地无需密钥，可留空' : 'sk-...'} />
+      </Form.Item>
+
+      <Form.Item name="description" label="描述">
+        <Input placeholder="可选的配置描述" />
+      </Form.Item>
+
+      <Form.Item name="isDefault" label="设为默认配置" valuePropName="checked">
+        <Switch checkedChildren="是" unCheckedChildren="否" />
+      </Form.Item>
+
+      <Alert
+        message="安全提示"
+        description="API密钥将使用 AES-256-GCM 加密存储，确保数据安全"
+        type="warning"
+        showIcon
+        icon={<SafetyCertificateOutlined />}
+      />
+
+      <Divider style={{ margin: '16px 0' }} />
+
+      <Space>
+        <Button onClick={onTestConnection} loading={testingConnection} icon={<CheckCircleOutlined />}>
+          测试连接
+        </Button>
+        <Button type="primary" htmlType="submit" loading={loading} icon={<SettingOutlined />}>
+          保存配置
+        </Button>
+        <Button onClick={onCancel}>取消</Button>
+      </Space>
+    </Form>
+  </Card>
+))
+
 export const LLMTab: React.FC<LLMTabProps> = ({ onApplyTables, onClose }) => {
   const { openTabs, closeTab, currentUser, currentProject, tables, getProjectSnapshot } = useAppStore()
   const [activeTab, setActiveTab] = useState<string>('configs')
@@ -118,7 +422,7 @@ export const LLMTab: React.FC<LLMTabProps> = ({ onApplyTables, onClose }) => {
     loadCacheHistory()
   }, [])
 
-  const loadUserConfigs = async () => {
+  const loadUserConfigs = useCallback(async () => {
     if (!currentUser) return
     try {
       const response = await llmApi.getUserConfigs(currentUser.id)
@@ -132,9 +436,9 @@ export const LLMTab: React.FC<LLMTabProps> = ({ onApplyTables, onClose }) => {
     } catch (error) {
       console.error('加载用户配置失败:', error)
     }
-  }
+  }, [currentUser])
 
-  const loadCacheHistory = async () => {
+  const loadCacheHistory = useCallback(async () => {
     try {
       const cached = await localStorageService.getMeta('llmTableCache')
       if (cached && Array.isArray(cached)) {
@@ -143,7 +447,7 @@ export const LLMTab: React.FC<LLMTabProps> = ({ onApplyTables, onClose }) => {
     } catch (error) {
       console.error('加载缓存历史失败:', error)
     }
-  }
+  }, [])
 
   const saveToCache = async (tables: TableSuggestion[]) => {
     try {
@@ -179,7 +483,7 @@ export const LLMTab: React.FC<LLMTabProps> = ({ onApplyTables, onClose }) => {
     message.success('已加载历史记录')
   }
 
-  const handleProviderChange = (value: string) => {
+  const handleProviderChange = useCallback((value: string) => {
     const endpoint = defaultEndpoints[value] || ''
     configForm.setFieldsValue({ endpoint })
     const models = modelOptions[value] || []
@@ -188,9 +492,9 @@ export const LLMTab: React.FC<LLMTabProps> = ({ onApplyTables, onClose }) => {
     } else {
       configForm.setFieldsValue({ model: undefined })
     }
-  }
+  }, [configForm])
 
-  const handleTestConnection = async () => {
+  const handleTestConnection = useCallback(async () => {
     const values = await configForm.validateFields().catch(() => null)
     if (!values) return
 
@@ -230,9 +534,9 @@ export const LLMTab: React.FC<LLMTabProps> = ({ onApplyTables, onClose }) => {
     } finally {
       setTestingConnection(false)
     }
-  }
+  }, [configForm])
 
-  const handleSaveConfig = async () => {
+  const handleSaveConfig = useCallback(async () => {
     if (!currentUser) {
       message.warning('请先登录')
       return
@@ -280,9 +584,9 @@ export const LLMTab: React.FC<LLMTabProps> = ({ onApplyTables, onClose }) => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [currentUser, configForm, loadUserConfigs])
 
-  const handleDeleteConfig = async (configId: string) => {
+  const handleDeleteConfig = useCallback(async (configId: string) => {
     try {
       await llmApi.deleteConfig(configId)
       message.success('配置已删除')
@@ -293,7 +597,7 @@ export const LLMTab: React.FC<LLMTabProps> = ({ onApplyTables, onClose }) => {
     } catch (error) {
       message.error('删除失败: ' + (error as Error).message)
     }
-  }
+  }, [selectedConfigId, loadUserConfigs])
 
   const createSnapshotIfNeeded = async () => {
     if (!currentProject) return null
@@ -314,7 +618,7 @@ export const LLMTab: React.FC<LLMTabProps> = ({ onApplyTables, onClose }) => {
     return null
   }
 
-  const handleGenerateTables = async () => {
+  const handleGenerateTables = useCallback(async () => {
     if (!description.trim()) {
       message.warning('请输入表结构描述')
       return
@@ -346,9 +650,9 @@ export const LLMTab: React.FC<LLMTabProps> = ({ onApplyTables, onClose }) => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [description, selectedDbType, selectedConfigId])
 
-  const handleConfirmGenerate = () => {
+  const handleConfirmGenerate = useCallback(() => {
     if (!confirmData) return
 
     if (confirmData.type === 'tables' && confirmData.tables) {
@@ -358,17 +662,27 @@ export const LLMTab: React.FC<LLMTabProps> = ({ onApplyTables, onClose }) => {
 
     setConfirmModalVisible(false)
     setConfirmData(null)
-  }
+  }, [confirmData])
 
-  const handleApply = () => {
+  const handleClose = useCallback(() => {
+    if (onClose) {
+      const llmTab = openTabs.find(tab => tab.type === 'llm')
+      if (llmTab) {
+        closeTab(llmTab.id)
+      }
+      onClose()
+    }
+  }, [onClose, openTabs, closeTab])
+
+  const handleApply = useCallback(() => {
     if (generatedTables.length > 0 && onApplyTables) {
       onApplyTables(generatedTables)
       message.success('已应用生成的表结构')
       handleClose()
     }
-  }
+  }, [generatedTables, onApplyTables, handleClose])
 
-  const handleGenerateMockData = async () => {
+  const handleGenerateMockData = useCallback(async () => {
     if (!selectedTableForMock || !currentProject) {
       message.warning('请选择要生成数据的表')
       return
@@ -382,6 +696,7 @@ export const LLMTab: React.FC<LLMTabProps> = ({ onApplyTables, onClose }) => {
 
     const request: MockDataRequest = {
       tableName: table.name,
+      tableComment: table.comment,
       columns: (table.columns || []).map((col: ColumnType) => ({
         name: col.name,
         dataType: col.dataType,
@@ -407,17 +722,7 @@ export const LLMTab: React.FC<LLMTabProps> = ({ onApplyTables, onClose }) => {
     } finally {
       setLoading(false)
     }
-  }
-
-  const handleClose = () => {
-    if (onClose) {
-      const llmTab = openTabs.find(tab => tab.type === 'llm')
-      if (llmTab) {
-        closeTab(llmTab.id)
-      }
-      onClose()
-    }
-  }
+  }, [selectedTableForMock, currentProject, tables, mockRowCount])
 
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp)
@@ -429,154 +734,43 @@ export const LLMTab: React.FC<LLMTabProps> = ({ onApplyTables, onClose }) => {
     })
   }
 
+  const handleCreateConfig = useCallback(() => {
+    configForm.resetFields()
+    configForm.setFieldsValue({
+      provider: 'ollama',
+      endpoint: defaultEndpoints.ollama,
+      model: ['llama3'],
+      isDefault: false
+    })
+    setShowNewConfig(true)
+  }, [configForm])
+
   const configsContent = useMemo(() => (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-      <Card size="small" title={
-        <Space>
-          <KeyOutlined />
-          <span>模型配置管理</span>
-        </Space>
-      } extra={
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => {
-            configForm.resetFields()
-            configForm.setFieldsValue({
-              provider: 'ollama',
-              endpoint: defaultEndpoints.ollama,
-              model: ['llama3'],
-              isDefault: false
-            })
-            setShowNewConfig(true)
-          }}
-        >
-          新建配置
-        </Button>
-      }>
-        {userConfigs.length === 0 ? (
-          <Alert
-            message="暂无配置"
-            description="点击「新建配置」添加您的大模型配置"
-            type="info"
-            showIcon
-          />
-        ) : (
-          <List
-            dataSource={userConfigs}
-            renderItem={(config) => (
-              <List.Item
-                key={config.id}
-                actions={[
-                  <Button
-                    key="select"
-                    type={selectedConfigId === config.id ? 'primary' : 'default'}
-                    onClick={() => setSelectedConfigId(config.id)}
-                  >
-                    {selectedConfigId === config.id ? '已选择' : '选择'}
-                  </Button>,
-                  <Popconfirm
-                    key="delete"
-                    title="确定删除此配置？"
-                    onConfirm={() => handleDeleteConfig(config.id)}
-                  >
-                    <Button danger icon={<DeleteOutlined />}>删除</Button>
-                  </Popconfirm>
-                ]}
-              >
-                <List.Item.Meta
-                  title={
-                    <Space>
-                      {config.name}
-                      {config.isDefault && <Tag color="blue">默认</Tag>}
-                      <Tag color={config.ownerType === 'user' ? 'green' : 'purple'}>
-                        {config.ownerType === 'user' ? <UserOutlined /> : <TeamOutlined />}
-                        {' '}{config.ownerType === 'user' ? '个人' : '团队'}
-                      </Tag>
-                      <Tag>{config.provider}</Tag>
-                    </Space>
-                  }
-                  description={
-                    <Space>
-                      <Text type="secondary">模型: {config.model}</Text>
-                      <Text type="secondary">端点: {config.endpoint}</Text>
-                      {config.description && <Text type="secondary">{config.description}</Text>}
-                    </Space>
-                  }
-                />
-              </List.Item>
-            )}
-          />
-        )}
-      </Card>
+      <ConfigListCard
+        userConfigs={userConfigs}
+        selectedConfigId={selectedConfigId}
+        onSelectConfig={setSelectedConfigId}
+        onDeleteConfig={handleDeleteConfig}
+        onCreateConfig={handleCreateConfig}
+      />
 
       {showNewConfig && (
-        <Card size="small" title="新建配置">
-          <Form form={configForm} layout="vertical" onFinish={handleSaveConfig}>
-            <Form.Item label="配置范围">
-              <Radio.Group value={configScope} onChange={(e) => setConfigScope(e.target.value)}>
-                <Radio value="user"><UserOutlined /> 个人配置（仅自己可见）</Radio>
-                <Radio value="team" disabled><TeamOutlined /> 团队配置（成员共享）</Radio>
-              </Radio.Group>
-            </Form.Item>
-
-            <Form.Item name="name" label="配置名称" rules={[{ required: true, message: '请输入配置名称' }]}>
-              <Input placeholder="例如：我的 OpenAI 配置" />
-            </Form.Item>
-
-            <Form.Item name="provider" label="服务提供商" rules={[{ required: true }]}>
-              <Select options={providerOptions} onChange={handleProviderChange} />
-            </Form.Item>
-
-            <Form.Item name="model" label="模型名称" rules={[{ required: true }]}>
-              <Select
-                options={modelOptions[selectedProvider] || []}
-                placeholder="选择或输入模型名称"
-                mode="tags"
-                maxTagCount={1}
-              />
-            </Form.Item>
-
-            <Form.Item name="endpoint" label="API 端点" rules={[{ required: true, message: '请输入API端点' }]}>
-              <Input placeholder="https://api.openai.com/v1" />
-            </Form.Item>
-
-            <Form.Item name="apiKey" label="API 密钥" rules={[{ required: selectedProvider !== 'ollama', message: '请输入API密钥' }]}>
-              <Input.Password placeholder={selectedProvider === 'ollama' ? 'Ollama 本地无需密钥，可留空' : 'sk-...'} />
-            </Form.Item>
-
-            <Form.Item name="description" label="描述">
-              <Input placeholder="可选的配置描述" />
-            </Form.Item>
-
-            <Form.Item name="isDefault" label="设为默认配置" valuePropName="checked">
-              <Switch checkedChildren="是" unCheckedChildren="否" />
-            </Form.Item>
-
-            <Alert
-              message="安全提示"
-              description="API密钥将使用 AES-256-GCM 加密存储，确保数据安全"
-              type="warning"
-              showIcon
-              icon={<SafetyCertificateOutlined />}
-            />
-
-            <Divider style={{ margin: '16px 0' }} />
-
-            <Space>
-              <Button onClick={handleTestConnection} loading={testingConnection} icon={<CheckCircleOutlined />}>
-                测试连接
-              </Button>
-              <Button type="primary" htmlType="submit" loading={loading} icon={<SettingOutlined />}>
-                保存配置
-              </Button>
-              <Button onClick={() => setShowNewConfig(false)}>取消</Button>
-            </Space>
-          </Form>
-        </Card>
+        <ConfigFormCard
+          configForm={configForm}
+          configScope={configScope}
+          setConfigScope={setConfigScope}
+          selectedProvider={selectedProvider}
+          handleProviderChange={handleProviderChange}
+          onFinish={handleSaveConfig}
+          testingConnection={testingConnection}
+          onTestConnection={handleTestConnection}
+          loading={loading}
+          onCancel={() => setShowNewConfig(false)}
+        />
       )}
     </Space>
-  ), [userConfigs, selectedConfigId, showNewConfig, selectedProvider, testingConnection, loading, configScope])
+  ), [userConfigs, selectedConfigId, showNewConfig])
 
   const generateContent = useMemo(() => (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
@@ -655,7 +849,7 @@ export const LLMTab: React.FC<LLMTabProps> = ({ onApplyTables, onClose }) => {
               <Divider style={{ margin: '16px 0' }} />
               <div>
                 <Space align="center" style={{ marginBottom: 8 }}>
-                  <ClockCircleOutlined style={{ fontSize: 14, color: '#1890ff' }} />
+                  <ClockCircleOutlined style={{ fontSize: 14, color: UI_COLORS.BLUE }} />
                   <Text strong>历史记录</Text>
                   <Text type="secondary" style={{ fontSize: 12 }}>（最多保存10条）</Text>
                 </Space>
@@ -901,7 +1095,7 @@ export const LLMTab: React.FC<LLMTabProps> = ({ onApplyTables, onClose }) => {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ padding: '16px', borderBottom: '1px solid #e8e8e8', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ padding: '16px', borderBottom: `1px solid ${UI_COLORS.BORDER}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Title level={4} style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
           <RobotOutlined />
           AI助手
@@ -928,7 +1122,7 @@ export const LLMTab: React.FC<LLMTabProps> = ({ onApplyTables, onClose }) => {
       <Modal
         title={
           <Space>
-            <ExclamationCircleOutlined style={{ color: '#faad14' }} />
+            <ExclamationCircleOutlined style={{ color: UI_COLORS.YELLOW }} />
             <span>确认 AI 操作</span>
           </Space>
         }
@@ -960,118 +1154,10 @@ export const LLMTab: React.FC<LLMTabProps> = ({ onApplyTables, onClose }) => {
         )}
       </Modal>
 
-      <Modal
-        title="连接测试报告"
-        open={testResultModal !== null}
-        onCancel={() => setTestResultModal(null)}
-        footer={<Button onClick={() => setTestResultModal(null)}>关闭</Button>}
-        width={650}
-        destroyOnHidden
-      >
-        {testResultModal && (
-          <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-            <Alert
-              type={testResultModal.success ? 'success' : 'error'}
-              message={testResultModal.success ? '连接测试通过' : '连接测试失败'}
-              description={testResultModal.success ? `模型: ${testResultModal.model || '未知'}` : testResultModal.error || '未知错误'}
-              showIcon
-              icon={testResultModal.success ? <CheckCircleOutlined /> : <ExclamationCircleOutlined />}
-            />
-
-            {testResultModal.security && (
-              <Card size="small" title={
-                <Space>
-                  <SafetyCertificateOutlined style={{ color: testResultModal.security.score === 'safe' ? '#52c41a' : testResultModal.security.score === 'warning' ? '#faad14' : '#ff4d4f' }} />
-                  <span>安全性评估</span>
-                  <Tag color={testResultModal.security.score === 'safe' ? 'success' : testResultModal.security.score === 'warning' ? 'warning' : 'error'}>
-                    {testResultModal.security.score === 'safe' ? '安全' : testResultModal.security.score === 'warning' ? '注意' : '危险'}
-                  </Tag>
-                </Space>
-              }>
-                <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Text type="secondary">传输加密：</Text>
-                    <Tag color={testResultModal.security.isHttps ? 'success' : (testResultModal.security.isLocalhost ? 'warning' : 'error')}>
-                      {testResultModal.security.isHttps ? 'HTTPS 加密' : (testResultModal.security.isLocalhost ? 'HTTP (本地)' : 'HTTP 明文')}
-                    </Tag>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Text type="secondary">连接类型：</Text>
-                    <Tag color={testResultModal.security.isLocalhost ? 'processing' : 'default'}>
-                      {testResultModal.security.isLocalhost ? '本地连接' : '远程连接'}
-                    </Tag>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Text type="secondary">密钥信息：</Text>
-                    <Text code>{testResultModal.security.apiKeyMasked || '无'}</Text>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Text type="secondary">密钥强度：</Text>
-                    <Tag color={
-                      testResultModal.security.apiKeyStrength === 'strong' ? 'success' :
-                      testResultModal.security.apiKeyStrength === 'good' ? 'processing' :
-                      testResultModal.security.apiKeyStrength === 'weak' ? 'warning' : 'default'
-                    }>
-                      {testResultModal.security.apiKeyStrength === 'strong' ? '强' :
-                       testResultModal.security.apiKeyStrength === 'good' ? '良好' :
-                       testResultModal.security.apiKeyStrength === 'weak' ? '弱' : '无'}
-                    </Tag>
-                  </div>
-                  {testResultModal.security.warnings.length > 0 && (
-                    <div>
-                      <Text type="secondary">安全警告：</Text>
-                      {testResultModal.security.warnings.map((w, i) => (
-                        <Alert key={i} message={w} type="warning" showIcon style={{ marginTop: 4 }} />
-                      ))}
-                    </div>
-                  )}
-                  <div style={{ marginTop: 4 }}>
-                    <Text type="secondary" style={{ fontSize: 12 }}>{testResultModal.security.summary}</Text>
-                  </div>
-                </Space>
-              </Card>
-            )}
-
-            {testResultModal.availability && (
-              <Card size="small" title={
-                <Space>
-                  <ThunderboltOutlined style={{ color: testResultModal.availability.capable ? '#52c41a' : '#ff4d4f' }} />
-                  <span>可用性评估</span>
-                  <Tag color={testResultModal.availability.capable ? 'success' : 'error'}>
-                    {testResultModal.availability.capable ? '可用' : testResultModal.availability.tested ? '不可用' : '未测试'}
-                  </Tag>
-                </Space>
-              }>
-                <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                  {testResultModal.availability.tested ? (
-                    <>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Text type="secondary">响应时间：</Text>
-                        <Tag color={testResultModal.availability.responseTimeMs < 1000 ? 'success' : testResultModal.availability.responseTimeMs < 5000 ? 'warning' : 'error'}>
-                          {testResultModal.availability.responseTimeMs}ms
-                        </Tag>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Text type="secondary">模型确认：</Text>
-                        <Tag color={testResultModal.availability.modelConfirmed ? 'success' : 'warning'}>
-                          {testResultModal.availability.modelConfirmed ? '已确认' : '未确认（使用请求模型）'}
-                        </Tag>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Text type="secondary">服务器模型：</Text>
-                        <Text code>{testResultModal.availability.modelReported || '-'}</Text>
-                      </div>
-                      <Text type="secondary" style={{ fontSize: 12 }}>{testResultModal.availability.details}</Text>
-                    </>
-                  ) : (
-                    <Text type="secondary">连接未成功，无法进行可用性测试</Text>
-                  )}
-                </Space>
-              </Card>
-            )}
-          </Space>
-        )}
-      </Modal>
+      <TestResultModal
+        testResult={testResultModal}
+        onClose={() => setTestResultModal(null)}
+      />
     </div>
   )
 }

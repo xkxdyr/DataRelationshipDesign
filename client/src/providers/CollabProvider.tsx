@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, useCa
 import * as Y from 'yjs'
 import { collabManager, CollabState, UserInfo } from '../services/collabManager'
 import { useAppStore } from '../stores/appStore'
+import { Table, Column, Relationship, Index } from '../types'
 
 export interface TableData {
   id: string
@@ -185,18 +186,102 @@ export function CollabProvider({ children }: CollabProviderProps) {
   const [relationships, setRelationships] = useState<RelationshipData[]>([])
   const [indexes, setIndexes] = useState<IndexData[]>([])
   
-  const { currentProject, currentUser } = useAppStore()
+  const { currentProject, currentUser, authToken } = useAppStore()
   const isInitializedRef = useRef(false)
   const lastProjectIdRef = useRef<string | null>(null)
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const updateFromDocData = useCallback(() => {
     const doc = collabManager.getDoc()
     if (!doc) return
     
-    setTables(extractTables(doc))
-    setColumns(extractColumns(doc))
-    setRelationships(extractRelationships(doc))
-    setIndexes(extractIndexes(doc))
+    const crdtTables = extractTables(doc)
+    const crdtColumns = extractColumns(doc)
+    const crdtRelationships = extractRelationships(doc)
+    const crdtIndexes = extractIndexes(doc)
+    
+    setTables(crdtTables)
+    setColumns(crdtColumns)
+    setRelationships(crdtRelationships)
+    setIndexes(crdtIndexes)
+
+    // 防抖同步 CRDT 数据到 appStore，避免快速连续更新导致频繁重绘
+    if (syncTimerRef.current) {
+      clearTimeout(syncTimerRef.current)
+    }
+    syncTimerRef.current = setTimeout(() => {
+      syncTimerRef.current = null
+      const latestDoc = collabManager.getDoc()
+      if (!latestDoc) return
+      
+      const store = useAppStore.getState()
+      if (!store.currentProject?.collaborationEnabled) return
+
+      const now = new Date().toISOString()
+      const latestTables = extractTables(latestDoc)
+      const latestColumns = extractColumns(latestDoc)
+      const latestRelationships = extractRelationships(latestDoc)
+      const latestIndexes = extractIndexes(latestDoc)
+
+      const appTables: Table[] = latestTables.map(t => ({
+        id: t.id,
+        projectId: t.projectId || store.currentProject!.id,
+        name: t.name,
+        comment: t.comment,
+        positionX: t.positionX || 0,
+        positionY: t.positionY || 0,
+        columns: latestColumns
+          .filter(c => c.tableId === t.id)
+          .map(c => ({
+            id: c.id,
+            tableId: c.tableId,
+            name: c.name,
+            dataType: c.type,
+            length: c.length,
+            precision: c.precision,
+            scale: c.scale,
+            nullable: !c.isNotNull,
+            defaultValue: c.defaultValue,
+            autoIncrement: c.isAutoIncrement || false,
+            primaryKey: c.isPrimaryKey || false,
+            unique: c.isUnique || false,
+            comment: c.comment,
+            order: c.order || 0,
+            createdAt: now,
+            updatedAt: now,
+          } as Column)),
+        indexes: latestIndexes
+          .filter(i => i.tableId === t.id)
+          .map(i => ({
+            id: i.id,
+            tableId: i.tableId,
+            name: i.name,
+            columns: i.columns,
+            unique: i.isUnique || false,
+            type: i.indexType || 'BTREE',
+          } as Index)),
+        createdAt: t.createdAt || now,
+        updatedAt: t.updatedAt || now,
+      }))
+
+      const appRelationships: Relationship[] = latestRelationships.map(r => ({
+        id: r.id,
+        projectId: r.projectId || store.currentProject!.id,
+        sourceTableId: r.sourceTableId,
+        sourceColumnId: r.sourceColumnId,
+        targetTableId: r.targetTableId,
+        targetColumnId: r.targetColumnId,
+        relationshipType: r.relationshipType,
+        onUpdate: r.onUpdate || 'NO ACTION',
+        onDelete: r.onDelete || 'NO ACTION',
+        createdAt: now,
+      }))
+
+      useAppStore.setState({
+        tables: appTables,
+        relationships: appRelationships,
+      })
+    }, 100)
   }, [])
 
   useEffect(() => {
@@ -216,6 +301,11 @@ export function CollabProvider({ children }: CollabProviderProps) {
       unsubscribeState()
       unsubscribeUsers()
       unsubscribeCRDT()
+      // 清理防抖定时器
+      if (syncTimerRef.current) {
+        clearTimeout(syncTimerRef.current)
+        syncTimerRef.current = null
+      }
     }
   }, [updateFromDocData])
 
@@ -224,6 +314,7 @@ export function CollabProvider({ children }: CollabProviderProps) {
       if (lastProjectIdRef.current !== null) {
         collabManager.stop()
         lastProjectIdRef.current = null
+        isInitializedRef.current = false
         setTables([])
         setColumns([])
         setRelationships([])
@@ -242,9 +333,13 @@ export function CollabProvider({ children }: CollabProviderProps) {
       if (lastProjectIdRef.current !== null) {
         collabManager.stop()
         lastProjectIdRef.current = null
+        isInitializedRef.current = false
       }
       return
     }
+
+    isInitializedRef.current = false
+    startCollaboration()
   }, [currentProject?.id, currentProject?.collaborationEnabled])
 
   const startCollaboration = useCallback(async () => {
@@ -267,15 +362,16 @@ export function CollabProvider({ children }: CollabProviderProps) {
     if (isInitializedRef.current) {
       return
     }
-    isInitializedRef.current = true
     
     const userName = currentUser?.displayName || currentUser?.username || '用户'
     
     try {
-      await collabManager.start(currentProject.id, userName)
+      await collabManager.start(currentProject.id, userName, authToken || undefined)
+      isInitializedRef.current = true
       updateFromDocData()
     } catch (error) {
       console.error('[CollabProvider] 启动协作失败:', error)
+      isInitializedRef.current = false
     }
   }, [currentProject, currentUser, updateFromDocData])
 

@@ -442,7 +442,7 @@ export const DatabaseSyncModal: React.FC<DatabaseSyncModalProps> = ({ visible, o
               <Card title="错误详情" bordered={false}>
                 <ul>
                   {syncResult.errors.map((error, index) => (
-                    <li key={index} style={{ color: '#f5222d' }}>{error}</li>
+                    <li key={`err-${index}-${error.substring(0, 10)}`} style={{ color: '#f5222d' }}>{error}</li>
                   ))}
                 </ul>
               </Card>

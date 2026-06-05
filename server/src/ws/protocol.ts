@@ -28,6 +28,9 @@ export enum MessageType {
   LOCK_DENIED = 'lock:denied',
   LOCK_STATE = 'lock:state',
   LOCK_TIMEOUT = 'lock:timeout',
+
+  // 光标同步
+  CURSOR_UPDATE = 'cursor:update',
 }
 
 // 消息压缩阈值（1KB）

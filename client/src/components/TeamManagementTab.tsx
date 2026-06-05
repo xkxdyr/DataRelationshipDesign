@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { Form, Input, Button, Table, Space, Typography, Tag, message, Card, Popconfirm, Select, AutoComplete } from 'antd'
 import { TeamOutlined, PlusOutlined, EditOutlined, DeleteOutlined, UserAddOutlined, CrownOutlined, SecurityScanOutlined, UserOutlined, ProjectOutlined, XOutlined } from '@ant-design/icons'
 import { teamApi, Team, TeamMember, CreateTeamRequest, AddMemberRequest, UpdateMemberRoleRequest, projectApi, userApi } from '../services/api'
@@ -13,6 +13,143 @@ interface TeamManagementTabProps {
 }
 
 type ViewMode = 'list' | 'detail' | 'create' | 'edit' | 'projects' | 'addMember'
+
+const UI_COLORS = {
+  BORDER: '#e8e8e8',
+  GOLD: '#d4a574',
+  BLUE: '#1890ff',
+  GREEN: '#52c41a',
+  GRAY: '#999',
+}
+
+const USER_COLORS = [
+  '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4',
+  '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F',
+  '#BB8FCE', '#85C1E9', '#F8B500', '#FF8C42'
+]
+
+const getUserColor = (userId: string): string => {
+  let hash = 0
+  for (let i = 0; i < userId.length; i++) {
+    const char = userId.charCodeAt(i)
+    hash = ((hash << 5) - hash) + char
+    hash = hash & hash
+  }
+  return USER_COLORS[Math.abs(hash) % USER_COLORS.length]
+}
+
+const getRoleIcon = (role: string) => {
+  switch (role) {
+    case 'owner':
+      return <CrownOutlined style={{ color: UI_COLORS.GOLD }} />
+    case 'admin':
+      return <SecurityScanOutlined style={{ color: UI_COLORS.BLUE }} />
+    default:
+      return <UserOutlined style={{ color: UI_COLORS.GREEN }} />
+  }
+}
+
+const getRoleTag = (role: string) => {
+  switch (role) {
+    case 'owner':
+      return <Tag color="gold">所有者</Tag>
+    case 'admin':
+      return <Tag color="blue">管理员</Tag>
+    default:
+      return <Tag color="green">成员</Tag>
+  }
+}
+
+interface TeamFormCardProps {
+  title: string
+  subtitle: string
+  form: any
+  submitText: string
+  onSubmit: () => void
+  onBack: () => void
+}
+
+const TeamFormCard = React.memo(({
+  title, subtitle, form, submitText, onSubmit, onBack
+}: TeamFormCardProps) => (
+  <div>
+    <Title level={4}>{title}</Title>
+    <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>{subtitle}</Text>
+    <Form form={form} layout="vertical">
+      <Form.Item
+        label="团队名称"
+        name="name"
+        rules={[{ required: true, message: '请输入团队名称' }]}
+      >
+        <Input placeholder="输入团队名称" />
+      </Form.Item>
+      <Form.Item label="团队描述" name="description">
+        <Input.TextArea placeholder="输入团队描述（可选）" rows={3} />
+      </Form.Item>
+      <Space style={{ marginTop: 16 }}>
+        <Button onClick={onBack}>返回</Button>
+        <Button type="primary" onClick={onSubmit}>{submitText}</Button>
+      </Space>
+    </Form>
+  </div>
+))
+
+interface AddMemberFormProps {
+  form: any
+  searchUsers: User[]
+  searchLoading: boolean
+  onSearchUsers: (query: string) => void
+  onUserSelect: (value: string) => void
+  onAddMember: () => void
+}
+
+const AddMemberForm = React.memo(({
+  form, searchUsers, searchLoading, onSearchUsers, onUserSelect, onAddMember
+}: AddMemberFormProps) => (
+  <Card title="添加成员" style={{ marginTop: 16 }}>
+    <Form form={form} layout="vertical">
+      <Form.Item
+        label="搜索用户"
+        name="userId"
+        rules={[{ required: true, message: '请搜索并选择用户' }]}
+      >
+        <AutoComplete
+          placeholder="搜索用户名或邮箱..."
+          allowClear
+          notFoundContent={searchLoading ? '搜索中...' : '未找到用户'}
+          onSearch={onSearchUsers}
+          onChange={onUserSelect}
+        >
+          {searchUsers.map(user => (
+            <AutoComplete.Option key={user.id} value={user.id}>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <div
+                  style={{
+                    width: 20, height: 20, borderRadius: '50%',
+                    backgroundColor: user.color || UI_COLORS.BLUE,
+                    marginRight: 8
+                  }}
+                />
+                <span>{user.username}</span>
+                <span style={{ marginLeft: 8, color: UI_COLORS.GRAY, fontSize: 12 }}>{user.email}</span>
+              </div>
+            </AutoComplete.Option>
+          ))}
+        </AutoComplete>
+      </Form.Item>
+      <Form.Item label="用户名" name="userName">
+        <Input placeholder="用户名将自动填充" disabled />
+      </Form.Item>
+      <Form.Item label="角色" name="role" initialValue="member">
+        <Select>
+          <Option value="member">成员</Option>
+          <Option value="admin">管理员</Option>
+        </Select>
+      </Form.Item>
+      <Button type="primary" onClick={onAddMember}>添加成员</Button>
+    </Form>
+  </Card>
+))
 
 export const TeamManagementTab: React.FC<TeamManagementTabProps> = ({ onClose }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('list')
@@ -125,7 +262,18 @@ export const TeamManagementTab: React.FC<TeamManagementTabProps> = ({ onClose })
     setTeamProjects([])
   }
 
-  const handleCreateTeam = async () => {
+  const handleClose = useCallback(() => {
+    resetState()
+    if (onClose) {
+      const teamTab = openTabs.find(tab => tab.type === 'teamManagement')
+      if (teamTab) {
+        closeTab(teamTab.id)
+      }
+      onClose()
+    }
+  }, [onClose, openTabs, closeTab])
+
+  const handleCreateTeam = useCallback(async () => {
     if (!currentUser) {
       message.error('请先登录')
       return
@@ -150,9 +298,9 @@ export const TeamManagementTab: React.FC<TeamManagementTabProps> = ({ onClose })
     } catch (error) {
       message.error('创建失败')
     }
-  }
+  }, [currentUser, teamForm])
 
-  const handleUpdateTeam = async () => {
+  const handleUpdateTeam = useCallback(async () => {
     if (!selectedTeam) return
 
     try {
@@ -173,9 +321,9 @@ export const TeamManagementTab: React.FC<TeamManagementTabProps> = ({ onClose })
     } catch (error) {
       message.error('更新失败')
     }
-  }
+  }, [selectedTeam, teamForm])
 
-  const handleDeleteTeam = async (teamId: string) => {
+  const handleDeleteTeam = useCallback(async (teamId: string) => {
     try {
       const result = await teamApi.deleteTeam(teamId)
       if (result.success) {
@@ -187,9 +335,9 @@ export const TeamManagementTab: React.FC<TeamManagementTabProps> = ({ onClose })
     } catch (error) {
       message.error('删除失败')
     }
-  }
+  }, [])
 
-  const handleAddMember = async () => {
+  const handleAddMember = useCallback(async () => {
     if (!selectedTeam) return
 
     const values = memberForm.getFieldsValue() as Partial<AddMemberRequest>
@@ -216,9 +364,9 @@ export const TeamManagementTab: React.FC<TeamManagementTabProps> = ({ onClose })
     } catch (error) {
       message.error('添加失败')
     }
-  }
+  }, [selectedTeam, memberForm])
 
-  const handleRemoveMember = async (userId: string) => {
+  const handleRemoveMember = useCallback(async (userId: string) => {
     if (!selectedTeam) return
 
     try {
@@ -232,9 +380,9 @@ export const TeamManagementTab: React.FC<TeamManagementTabProps> = ({ onClose })
     } catch (error) {
       message.error('移除失败')
     }
-  }
+  }, [selectedTeam])
 
-  const handleUpdateRole = async (userId: string, role: 'admin' | 'member') => {
+  const handleUpdateRole = useCallback(async (userId: string, role: 'admin' | 'member') => {
     if (!selectedTeam) return
 
     try {
@@ -249,47 +397,9 @@ export const TeamManagementTab: React.FC<TeamManagementTabProps> = ({ onClose })
     } catch (error) {
       message.error('更新失败')
     }
-  }
+  }, [selectedTeam])
 
-  const getRoleIcon = (role: string) => {
-    switch (role) {
-      case 'owner':
-        return <CrownOutlined style={{ color: '#d4a574' }} />
-      case 'admin':
-        return <SecurityScanOutlined style={{ color: '#1890ff' }} />
-      default:
-        return <UserOutlined style={{ color: '#52c41a' }} />
-    }
-  }
-
-  const getRoleTag = (role: string) => {
-    switch (role) {
-      case 'owner':
-        return <Tag color="gold">所有者</Tag>
-      case 'admin':
-        return <Tag color="blue">管理员</Tag>
-      default:
-        return <Tag color="green">成员</Tag>
-    }
-  }
-
-  const USER_COLORS = [
-    '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4',
-    '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F',
-    '#BB8FCE', '#85C1E9', '#F8B500', '#FF8C42'
-  ]
-
-  const getUserColor = (userId: string): string => {
-    let hash = 0
-    for (let i = 0; i < userId.length; i++) {
-      const char = userId.charCodeAt(i)
-      hash = ((hash << 5) - hash) + char
-      hash = hash & hash
-    }
-    return USER_COLORS[Math.abs(hash) % USER_COLORS.length]
-  }
-
-  const handleAddProjectToTeam = async (projectId: string) => {
+  const handleAddProjectToTeam = useCallback(async (projectId: string) => {
     if (!selectedTeam) return
 
     try {
@@ -303,9 +413,9 @@ export const TeamManagementTab: React.FC<TeamManagementTabProps> = ({ onClose })
     } catch (error) {
       message.error('添加失败')
     }
-  }
+  }, [selectedTeam])
 
-  const handleRemoveProjectFromTeam = async (projectId: string) => {
+  const handleRemoveProjectFromTeam = useCallback(async (projectId: string) => {
     if (!selectedTeam) return
 
     try {
@@ -319,18 +429,7 @@ export const TeamManagementTab: React.FC<TeamManagementTabProps> = ({ onClose })
     } catch (error) {
       message.error('移除失败')
     }
-  }
-
-  const handleClose = () => {
-    resetState()
-    if (onClose) {
-      const teamTab = openTabs.find(tab => tab.type === 'teamManagement')
-      if (teamTab) {
-        closeTab(teamTab.id)
-      }
-      onClose()
-    }
-  }
+  }, [selectedTeam])
 
   const teamColumns = [
     {
@@ -546,75 +645,25 @@ export const TeamManagementTab: React.FC<TeamManagementTabProps> = ({ onClose })
   )
 
   const renderCreate = () => (
-    <div>
-      <Title level={4}>创建团队</Title>
-      <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>填写团队基本信息</Text>
-
-      <Form form={teamForm} layout="vertical">
-        <Form.Item
-          label="团队名称"
-          name="name"
-          rules={[{ required: true, message: '请输入团队名称' }]}
-        >
-          <Input placeholder="输入团队名称" />
-        </Form.Item>
-
-        <Form.Item
-          label="团队描述"
-          name="description"
-        >
-          <Input.TextArea placeholder="输入团队描述（可选）" rows={3} />
-        </Form.Item>
-
-        <Space style={{ marginTop: 16 }}>
-          <Button onClick={() => setViewMode('list')}>
-            返回
-          </Button>
-          <Button
-            type="primary"
-            onClick={handleCreateTeam}
-          >
-            创建团队
-          </Button>
-        </Space>
-      </Form>
-    </div>
+    <TeamFormCard
+      title="创建团队"
+      subtitle="填写团队基本信息"
+      form={teamForm}
+      submitText="创建团队"
+      onSubmit={handleCreateTeam}
+      onBack={() => setViewMode('list')}
+    />
   )
 
   const renderEdit = () => (
-    <div>
-      <Title level={4}>编辑团队</Title>
-      <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>修改团队信息</Text>
-
-      <Form form={teamForm} layout="vertical">
-        <Form.Item
-          label="团队名称"
-          name="name"
-          rules={[{ required: true, message: '请输入团队名称' }]}
-        >
-          <Input placeholder="输入团队名称" />
-        </Form.Item>
-
-        <Form.Item
-          label="团队描述"
-          name="description"
-        >
-          <Input.TextArea placeholder="输入团队描述（可选）" rows={3} />
-        </Form.Item>
-
-        <Space style={{ marginTop: 16 }}>
-          <Button onClick={() => setViewMode('list')}>
-            返回
-          </Button>
-          <Button
-            type="primary"
-            onClick={handleUpdateTeam}
-          >
-            保存修改
-          </Button>
-        </Space>
-      </Form>
-    </div>
+    <TeamFormCard
+      title="编辑团队"
+      subtitle="修改团队信息"
+      form={teamForm}
+      submitText="保存修改"
+      onSubmit={handleUpdateTeam}
+      onBack={() => setViewMode('list')}
+    />
   )
 
   const renderDetail = () => (
@@ -655,73 +704,21 @@ export const TeamManagementTab: React.FC<TeamManagementTabProps> = ({ onClose })
         />
       </div>
 
-      <Card title="添加成员" style={{ marginTop: 16 }}>
-        <Form form={memberForm} layout="vertical">
-          <Form.Item
-            label="搜索用户"
-            name="userId"
-            rules={[{ required: true, message: '请搜索并选择用户' }]}
-          >
-            <AutoComplete
-              placeholder="搜索用户名或邮箱..."
-              allowClear
-              notFoundContent={searchLoading ? '搜索中...' : '未找到用户'}
-              onSearch={handleSearchUsers}
-              onChange={(value) => {
-                if (value) {
-                  const user = searchUsers.find(u => u.id === value)
-                  if (user) {
-                    memberForm.setFieldsValue({ userName: user.username })
-                  }
-                }
-              }}
-            >
-              {searchUsers.map(user => (
-                <AutoComplete.Option key={user.id} value={user.id}>
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <div
-                      style={{
-                        width: 20,
-                        height: 20,
-                        borderRadius: '50%',
-                        backgroundColor: user.color || '#1890ff',
-                        marginRight: 8
-                      }}
-                    />
-                    <span>{user.username}</span>
-                    <span style={{ marginLeft: 8, color: '#999', fontSize: 12 }}>{user.email}</span>
-                  </div>
-                </AutoComplete.Option>
-              ))}
-            </AutoComplete>
-          </Form.Item>
-
-          <Form.Item
-            label="用户名"
-            name="userName"
-          >
-            <Input placeholder="用户名将自动填充" disabled />
-          </Form.Item>
-
-          <Form.Item
-            label="角色"
-            name="role"
-            initialValue="member"
-          >
-            <Select>
-              <Option value="member">成员</Option>
-              <Option value="admin">管理员</Option>
-            </Select>
-          </Form.Item>
-
-          <Button
-            type="primary"
-            onClick={handleAddMember}
-          >
-            添加成员
-          </Button>
-        </Form>
-      </Card>
+      <AddMemberForm
+        form={memberForm}
+        searchUsers={searchUsers}
+        searchLoading={searchLoading}
+        onSearchUsers={handleSearchUsers}
+        onUserSelect={(value) => {
+          if (value) {
+            const user = searchUsers.find(u => u.id === value)
+            if (user) {
+              memberForm.setFieldsValue({ userName: user.username })
+            }
+          }
+        }}
+        onAddMember={handleAddMember}
+      />
     </div>
   )
 

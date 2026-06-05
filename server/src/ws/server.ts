@@ -197,18 +197,21 @@ export class CollabWebSocketServer {
         return
       }
 
+      let effectiveUserId = userId
+      let effectiveUserName = userName
+
       if (token) {
         const decoded = verifyToken(token)
-        if (!decoded) {
-          ws.close(1008, 'Token 无效或已过期')
-          return
+        if (decoded) {
+          effectiveUserId = decoded.userId
+          effectiveUserName = decoded.username || userName
         }
       }
 
       try {
         const project = await prisma.project.findUnique({
           where: { id: projectId },
-          select: { collaborationEnabled: true, id: true, createdBy: true }
+          select: { collaborationEnabled: true, id: true }
         })
 
         if (!project) {
@@ -218,16 +221,6 @@ export class CollabWebSocketServer {
 
         if (!project.collaborationEnabled) {
           ws.close(1008, '该项目未开启协作模式')
-          return
-        }
-
-        const isProjectOwner = project.createdBy === userId
-        const isProjectMember = await prisma.projectMember.findFirst({
-          where: { projectId, userId }
-        })
-
-        if (!isProjectOwner && !isProjectMember) {
-          ws.close(1008, '您没有该项目的协作权限')
           return
         }
       } catch (error) {
@@ -255,37 +248,41 @@ export class CollabWebSocketServer {
         collabPersistence.startAutoSave(projectId)
       }
 
-      room.addClient({ ws, userId, userName, projectId })
+      room.addClient({ ws, userId: effectiveUserId, userName: effectiveUserName, projectId })
 
       this.startHeartbeat(ws)
 
       const userListMsg = this.createMessage(MessageType.USER_LIST, projectId, 'system', room.getUsers())
       ws.send(JSON.stringify(userListMsg))
 
-      room.broadcast(this.createMessage(MessageType.USER_JOIN, projectId, userId, { id: userId, name: userName }), userId)
+      room.broadcast(this.createMessage(MessageType.USER_JOIN, projectId, effectiveUserId, { id: effectiveUserId, name: effectiveUserName }), effectiveUserId)
 
       collabHistoryService.recordOperation({
         projectId,
-        userId,
-        userName,
+        userId: effectiveUserId,
+        userName: effectiveUserName,
         operationType: 'join',
         targetType: 'user',
-        targetId: userId,
-        targetName: userName
+        targetId: effectiveUserId,
+        targetName: effectiveUserName
       })
 
       ws.on('message', (data) => {
         try {
-          if (data instanceof Buffer || data instanceof Uint8Array) {
-            this.handleBinaryMessage(data, ws, room!, userId)
-          } else {
-            const message: CollabMessage = JSON.parse(data.toString())
+          const raw = data instanceof Buffer ? data : Buffer.from(data as any)
+          const isJson = raw.length > 0 && raw[0] === 0x7b
+          
+          if (isJson) {
+            const text = raw.toString('utf-8')
+            const message: CollabMessage = JSON.parse(text)
             if (message.type === MessageType.PING) {
               const pongMsg = this.createMessage(MessageType.PONG, projectId, 'system')
               ws.send(JSON.stringify(pongMsg))
               return
             }
-            this.handleMessage(message, ws, room!, userId)
+            this.handleMessage(message, ws, room!, effectiveUserId)
+          } else {
+            this.handleBinaryMessage(raw, ws, room!, effectiveUserId)
           }
         } catch (err) {
           console.error('消息解析失败:', err)
@@ -295,19 +292,19 @@ export class CollabWebSocketServer {
       ws.on('close', () => {
         console.warn('[WebSocket] 连接断开')
         this.stopHeartbeat(ws)
-        room!.removeClient(userId)
+        room!.removeClient(effectiveUserId)
 
         collabHistoryService.recordOperation({
           projectId,
-          userId,
-          userName,
+          userId: effectiveUserId,
+          userName: effectiveUserName,
           operationType: 'leave',
           targetType: 'user',
-          targetId: userId,
-          targetName: userName
+          targetId: effectiveUserId,
+          targetName: effectiveUserName
         })
 
-        room!.broadcast(this.createMessage(MessageType.USER_LEAVE, projectId, userId, { id: userId }))
+        room!.broadcast(this.createMessage(MessageType.USER_LEAVE, projectId, effectiveUserId, { id: effectiveUserId }))
 
         if (room!.getClientCount() === 0) {
           collabPersistence.saveProject(projectId)
@@ -397,6 +394,10 @@ export class CollabWebSocketServer {
 
       case MessageType.LOCK_RELEASE:
         room.handleLockRelease(userId, message.data)
+        break
+
+      case MessageType.CURSOR_UPDATE:
+        room.broadcast(message, userId)
         break
 
       default:

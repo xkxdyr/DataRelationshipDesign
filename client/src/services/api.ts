@@ -196,6 +196,7 @@ export interface LLMConfigCreate {
 
 export interface MockDataRequest {
   tableName: string
+  tableComment?: string
   columns: Array<{
     name: string
     dataType: string

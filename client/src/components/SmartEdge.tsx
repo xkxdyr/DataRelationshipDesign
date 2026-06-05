@@ -43,6 +43,119 @@ function lineIntersectsRect(x1: number, y1: number, x2: number, y2: number, rect
   return false
 }
 
+function pointDist(x1: number, y1: number, x2: number, y2: number): number {
+  return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+}
+
+function buildBezierPath(pts: Array<{ x: number; y: number }>): string {
+  if (pts.length < 2) return ''
+  let d = `M ${pts[0].x} ${pts[0].y}`
+  for (let i = 1; i < pts.length; i++) {
+    const prev = pts[i - 1]
+    const curr = pts[i]
+    const cpx1 = prev.x + (curr.x - prev.x) * 0.3
+    const cpy1 = prev.y + (curr.y - prev.y) * 0.3
+    const cpx2 = curr.x - (curr.x - prev.x) * 0.3
+    const cpy2 = curr.y - (curr.y - prev.y) * 0.3
+    d += ` C ${cpx1} ${cpy1}, ${cpx2} ${cpy2}, ${curr.x} ${curr.y}`
+  }
+  return d
+}
+
+function lineCrossesAnyNode(
+  x1: number, y1: number, x2: number, y2: number,
+  nodes: Array<{ x: number; y: number; right: number; bottom: number }>,
+  padding: number = 12
+): boolean {
+  for (const rect of nodes) {
+    if (lineIntersectsRect(x1, y1, x2, y2, rect, padding)) return true
+  }
+  return false
+}
+
+function routeAroundNode(
+  sourceX: number, sourceY: number,
+  targetX: number, targetY: number,
+  blockers: Array<{ x: number; y: number; width: number; height: number; right: number; bottom: number; cx: number; cy: number }>,
+  blockingRects: Array<{ x: number; y: number; right: number; bottom: number }>,
+  sourceId: string, targetId: string
+): string {
+  const candidates: Array<{ path: string; cost: number }> = []
+
+  const otherBlockers = blockingRects.filter(r => {
+    return !blockers.some(b => Math.abs(b.x - r.x) < 1 && Math.abs(b.y - r.y) < 1)
+  })
+
+  const padding = 30
+
+  for (const blocker of blockers) {
+    const corners = [
+      { x: blocker.x - padding, y: blocker.y - padding },
+      { x: blocker.right + padding, y: blocker.y - padding },
+      { x: blocker.x - padding, y: blocker.bottom + padding },
+      { x: blocker.right + padding, y: blocker.bottom + padding }
+    ]
+
+    for (const corner of corners) {
+      const seg1Blocked = lineCrossesAnyNode(sourceX, sourceY, corner.x, corner.y, otherBlockers)
+      const seg2Blocked = lineCrossesAnyNode(corner.x, corner.y, targetX, targetY, otherBlockers)
+
+      if (seg1Blocked || seg2Blocked) continue
+
+      const detourDist = pointDist(sourceX, sourceY, corner.x, corner.y) +
+                         pointDist(corner.x, corner.y, targetX, targetY) -
+                         pointDist(sourceX, sourceY, targetX, targetY)
+
+      const path = buildBezierPath([
+        { x: sourceX, y: sourceY },
+        { x: corner.x, y: corner.y },
+        { x: targetX, y: targetY }
+      ])
+
+      candidates.push({ path, cost: detourDist })
+    }
+  }
+
+  if (candidates.length > 0) {
+    candidates.sort((a, b) => a.cost - b.cost)
+    return candidates[0].path
+  }
+
+  const detourOffset = 100
+  const midX = (sourceX + targetX) / 2
+  const midY = (sourceY + targetY) / 2
+
+  const offsets = [
+    { ox: 0, oy: -detourOffset }, { ox: 0, oy: detourOffset },
+    { ox: -detourOffset, oy: 0 }, { ox: detourOffset, oy: 0 },
+    { ox: -detourOffset * 0.7, oy: -detourOffset * 0.7 },
+    { ox: detourOffset * 0.7, oy: -detourOffset * 0.7 },
+    { ox: -detourOffset * 0.7, oy: detourOffset * 0.7 },
+    { ox: detourOffset * 0.7, oy: detourOffset * 0.7 }
+  ]
+
+  for (const { ox, oy } of offsets) {
+    const wpX = midX + ox
+    const wpY = midY + oy
+
+    const seg1Blocked = lineCrossesAnyNode(sourceX, sourceY, wpX, wpY, blockingRects)
+    const seg2Blocked = lineCrossesAnyNode(wpX, wpY, targetX, targetY, blockingRects)
+    const blocked = seg1Blocked || seg2Blocked
+    const cost = Math.abs(ox) + Math.abs(oy) + (blocked ? 1000 : 0)
+
+    const path = buildBezierPath([
+      { x: sourceX, y: sourceY },
+      { x: wpX, y: wpY },
+      { x: targetX, y: targetY }
+    ])
+
+    candidates.push({ path, cost })
+  }
+
+  candidates.sort((a, b) => a.cost - b.cost)
+  return candidates[0]?.path || buildBezierPath([{ x: sourceX, y: sourceY }, { x: targetX, y: targetY }])
+}
+
 function computeSmartPath(
   sourceX: number, sourceY: number, sourcePosition: any,
   targetX: number, targetY: number, targetPosition: any,
@@ -58,86 +171,29 @@ function computeSmartPath(
 
   const blockingNodes = nodes.filter(n => n.id !== sourceId && n.id !== targetId)
 
-  const sourceBounds = nodes.find(n => n.id === sourceId)
-  const targetBounds = nodes.find(n => n.id === targetId)
-
   const dx = targetX - sourceX
   const dy = targetY - sourceY
   const dist = Math.sqrt(dx * dx + dy * dy)
 
-  const isBlocked = blockingNodes.some(node => {
+  const blockingRects = blockingNodes.map(n => getNodeBounds(n))
+
+  const isPathBlocked = blockingNodes.some(node => {
     const bounds = getNodeBounds(node)
     return lineIntersectsRect(sourceX, sourceY, targetX, targetY, bounds)
   })
 
-  if (!isBlocked) {
-    const controlOffset = Math.min(dist * 0.3, 80)
-    let cp1x = sourceX, cp1y = sourceY, cp2x = targetX, cp2y = targetY
-
-    if (Math.abs(dx) > Math.abs(dy)) {
-      cp1x = sourceX + controlOffset * Math.sign(dx)
-      cp1y = sourceY
-      cp2x = targetX - controlOffset * Math.sign(dx)
-      cp2y = targetY
-    } else {
-      cp1x = sourceX
-      cp1y = sourceY + controlOffset * Math.sign(dy)
-      cp2x = targetX
-      cp2y = targetY - controlOffset * Math.sign(dy)
-    }
-
-    return `M ${sourceX} ${sourceY} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${targetX} ${targetY}`
+  if (!isPathBlocked) {
+    return buildBezierPath([{ x: sourceX, y: sourceY }, { x: targetX, y: targetY }])
   }
 
-  const detourOffset = 80
-  const candidates: Array<{ path: string; cost: number }> = []
-
-  const midX = (sourceX + targetX) / 2
-  const midY = (sourceY + targetY) / 2
-
-  const offsets = [
-    { ox: 0, oy: -detourOffset },
-    { ox: 0, oy: detourOffset },
-    { ox: -detourOffset, oy: 0 },
-    { ox: detourOffset, oy: 0 },
-    { ox: -detourOffset * 0.7, oy: -detourOffset * 0.7 },
-    { ox: detourOffset * 0.7, oy: -detourOffset * 0.7 },
-    { ox: -detourOffset * 0.7, oy: detourOffset * 0.7 },
-    { ox: detourOffset * 0.7, oy: detourOffset * 0.7 }
-  ]
-
-  for (const { ox, oy } of offsets) {
-    const wpX = midX + ox
-    const wpY = midY + oy
-
-    const seg1Blocked = blockingNodes.some(node => {
-      const bounds = getNodeBounds(node)
-      return lineIntersectsRect(sourceX, sourceY, wpX, wpY, bounds)
+  const blockingRectsWithData = blockingNodes
+    .filter(n => {
+      const bounds = getNodeBounds(n)
+      return lineIntersectsRect(sourceX, sourceY, targetX, targetY, bounds)
     })
-    const seg2Blocked = blockingNodes.some(node => {
-      const bounds = getNodeBounds(node)
-      return lineIntersectsRect(wpX, wpY, targetX, targetY, bounds)
-    })
+    .map(n => getNodeBounds(n))
 
-    const blocked = seg1Blocked || seg2Blocked
-    const cost = Math.abs(ox) + Math.abs(oy) + (blocked ? 1000 : 0)
-
-    const cp1x = sourceX + (wpX - sourceX) * 0.5
-    const cp1y = sourceY + (wpY - sourceY) * 0.5
-    const cp2x = wpX + (targetX - wpX) * 0.3
-    const cp2y = wpY + (targetY - wpY) * 0.3
-    const cp3x = wpX + (targetX - wpX) * 0.7
-    const cp3y = wpY + (targetY - wpY) * 0.7
-    const cp4x = targetX - (targetX - wpX) * 0.5
-    const cp4y = targetY - (targetY - wpY) * 0.5
-
-    const path = `M ${sourceX} ${sourceY} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${wpX} ${wpY} C ${cp3x} ${cp3y}, ${cp4x} ${cp4y}, ${targetX} ${targetY}`
-
-    candidates.push({ path, cost })
-  }
-
-  candidates.sort((a, b) => a.cost - b.cost)
-  return candidates[0].path
+  return routeAroundNode(sourceX, sourceY, targetX, targetY, blockingRectsWithData, blockingRects, sourceId, targetId)
 }
 
 export function SmartEdge(props: EdgeProps) {

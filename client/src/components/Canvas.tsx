@@ -1,7 +1,6 @@
 import React, { useCallback, useMemo, useEffect, useState, useRef } from 'react'
 import ReactFlow, {
   Background,
-  Controls,
   MiniMap,
   Node,
   Edge,
@@ -16,11 +15,13 @@ import TableNode from './TableNode'
 import { SmartEdge } from './SmartEdge'
 import RelationshipEditor from './RelationshipEditor'
 import { useAppStore } from '../stores/appStore'
-import { Button, Space, Dropdown, message, Modal, Form, Card, Radio, Slider, Select, Input, AutoComplete } from 'antd'
+import { Button, Space, Dropdown, message, Modal, Form, Card, Radio, Slider, Select, Input, AutoComplete, Divider } from 'antd'
 import { PlusOutlined, CodeOutlined, LinkOutlined, ExportOutlined, PictureOutlined, FileImageOutlined, SettingOutlined, ZoomInOutlined, ZoomOutOutlined, RotateLeftOutlined, CompressOutlined, AimOutlined, LockOutlined, DeleteOutlined, TeamOutlined, WifiOutlined, UndoOutlined, RedoOutlined, AlignLeftOutlined, AlignRightOutlined, AlignCenterOutlined, VerticalAlignMiddleOutlined, ColumnWidthOutlined, VerticalAlignTopOutlined, VerticalAlignBottomOutlined, EditOutlined, SearchOutlined } from '@ant-design/icons'
 import CreateTableModal from './CreateTableModal'
+import CollabCursors from './CollabCursors'
 import { projectApi } from '../services/api'
 import { useCollab } from '../providers/CollabProvider'
+import { collabManager } from '../services/collabManager'
 
 interface AutoLayoutOptions {
   layoutType: 'grid' | 'hierarchical' | 'compact'
@@ -54,6 +55,132 @@ const edgeTypes = {
   smart: SmartEdge
 }
 
+const NODE_WIDTH = 280
+const NODE_HEIGHT = 200
+const CANVAS_ZOOM_MIN = 0.5
+const CANVAS_ZOOM_MAX = 2
+const CURSOR_SEND_INTERVAL = 50
+
+const ZOOM_PRESETS = [50, 60, 70, 75, 80, 85, 90, 95, 100, 105, 110, 115, 120, 125, 130, 140, 150, 160, 170, 180, 190, 200] as const
+
+const REL_TYPE_OPTIONS = [
+  { label: '一对多 (1:N)', value: 'one-to-many' },
+  { label: '一对一 (1:1)', value: 'one-to-one' },
+  { label: '多对多 (M:N)', value: 'many-to-many' }
+]
+
+const SHORTCUT_GROUPS = [
+  {
+    title: '📋 通用操作',
+    items: [
+      { key: 'Ctrl + S', desc: '保存项目' },
+      { key: 'Ctrl + Z', desc: '撤销' },
+      { key: 'Ctrl + Shift + Z', desc: '重做' },
+      { key: 'Escape', desc: '清除选中 / 关闭编辑' },
+      { key: '?', desc: '显示此帮助面板' },
+    ]
+  },
+  {
+    title: '🔲 表节点操作',
+    items: [
+      { key: 'Delete / Backspace', desc: '删除选中表 / 关系线' },
+      { key: 'Ctrl + A', desc: '全选所有表' },
+      { key: 'Ctrl + C', desc: '复制表（含列和索引）' },
+      { key: 'Ctrl + V', desc: '粘贴表' },
+      { key: 'Shift + Z', desc: '缩放至适配' },
+    ]
+  },
+  {
+    title: '🖱️ 画布操作',
+    items: [
+      { key: '鼠标拖拽', desc: '移动表节点（吸附开启时自动对齐网格）' },
+      { key: '滚轮 / 触控板', desc: '缩放画布' },
+      { key: '双击表名', desc: '快速编辑表名' },
+      { key: '双击列名', desc: '快速编辑列名' },
+      { key: '右键表节点', desc: '上下文菜单（编辑/复制/删除）' },
+      { key: '拖拽底部Handle', desc: '拖拽连线快速创建关系' },
+    ]
+  }
+]
+
+const SVG_EXPORT = {
+  padding: 50,
+  nodeWidth: 220,
+  nodeMinHeight: 150,
+  columnHeight: 28,
+  headerHeight: 50,
+  gapX: 80,
+  gapY: 80,
+  maxWidth: 1200
+} as const
+
+const GridOverlay = React.memo(({ snapToGrid, gridSize }: { snapToGrid: boolean; gridSize: number }) => {
+  if (!snapToGrid) return null
+  return (
+    <svg
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        pointerEvents: 'none',
+        zIndex: 1
+      }}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <defs>
+        <pattern
+          id={`grid-${gridSize}`}
+          width={gridSize}
+          height={gridSize}
+          patternUnits="userSpaceOnUse"
+        >
+          <circle cx="0" cy="0" r="0.5" fill="#d9d9d9" />
+        </pattern>
+      </defs>
+      <rect width="100%" height="100%" fill={`url(#grid-${gridSize})`} />
+    </svg>
+  )
+})
+GridOverlay.displayName = 'GridOverlay'
+
+const DragInfoTooltip = React.memo(({ dragInfo, snapToGrid }: { dragInfo: { x: number; y: number; snappedX: number; snappedY: number } | null; snapToGrid: boolean }) => {
+  if (!dragInfo) return null
+  return (
+    <div style={{
+      position: 'fixed',
+      left: '50%',
+      bottom: 24,
+      transform: 'translateX(-50%)',
+      zIndex: 1000,
+      background: 'rgba(0, 0, 0, 0.82)',
+      color: '#fff',
+      borderRadius: 8,
+      padding: '6px 14px',
+      fontSize: 12,
+      fontFamily: 'monospace',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 12,
+      boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+      pointerEvents: 'none',
+      whiteSpace: 'nowrap'
+    }}>
+      <span style={{ opacity: 0.6 }}>原始:</span>
+      <span>{Math.round(dragInfo.x)}, {Math.round(dragInfo.y)}</span>
+      {snapToGrid && (
+        <>
+          <span style={{ opacity: 0.4, margin: '0 4px' }}>|</span>
+          <span style={{ opacity: 0.6 }}>吸附:</span>
+          <span style={{ color: '#52c41a', fontWeight: 600 }}>{Math.round(dragInfo.snappedX)}, {Math.round(dragInfo.snappedY)}</span>
+        </>
+      )}
+    </div>
+  )
+})
+DragInfoTooltip.displayName = 'DragInfoTooltip'
+
 const CanvasContent: React.FC = () => {
   const { tables, currentProject, updateTablePosition, selectTable, selectedTableId, selectedTableIds, deleteTable, createTable, loadTables, relationships, loadRelationships, canvasZoom, setCanvasZoom, snapToGrid, gridSize, setSnapToGrid, setGridSize, showMiniMap, setShowMiniMap, edgeStyle, showEdgeLabels, updateTable, selectMultipleTables, addSelectedTable, removeSelectedTable, clearSelectedTables, copyTable, pasteTable, copiedTable, undo, redo, canUndo, canRedo, deleteRelationship, createRelationship, updateRelationship } = useAppStore()
   const { isConnected, onlineUsers } = useCollab()
@@ -84,6 +211,8 @@ const CanvasContent: React.FC = () => {
   const [editRelType, setEditRelType] = useState('one-to-many')
   const [edgeContextMenuPos, setEdgeContextMenuPos] = useState<{ x: number; y: number; edgeId: string } | null>(null)
   const [searchText, setSearchText] = useState('')
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null)
+  const lastCursorSendRef = useRef(0)
 
   useEffect(() => {
     if (currentProject) {
@@ -99,10 +228,10 @@ const CanvasContent: React.FC = () => {
   }, [reactFlow, canvasZoom])
 
   useEffect(() => {
-    if (canvasZoom < 0.5) {
-      setCanvasZoom(0.5)
-    } else if (canvasZoom > 2) {
-      setCanvasZoom(2)
+    if (canvasZoom < CANVAS_ZOOM_MIN) {
+      setCanvasZoom(CANVAS_ZOOM_MIN)
+    } else if (canvasZoom > CANVAS_ZOOM_MAX) {
+      setCanvasZoom(CANVAS_ZOOM_MAX)
     }
   }, [canvasZoom, setCanvasZoom])
 
@@ -172,6 +301,27 @@ const CanvasContent: React.FC = () => {
 
   const [nodeState, setNodeState, onNodeChange] = useNodesState(initialNodes)
   const [edgeState, setEdgeState, onEdgesChange] = useEdgesState(initialEdges)
+
+  const displayEdges = useMemo(() => {
+    if (!hoveredNodeId) return edgeState
+    const connectedEdgeIds = new Set<string>()
+    edgeState.forEach(edge => {
+      if (edge.source === hoveredNodeId || edge.target === hoveredNodeId) {
+        connectedEdgeIds.add(edge.id)
+      }
+    })
+    return edgeState.map(edge => {
+      if (connectedEdgeIds.has(edge.id)) {
+        return {
+          ...edge,
+          style: { ...edge.style, stroke: 'var(--theme-primary)', strokeWidth: 3, opacity: 1 },
+          animated: true
+        }
+      }
+      return { ...edge, style: { ...edge.style, opacity: 0.15 } }
+    })
+  }, [edgeState, hoveredNodeId])
+
   const isDraggingRef = React.useRef(false)
 
   // 在项目切换时完全重新初始化
@@ -393,14 +543,28 @@ const CanvasContent: React.FC = () => {
   }, [])
 
   const onPaneMouseMove = useCallback((event: React.MouseEvent) => {
-    if (!marqueeActive) return
+    if (!marqueeActive) {
+      const now = Date.now()
+      if (now - lastCursorSendRef.current >= CURSOR_SEND_INTERVAL && isConnected) {
+        lastCursorSendRef.current = now
+        const rect = reactFlowWrapper.current?.getBoundingClientRect()
+        if (rect) {
+          const flowPos = reactFlow.screenToFlowPosition({
+            x: event.clientX,
+            y: event.clientY
+          })
+          collabManager.sendCursorUpdate(Math.round(flowPos.x), Math.round(flowPos.y))
+        }
+      }
+      return
+    }
 
     const rect = reactFlowWrapper.current?.getBoundingClientRect()
     if (rect) {
       const { left, top } = rect
       setMarqueeEnd({ x: event.clientX - left, y: event.clientY - top })
     }
-  }, [marqueeActive])
+  }, [marqueeActive, isConnected])
 
   const onPaneMouseUp = useCallback(() => {
     if (!marqueeActive) return
@@ -424,11 +588,11 @@ const CanvasContent: React.FC = () => {
         const tableY = table.positionY || 0
 
         if (marqueeMode === 'contains') {
-          return tableX >= mStartX && tableX + 280 <= mEndX &&
-                 tableY >= mStartY && tableY + 120 <= mEndY
+          return tableX >= mStartX && tableX + NODE_WIDTH <= mEndX &&
+                 tableY >= mStartY && tableY + NODE_HEIGHT <= mEndY
         } else {
-          return tableX < mEndX && tableX + 280 > mStartX &&
-                 tableY < mEndY && tableY + 120 > mStartY
+          return tableX < mEndX && tableX + NODE_WIDTH > mStartX &&
+                 tableY < mEndY && tableY + NODE_HEIGHT > mStartY
         }
       })
       .map(t => t.id)
@@ -444,7 +608,7 @@ const CanvasContent: React.FC = () => {
 
   const onMoveEnd = useCallback((event: any, viewport: any) => {
     if (viewport.zoom !== canvasZoom) {
-      const clampedZoom = Math.max(0.5, Math.min(viewport.zoom, 2))
+      const clampedZoom = Math.max(CANVAS_ZOOM_MIN, Math.min(viewport.zoom, CANVAS_ZOOM_MAX))
       setCanvasZoom(Math.round(clampedZoom * 100) / 100)
     }
   }, [canvasZoom, setCanvasZoom])
@@ -743,9 +907,6 @@ const CanvasContent: React.FC = () => {
     const nodes = getSelectedTableNodes()
     if (nodes.length < 2) { message.warning('请至少选中 2 张表'); return }
 
-    const NODE_WIDTH = 280
-    const NODE_HEIGHT = 200
-
     switch (type) {
       case 'left': {
         const minX = Math.min(...nodes.map(n => n.positionX))
@@ -893,37 +1054,29 @@ const CanvasContent: React.FC = () => {
   const generateERDiagramSVG = (): string => {
     if (!currentProject) return ''
 
-    const padding = 50
-    const nodeWidth = 220
-    const nodeMinHeight = 150
-    const columnHeight = 28
-    const headerHeight = 50
-    const gapX = 80
-    const gapY = 80
-
     const positions: { [key: string]: { x: number; y: number; width: number; height: number } } = {}
-    let currentX = padding
-    let currentY = padding
+    let currentX = SVG_EXPORT.padding
+    let currentY = SVG_EXPORT.padding
     let maxYInRow = 0
 
-    tables.forEach((table, index) => {
+    tables.forEach((table) => {
       const colCount = (table.columns?.length || 0) + 1
-      const height = Math.max(nodeMinHeight, headerHeight + colCount * columnHeight)
-      const width = nodeWidth
+      const height = Math.max(SVG_EXPORT.nodeMinHeight, SVG_EXPORT.headerHeight + colCount * SVG_EXPORT.columnHeight)
+      const width = SVG_EXPORT.nodeWidth
 
-      if (currentX + width > 1200) {
-        currentX = padding
-        currentY = maxYInRow + gapY
+      if (currentX + width > SVG_EXPORT.maxWidth) {
+        currentX = SVG_EXPORT.padding
+        currentY = maxYInRow + SVG_EXPORT.gapY
       }
 
       positions[table.id] = { x: currentX, y: currentY, width, height }
 
-      currentX += width + gapX
+      currentX += width + SVG_EXPORT.gapX
       maxYInRow = Math.max(maxYInRow, currentY + height)
     })
 
     let svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="${maxYInRow + padding * 2}" style="background:#fafafa">
+<svg xmlns="http://www.w3.org/2000/svg" width="${SVG_EXPORT.maxWidth}" height="${maxYInRow + SVG_EXPORT.padding * 2}" style="background:#fafafa">
   <defs>
     <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
       <polygon points="0 0, 10 3.5, 0 7" fill="#1890ff"/>
@@ -943,12 +1096,12 @@ const CanvasContent: React.FC = () => {
 
       svg += `  <g>
     <rect x="${pos.x}" y="${pos.y}" width="${pos.width}" height="${pos.height}" fill="white" stroke="#1890ff" stroke-width="2" rx="4"/>
-    <rect x="${pos.x}" y="${pos.y}" width="${pos.width}" height="${headerHeight}" fill="#1890ff" rx="4" ry="4"/>
+    <rect x="${pos.x}" y="${pos.y}" width="${pos.width}" height="${SVG_EXPORT.headerHeight}" fill="#1890ff" rx="4" ry="4"/>
     <text x="${pos.x + 10}" y="${pos.y + 30}" class="table-title">${table.name}</text>
 `
 
       table.columns?.forEach((col, idx) => {
-        const y = pos.y + headerHeight + 20 + idx * columnHeight
+        const y = pos.y + SVG_EXPORT.headerHeight + 20 + idx * SVG_EXPORT.columnHeight
         svg += `    <text x="${pos.x + 10}" y="${y}" class="column-text">${col.name} (${col.dataType})</text>
 `
       })
@@ -975,7 +1128,7 @@ const CanvasContent: React.FC = () => {
     return svg
   }
 
-  const exportMenuItems = [
+  const exportMenuItems = useMemo(() => [
     {
       key: 'png',
       icon: <FileImageOutlined />,
@@ -988,7 +1141,25 @@ const CanvasContent: React.FC = () => {
       label: '导出为 SVG',
       onClick: exportToSVG
     }
-  ]
+  ], [])
+
+  const alignMenuItems = useMemo(() => [
+    { key: 'left', label: '左对齐', icon: <AlignLeftOutlined />, disabled: selectedTableIds.length < 2, onClick: () => alignTables('left') },
+    { key: 'hcenter', label: '水平居中', icon: <AlignCenterOutlined />, disabled: selectedTableIds.length < 2, onClick: () => alignTables('hcenter') },
+    { key: 'right', label: '右对齐', icon: <AlignRightOutlined />, disabled: selectedTableIds.length < 2, onClick: () => alignTables('right') },
+    { type: 'divider' as const },
+    { key: 'top', label: '顶对齐', icon: <VerticalAlignTopOutlined />, disabled: selectedTableIds.length < 2, onClick: () => alignTables('top') },
+    { key: 'vcenter', label: '垂直居中', icon: <VerticalAlignMiddleOutlined />, disabled: selectedTableIds.length < 2, onClick: () => alignTables('vcenter') },
+    { key: 'bottom', label: '底对齐', icon: <VerticalAlignBottomOutlined />, disabled: selectedTableIds.length < 2, onClick: () => alignTables('bottom') },
+    { type: 'divider' as const },
+    { key: 'hdistribute', label: '水平分布', icon: <ColumnWidthOutlined />, disabled: selectedTableIds.length < 3, onClick: () => alignTables('hdistribute') },
+    { key: 'vdistribute', label: '垂直分布', icon: <VerticalAlignTopOutlined />, disabled: selectedTableIds.length < 3, onClick: () => alignTables('vdistribute') }
+  ], [selectedTableIds.length])
+
+  const marqueeModeMenuItems = useMemo(() => [
+    { key: 'contains', label: '包含选择', onClick: () => setMarqueeMode('contains') },
+    { key: 'intersect', label: '相交选择', onClick: () => setMarqueeMode('intersect') }
+  ], [])
 
   return (
     <>
@@ -1001,9 +1172,19 @@ const CanvasContent: React.FC = () => {
         </Form>
       </div>
       <div style={{ height: '100%', width: '100%', position: 'relative' }} ref={reactFlowWrapper}>
-        <div style={{ position: 'absolute', top: 16, right: 16, zIndex: 10 }}>
+        <div style={{ 
+          position: 'absolute', 
+          top: 16, 
+          right: 16, 
+          zIndex: 10,
+          background: 'var(--theme-card)',
+          borderRadius: 8,
+          border: '1px solid var(--theme-border)',
+          boxShadow: '0 2px 8px var(--theme-shadow)',
+          padding: '4px 8px'
+        }}>
           <AutoComplete
-            style={{ width: 200 }}
+            style={{ width: 180 }}
             value={searchText}
             onSearch={setSearchText}
             onSelect={(id) => {
@@ -1021,32 +1202,53 @@ const CanvasContent: React.FC = () => {
             placeholder="搜索表..."
             allowClear
           >
-            <Input prefix={<SearchOutlined style={{ color: '#999' }} />} allowClear />
+            <Input 
+              prefix={<SearchOutlined style={{ color: '#999', fontSize: 12 }} />} 
+              allowClear 
+              size="small"
+              style={{ border: 'none', boxShadow: 'none' }}
+            />
           </AutoComplete>
         </div>
-        <div style={{ position: 'absolute', top: 16, left: 16, zIndex: 10 }}>
-          <Space size="middle">
-            <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenModal} size="middle">
+        <div style={{ 
+          position: 'absolute', 
+          top: 16, 
+          left: 16, 
+          zIndex: 10,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '8px 12px',
+          background: 'var(--theme-card)',
+          borderRadius: 8,
+          border: '1px solid var(--theme-border)',
+          boxShadow: '0 2px 8px var(--theme-shadow)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenModal} size="small">
               新建表
             </Button>
-            <Button icon={<LinkOutlined />} onClick={() => setIsRelationshipEditorOpen(true)} size="middle">
+            <Button icon={<LinkOutlined />} onClick={() => setIsRelationshipEditorOpen(true)} size="small">
               关系管理
             </Button>
-            <Button icon={<SettingOutlined />} onClick={handleAutoLayout} size="middle">
+            <Button icon={<SettingOutlined />} onClick={handleAutoLayout} size="small">
               自动布局
             </Button>
+          </div>
+          
+          <Divider type="vertical" style={{ height: 28, margin: '0 2px' }} />
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <Button
               icon={<AimOutlined />}
-              size="middle"
+              size="small"
               type={snapToGrid ? 'primary' : 'default'}
               onClick={() => setSnapToGrid(!snapToGrid)}
-              title={snapToGrid ? '关闭网格吸附 (当前网格: ' + gridSize + 'px)' : '开启网格吸附 (当前网格: ' + gridSize + 'px)'}
-            >
-              吸附
-            </Button>
+              title={snapToGrid ? '关闭网格吸附' : '开启网格吸附'}
+            />
             <Button
               icon={<CompressOutlined />}
-              size="middle"
+              size="small"
               onClick={() => {
                 if (selectedTableIds.length > 0) {
                   reactFlow?.fitView({ nodes: selectedTableIds.map(id => ({ id })), padding: 0.15 })
@@ -1054,104 +1256,80 @@ const CanvasContent: React.FC = () => {
                   reactFlow?.fitView({ padding: 0.1, includeHiddenNodes: false })
                 }
               }}
-              title={selectedTableIds.length > 0 ? `缩放至选区 (${selectedTableIds.length}张表)` : '缩放至适配 (将所有表节点居中显示)'}
+              title={selectedTableIds.length > 0 ? `缩放至选区` : '缩放至适配'}
+            />
+            <Dropdown
+              menu={{
+                items: alignMenuItems
+              }}
+              placement="bottomLeft"
             >
-              适配
-            </Button>
+              <Button icon={<AlignCenterOutlined />} size="small" title={selectedTableIds.length >= 2 ? `对齐` : '请先选中至少 2 张表'} disabled={selectedTableIds.length < 2} />
+            </Dropdown>
             <Button
               icon={<UndoOutlined />}
-              size="middle"
+              size="small"
               disabled={!canUndo()}
               onClick={() => undo()}
               title="撤销 (Ctrl+Z)"
             />
-            <Dropdown
-              menu={{
-                items: [
-                  { key: 'left', label: '左对齐', icon: <AlignLeftOutlined />, disabled: selectedTableIds.length < 2, onClick: () => alignTables('left') },
-                  { key: 'hcenter', label: '水平居中', icon: <AlignCenterOutlined />, disabled: selectedTableIds.length < 2, onClick: () => alignTables('hcenter') },
-                  { key: 'right', label: '右对齐', icon: <AlignRightOutlined />, disabled: selectedTableIds.length < 2, onClick: () => alignTables('right') },
-                  { type: 'divider' },
-                  { key: 'top', label: '顶对齐', icon: <VerticalAlignTopOutlined />, disabled: selectedTableIds.length < 2, onClick: () => alignTables('top') },
-                  { key: 'vcenter', label: '垂直居中', icon: <VerticalAlignMiddleOutlined />, disabled: selectedTableIds.length < 2, onClick: () => alignTables('vcenter') },
-                  { key: 'bottom', label: '底对齐', icon: <VerticalAlignBottomOutlined />, disabled: selectedTableIds.length < 2, onClick: () => alignTables('bottom') },
-                  { type: 'divider' },
-                  { key: 'hdistribute', label: '水平分布', icon: <ColumnWidthOutlined />, disabled: selectedTableIds.length < 3, onClick: () => alignTables('hdistribute') },
-                  { key: 'vdistribute', label: '垂直分布', icon: <VerticalAlignTopOutlined />, disabled: selectedTableIds.length < 3, onClick: () => alignTables('vdistribute') }
-                ]
-              }}
-              placement="bottomLeft"
-            >
-              <Button
-                size="middle"
-                title={selectedTableIds.length >= 2 ? `对齐 ${selectedTableIds.length} 张表` : '请先选中至少 2 张表'}
-                disabled={selectedTableIds.length < 2}
-              >
-                对齐
-              </Button>
-            </Dropdown>
             <Button
               icon={<RedoOutlined />}
-              size="middle"
+              size="small"
               disabled={!canRedo()}
               onClick={() => redo()}
               title="重做 (Ctrl+Shift+Z)"
             />
+          </div>
+          
+          <Divider type="vertical" style={{ height: 28, margin: '0 2px' }} />
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <Dropdown menu={{ items: exportMenuItems }} placement="bottomLeft">
-              <Button icon={<ExportOutlined />} size="middle">
-                导出
-              </Button>
+              <Button icon={<ExportOutlined />} size="small" title="导出" />
             </Dropdown>
-            <Button icon={<CodeOutlined />} onClick={handleGenerateDDL} size="middle">
-              导出DDL
-            </Button>
+            <Button icon={<CodeOutlined />} onClick={handleGenerateDDL} size="small" title="导出DDL" />
             <Dropdown 
               menu={{ 
-                items: [
-                  { key: 'contains', label: '包含选择', onClick: () => setMarqueeMode('contains') },
-                  { key: 'intersect', label: '相交选择', onClick: () => setMarqueeMode('intersect') }
-                ],
+                items: marqueeModeMenuItems,
                 selectedKeys: [marqueeMode]
               }} 
               placement="bottomLeft"
             >
-              <Button size="middle">
-                <LockOutlined style={{ marginRight: 4 }} />
-                {marqueeMode === 'contains' ? '包含' : '相交'}
-              </Button>
+              <Button icon={<LockOutlined />} size="small" title={marqueeMode === 'contains' ? '包含选择' : '相交选择'} />
             </Dropdown>
             <div style={{
               display: 'flex',
               alignItems: 'center',
               gap: 6,
-              padding: '4px 12px',
-              borderRadius: 16,
-              background: isConnected ? 'rgba(82,196,26,0.08)' : 'var(--theme-background-secondary)',
-              border: `1px solid ${isConnected ? '#52c41a' : 'var(--theme-border)'}`,
-              fontSize: 12,
-              color: isConnected ? '#52c41a' : 'var(--theme-text-secondary)',
+              padding: '4px 10px',
+              borderRadius: 10,
+              background: isConnected ? 'rgba(82,196,26,0.08)' : 'rgba(0,0,0,0.04)',
+              border: `1px solid ${isConnected ? '#52c41a' : 'rgba(0,0,0,0.06)'}`,
+              fontSize: 11,
+              color: isConnected ? '#52c41a' : '#999',
               transition: 'all 0.3s ease'
             }}>
-              <WifiOutlined style={{ fontSize: 12 }} />
+              <WifiOutlined style={{ fontSize: 11 }} />
               <span>{isConnected ? '已连接' : '未连接'}</span>
               {isConnected && onlineUsers.length > 1 && (
                 <span style={{
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: 2,
-                  padding: '1px 6px',
-                  borderRadius: 10,
+                  padding: '1px 5px',
+                  borderRadius: 8,
                   background: '#52c41a',
                   color: '#fff',
-                  fontSize: 10,
+                  fontSize: 9,
                   fontWeight: 500
                 }}>
-                  <TeamOutlined style={{ fontSize: 9 }} />
+                  <TeamOutlined style={{ fontSize: 8 }} />
                   {onlineUsers.length}
                 </span>
               )}
             </div>
-          </Space>
+          </div>
         </div>
 
         {/* 批量操作提示 */}
@@ -1245,37 +1423,7 @@ const CanvasContent: React.FC = () => {
           </div>
         )}
 
-        {dragInfo && (
-          <div style={{
-            position: 'fixed',
-            left: '50%',
-            bottom: 24,
-            transform: 'translateX(-50%)',
-            zIndex: 1000,
-            background: 'rgba(0, 0, 0, 0.82)',
-            color: '#fff',
-            borderRadius: 8,
-            padding: '6px 14px',
-            fontSize: 12,
-            fontFamily: 'monospace',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-            pointerEvents: 'none',
-            whiteSpace: 'nowrap'
-          }}>
-            <span style={{ opacity: 0.6 }}>原始:</span>
-            <span>{Math.round(dragInfo.x)}, {Math.round(dragInfo.y)}</span>
-            {snapToGrid && (
-              <>
-                <span style={{ opacity: 0.4, margin: '0 4px' }}>|</span>
-                <span style={{ opacity: 0.6 }}>吸附:</span>
-                <span style={{ color: '#52c41a', fontWeight: 600 }}>{Math.round(dragInfo.snappedX)}, {Math.round(dragInfo.snappedY)}</span>
-              </>
-            )}
-          </div>
-        )}
+        <DragInfoTooltip dragInfo={dragInfo} snapToGrid={snapToGrid} />
 
         <Modal
           title={
@@ -1290,39 +1438,7 @@ const CanvasContent: React.FC = () => {
           width={560}
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {[
-              {
-                title: '📋 通用操作',
-                items: [
-                  { key: 'Ctrl + S', desc: '保存项目' },
-                  { key: 'Ctrl + Z', desc: '撤销' },
-                  { key: 'Ctrl + Shift + Z', desc: '重做' },
-                  { key: 'Escape', desc: '清除选中 / 关闭编辑' },
-                  { key: '?', desc: '显示此帮助面板' },
-                ]
-              },
-              {
-                title: '🔲 表节点操作',
-                items: [
-                  { key: 'Delete / Backspace', desc: '删除选中表 / 关系线' },
-                  { key: 'Ctrl + A', desc: '全选所有表' },
-                  { key: 'Ctrl + C', desc: '复制表（含列和索引）' },
-                  { key: 'Ctrl + V', desc: '粘贴表' },
-                  { key: 'Shift + Z', desc: '缩放至适配' },
-                ]
-              },
-              {
-                title: '🖱️ 画布操作',
-                items: [
-                  { key: '鼠标拖拽', desc: '移动表节点（吸附开启时自动对齐网格）' },
-                  { key: '滚轮 / 触控板', desc: '缩放画布' },
-                  { key: '双击表名', desc: '快速编辑表名' },
-                  { key: '双击列名', desc: '快速编辑列名' },
-                  { key: '右键表节点', desc: '上下文菜单（编辑/复制/删除）' },
-                  { key: '拖拽底部Handle', desc: '拖拽连线快速创建关系' },
-                ]
-              }
-            ].map(group => (
+            {SHORTCUT_GROUPS.map(group => (
               <div key={group.title}>
                 <div style={{
                   fontSize: 13,
@@ -1378,11 +1494,7 @@ const CanvasContent: React.FC = () => {
                 style={{ width: '100%' }}
                 value={editRelType}
                 onChange={setEditRelType}
-                options={[
-                  { label: '一对多 (1:N)', value: 'one-to-many' },
-                  { label: '一对一 (1:1)', value: 'one-to-one' },
-                  { label: '多对多 (M:N)', value: 'many-to-many' }
-                ]}
+                options={REL_TYPE_OPTIONS}
               />
             </div>
           </div>
@@ -1430,11 +1542,7 @@ const CanvasContent: React.FC = () => {
                 style={{ width: '100%' }}
                 value={connectRelType}
                 onChange={setConnectRelType}
-                options={[
-                  { label: '一对多 (One-to-Many)', value: 'one-to-many' },
-                  { label: '一对一 (One-to-One)', value: 'one-to-one' },
-                  { label: '多对多 (Many-to-Many)', value: 'many-to-many' }
-                ]}
+                options={REL_TYPE_OPTIONS}
               />
             </div>
           </div>
@@ -1458,7 +1566,7 @@ const CanvasContent: React.FC = () => {
 
         <ReactFlow
           nodes={nodeState}
-          edges={edgeState}
+          edges={displayEdges}
           onNodesChange={onNodeChange}
           onEdgesChange={onEdgesChange}
           onNodeDragStart={onNodeDragStart}
@@ -1466,6 +1574,8 @@ const CanvasContent: React.FC = () => {
           onNodeDragStop={onNodeDragStop}
           onNodeClick={onNodeClick}
           onNodeDoubleClick={onNodeDoubleClick}
+          onNodeMouseEnter={(e, node) => setHoveredNodeId(node.id)}
+          onNodeMouseLeave={() => setHoveredNodeId(null)}
           onEdgeClick={onEdgeClick}
           onEdgeDoubleClick={onEdgeDoubleClick}
           onEdgeContextMenu={onEdgeContextMenu}
@@ -1491,41 +1601,17 @@ const CanvasContent: React.FC = () => {
             gap={snapToGrid ? gridSize : 24}
             size={snapToGrid ? 1 : 2}
           />
-          {snapToGrid && (
-            <svg
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100%',
-                height: '100%',
-                pointerEvents: 'none',
-                zIndex: 1
-              }}
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <defs>
-                <pattern
-                  id={`grid-${gridSize}`}
-                  width={gridSize}
-                  height={gridSize}
-                  patternUnits="userSpaceOnUse"
-                >
-                  <circle cx="0" cy="0" r="0.5" fill="#d9d9d9" />
-                </pattern>
-              </defs>
-              <rect width="100%" height="100%" fill={`url(#grid-${gridSize})`} />
-            </svg>
-          )}
+          {snapToGrid && <GridOverlay snapToGrid={snapToGrid} gridSize={gridSize} />}
           <div style={{ 
             position: 'absolute', 
-            top: 10, 
+            top: 60, 
             right: 10, 
             zIndex: 100,
-            background: '#ffffff',
+            background: 'var(--theme-card)',
             borderRadius: 8,
             padding: 4,
-            boxShadow: 'rgba(0, 0, 0, 0.1) 0 2px 12px',
+            boxShadow: '0 2px 8px var(--theme-shadow)',
+            border: '1px solid var(--theme-border)',
             display: 'flex',
             flexDirection: 'column',
             gap: 2
@@ -1631,25 +1717,29 @@ const CanvasContent: React.FC = () => {
                 position: 'absolute',
                 bottom: 50,
                 right: 10,
-                border: '1px solid #ddd',
-                borderRadius: 4,
+                border: '1px solid var(--theme-border)',
+                borderRadius: 8,
                 width: 150,
-                height: 100
+                height: 100,
+                boxShadow: '0 2px 8px var(--theme-shadow)',
+                background: 'var(--theme-card)'
               }}
               nodeColor={(node) => '#1890ff'}
               maskColor="rgba(24,144,255,0.1)"
             />
           )}
+          {isConnected && <CollabCursors />}
         </ReactFlow>
 
         <div style={{
           position: 'absolute',
           bottom: 10,
           right: 10,
-          background: 'rgba(255, 255, 255, 0.95)',
+          background: 'var(--theme-card)',
           borderRadius: 8,
           padding: '6px 12px',
-          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+          boxShadow: '0 2px 8px var(--theme-shadow)',
+          border: '1px solid var(--theme-border)',
           fontSize: 12,
           display: 'flex',
           alignItems: 'center',
@@ -1658,30 +1748,11 @@ const CanvasContent: React.FC = () => {
         }}>
           <Dropdown
             menu={{
-              items: [
-                { key: '50%', label: '50%', onClick: () => setCanvasZoom(0.5) },
-                { key: '60%', label: '60%', onClick: () => setCanvasZoom(0.6) },
-                { key: '70%', label: '70%', onClick: () => setCanvasZoom(0.7) },
-                { key: '75%', label: '75%', onClick: () => setCanvasZoom(0.75) },
-                { key: '80%', label: '80%', onClick: () => setCanvasZoom(0.8) },
-                { key: '85%', label: '85%', onClick: () => setCanvasZoom(0.85) },
-                { key: '90%', label: '90%', onClick: () => setCanvasZoom(0.9) },
-                { key: '95%', label: '95%', onClick: () => setCanvasZoom(0.95) },
-                { key: '100%', label: '100%', onClick: () => setCanvasZoom(1) },
-                { key: '105%', label: '105%', onClick: () => setCanvasZoom(1.05) },
-                { key: '110%', label: '110%', onClick: () => setCanvasZoom(1.1) },
-                { key: '115%', label: '115%', onClick: () => setCanvasZoom(1.15) },
-                { key: '120%', label: '120%', onClick: () => setCanvasZoom(1.2) },
-                { key: '125%', label: '125%', onClick: () => setCanvasZoom(1.25) },
-                { key: '130%', label: '130%', onClick: () => setCanvasZoom(1.3) },
-                { key: '140%', label: '140%', onClick: () => setCanvasZoom(1.4) },
-                { key: '150%', label: '150%', onClick: () => setCanvasZoom(1.5) },
-                { key: '160%', label: '160%', onClick: () => setCanvasZoom(1.6) },
-                { key: '170%', label: '170%', onClick: () => setCanvasZoom(1.7) },
-                { key: '180%', label: '180%', onClick: () => setCanvasZoom(1.8) },
-                { key: '190%', label: '190%', onClick: () => setCanvasZoom(1.9) },
-                { key: '200%', label: '200%', onClick: () => setCanvasZoom(2) }
-              ]
+              items: ZOOM_PRESETS.map(p => ({
+                key: `${p}%`,
+                label: `${p}%`,
+                onClick: () => setCanvasZoom(p / 100)
+              }))
             }}
           >
             <span style={{ cursor: 'pointer', fontWeight: 500, color: '#1890ff' }}>
