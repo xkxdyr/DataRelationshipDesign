@@ -269,27 +269,51 @@ export const projectMemberService = {
 
   async canView(projectId: string, userId: string): Promise<boolean> {
     try {
-      return this.isMember(projectId, userId)
+      // 项目创建者始终有查看权限
+      const project = await prisma.project.findUnique({ where: { id: projectId }, select: { createdBy: true } })
+      if (project && project.createdBy === userId) {
+        console.log(`[PermService] canView=true (创建者) | projectId=${projectId} | userId=${userId}`)
+        return true
+      }
+      const result = await this.isMember(projectId, userId)
+      console.log(`[PermService] canView=${result} (成员检查) | projectId=${projectId} | userId=${userId}`)
+      return result
     } catch (error) {
-      console.error('检查查看权限失败:', error)
+      console.error('[PermService] canView异常 | projectId=', projectId, 'userId=', userId, 'error=', error)
       return false
     }
   },
 
   async canEdit(projectId: string, userId: string): Promise<boolean> {
     try {
-      return this.isEditor(projectId, userId)
+      // 项目创建者始终有编辑权限
+      const project = await prisma.project.findUnique({ where: { id: projectId }, select: { createdBy: true } })
+      if (project && project.createdBy === userId) {
+        console.log(`[PermService] canEdit=true (创建者) | projectId=${projectId} | userId=${userId}`)
+        return true
+      }
+      const result = await this.isEditor(projectId, userId)
+      console.log(`[PermService] canEdit=${result} (editor检查) | projectId=${projectId} | userId=${userId}`)
+      return result
     } catch (error) {
-      console.error('检查编辑权限失败:', error)
+      console.error('[PermService] canEdit异常 | projectId=', projectId, 'userId=', userId, 'error=', error)
       return false
     }
   },
 
   async canManage(projectId: string, userId: string): Promise<boolean> {
     try {
-      return this.isOwner(projectId, userId)
+      // 项目创建者始终有管理权限
+      const project = await prisma.project.findUnique({ where: { id: projectId }, select: { createdBy: true } })
+      if (project && project.createdBy === userId) {
+        console.log(`[PermService] canManage=true (创建者) | projectId=${projectId} | userId=${userId}`)
+        return true
+      }
+      const result = await this.isOwner(projectId, userId)
+      console.log(`[PermService] canManage=${result} (owner检查) | projectId=${projectId} | userId=${userId}`)
+      return result
     } catch (error) {
-      console.error('检查管理权限失败:', error)
+      console.error('[PermService] canManage异常 | projectId=', projectId, 'userId=', userId, 'error=', error)
       return false
     }
   },

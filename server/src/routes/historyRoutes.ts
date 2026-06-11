@@ -19,4 +19,7 @@ router.get('/export/project/:projectId/user/:userId/:format', historyController.
 router.get('/project/:projectId/reminder', historyController.getProjectHistoryReminder)
 router.get('/user/:userId/reminders', historyController.getUserHistoryReminders)
 
+// 导入
+router.post('/:projectId/import', historyController.importProjectHistory)
+
 export default router

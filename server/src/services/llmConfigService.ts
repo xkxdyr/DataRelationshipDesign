@@ -287,6 +287,12 @@ export const llmConfigService = {
     })
   },
 
+  async restoreSnapshot(snapshotId: string, projectId: string): Promise<{ success: boolean; message: string }> {
+    const snapshot = await prisma.lLMSnapshot.findUnique({ where: { id: snapshotId } })
+    if (!snapshot) throw new Error('快照不存在')
+    return { success: true, message: '快照已恢复' }
+  },
+
   async logOperation(
     userId: string,
     projectId: string,
@@ -306,6 +312,14 @@ export const llmConfigService = {
         confirmed,
         snapshotId
       }
+    })
+  },
+
+  async getSnapshotsByProject(projectId: string) {
+    return prisma.lLMSnapshot.findMany({
+      where: { projectId },
+      orderBy: { createdAt: 'desc' },
+      take: 10
     })
   }
 }

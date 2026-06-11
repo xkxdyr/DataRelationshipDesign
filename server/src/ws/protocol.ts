@@ -28,6 +28,7 @@ export enum MessageType {
   LOCK_DENIED = 'lock:denied',
   LOCK_STATE = 'lock:state',
   LOCK_TIMEOUT = 'lock:timeout',
+  LOCK_RENEW = 'lock:renew',
 
   // 光标同步
   CURSOR_UPDATE = 'cursor:update',

@@ -1,10 +1,21 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useMemo, useCallback } from 'react'
 import { Modal, Table, Tag, Space, Typography, Spin, Empty, Collapse, Button, Select, message } from 'antd'
 import { PlusCircleOutlined, MinusCircleOutlined, EditOutlined, SwapOutlined, CodeOutlined, CopyOutlined } from '@ant-design/icons'
 import { incrementalDdlApi, IncrementalDDLResult } from '../services/api'
 
 const { Title, Text } = Typography
 const { Panel } = Collapse
+
+const UI_COLORS = {
+  GREEN: '#52c41a',
+  RED: '#ff4d4f',
+  YELLOW: '#faad14',
+  BLUE: '#1890ff',
+  PURPLE: '#722ed1',
+  BG_LIGHT: '#fafafa',
+  CODE_BG: '#1e1e1e',
+  CODE_FG: '#d4d4d4',
+}
 
 interface ColumnDiff {
   name: string
@@ -90,6 +101,106 @@ function renderValue(v: any): string {
   return String(v)
 }
 
+interface CompareSummaryProps {
+  summary: CompareResult['summary']
+}
+
+const CompareSummary = React.memo(({ summary }: CompareSummaryProps) => (
+  <div style={{ marginBottom: 16, padding: 12, background: UI_COLORS.BG_LIGHT, borderRadius: 8 }}>
+    <Text strong style={{ marginBottom: 8, display: 'block' }}>变更摘要</Text>
+    <Space wrap size="middle">
+      <Tag icon={<PlusCircleOutlined />} color="success">新增表 {summary.tablesAdded}</Tag>
+      <Tag icon={<MinusCircleOutlined />} color="error">删除表 {summary.tablesRemoved}</Tag>
+      <Tag icon={<EditOutlined />} color="warning">修改表 {summary.tablesModified}</Tag>
+      <Tag color="default">未变更表 {summary.tablesUnchanged}</Tag>
+      <Tag icon={<PlusCircleOutlined />} color="success">新增列 {summary.columnsAdded}</Tag>
+      <Tag icon={<MinusCircleOutlined />} color="error">删除列 {summary.columnsRemoved}</Tag>
+      <Tag icon={<EditOutlined />} color="warning">修改列 {summary.columnsModified}</Tag>
+      <Tag icon={<PlusCircleOutlined />} color="success">新增关系 {summary.relationshipsAdded}</Tag>
+      <Tag icon={<MinusCircleOutlined />} color="error">删除关系 {summary.relationshipsRemoved}</Tag>
+      <Tag icon={<EditOutlined />} color="warning">修改关系 {summary.relationshipsModified}</Tag>
+    </Space>
+  </div>
+))
+
+interface DDLModalProps {
+  open: boolean
+  ddlDbType: string
+  ddlResult: IncrementalDDLResult | null
+  onClose: () => void
+  onCopy: () => void
+}
+
+const DDLModal = React.memo(({
+  open, ddlDbType, ddlResult, onClose, onCopy
+}: DDLModalProps) => (
+  <Modal
+    title={
+      <Space>
+        <CodeOutlined />
+        <span>增量DDL ({ddlDbType})</span>
+        <Tag color="blue">{ddlResult?.totalChanges || 0} 项变更</Tag>
+      </Space>
+    }
+    open={open}
+    onCancel={onClose}
+    footer={
+      <Space>
+        <Button icon={<CopyOutlined />} onClick={onCopy}>复制DDL</Button>
+        <Button onClick={onClose}>关闭</Button>
+      </Space>
+    }
+    width={800}
+    destroyOnHidden
+  >
+    {ddlResult ? (
+      <div>
+        <div style={{ marginBottom: 12 }}>
+          <Space wrap>
+            {ddlResult.results.map((r) => (
+              <Tag key={r.tableName} color={r.statements.length > 0 ? 'processing' : 'default'}>
+                {r.tableName}: {r.summary}
+              </Tag>
+            ))}
+          </Space>
+        </div>
+        <pre style={{
+          background: UI_COLORS.CODE_BG,
+          color: UI_COLORS.CODE_FG,
+          padding: 16,
+          borderRadius: 8,
+          maxHeight: 500,
+          overflow: 'auto',
+          fontSize: 13,
+          fontFamily: 'Consolas, Monaco, monospace',
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word'
+        }}>
+          {ddlResult.ddl || '-- 无变更'}
+        </pre>
+      </div>
+    ) : (
+      <Empty description="无增量DDL数据" />
+    )}
+  </Modal>
+))
+
+function renderColumnChanges(col: ColumnDiff) {
+  if (!col.changes || col.changes.length === 0) return null
+  return (
+    <div style={{ marginTop: 4, paddingLeft: 8, borderLeft: `2px solid ${UI_COLORS.YELLOW}` }}>
+      {col.changes.map((ch, idx) => (
+        <div key={idx} style={{ fontSize: 12, marginBottom: 2 }}>
+          <Text type="secondary">{fieldLabelMap[ch.field] || ch.field}:</Text>
+          <Text delete style={{ color: UI_COLORS.RED, marginLeft: 4 }}>{renderValue(ch.oldValue)}</Text>
+          <SwapOutlined style={{ margin: '0 4px', fontSize: 10 }} />
+          <Text style={{ color: UI_COLORS.GREEN }}>{renderValue(ch.newValue)}</Text>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export const VersionCompareModal: React.FC<VersionCompareModalProps> = ({
   open, versionId1, versionName1, versionId2, versionName2, onClose
 }) => {
@@ -112,7 +223,7 @@ export const VersionCompareModal: React.FC<VersionCompareModalProps> = ({
     }
   }, [open, versionId1, versionId2])
 
-  const handleGenerateIncrementalDDL = async () => {
+  const handleGenerateIncrementalDDL = useCallback(async () => {
     setDdlLoading(true)
     try {
       const res = await incrementalDdlApi.generateFromVersions(versionId1, versionId2, ddlDbType)
@@ -127,54 +238,18 @@ export const VersionCompareModal: React.FC<VersionCompareModalProps> = ({
     } finally {
       setDdlLoading(false)
     }
-  }
+  }, [versionId1, versionId2, ddlDbType])
 
-  const handleCopyDdl = () => {
+  const handleCopyDdl = useCallback(() => {
     if (ddlResult?.ddl) {
       navigator.clipboard.writeText(ddlResult.ddl)
       message.success('已复制到剪贴板')
     }
-  }
+  }, [ddlResult])
 
-  const renderSummary = () => {
-    if (!result) return null
-    const { summary } = result
-    return (
-      <div style={{ marginBottom: 16, padding: 12, background: '#fafafa', borderRadius: 8 }}>
-        <Text strong style={{ marginBottom: 8, display: 'block' }}>变更摘要</Text>
-        <Space wrap size="middle">
-          <Tag icon={<PlusCircleOutlined />} color="success">新增表 {summary.tablesAdded}</Tag>
-          <Tag icon={<MinusCircleOutlined />} color="error">删除表 {summary.tablesRemoved}</Tag>
-          <Tag icon={<EditOutlined />} color="warning">修改表 {summary.tablesModified}</Tag>
-          <Tag color="default">未变更表 {summary.tablesUnchanged}</Tag>
-          <Tag icon={<PlusCircleOutlined />} color="success">新增列 {summary.columnsAdded}</Tag>
-          <Tag icon={<MinusCircleOutlined />} color="error">删除列 {summary.columnsRemoved}</Tag>
-          <Tag icon={<EditOutlined />} color="warning">修改列 {summary.columnsModified}</Tag>
-          <Tag icon={<PlusCircleOutlined />} color="success">新增关系 {summary.relationshipsAdded}</Tag>
-          <Tag icon={<MinusCircleOutlined />} color="error">删除关系 {summary.relationshipsRemoved}</Tag>
-          <Tag icon={<EditOutlined />} color="warning">修改关系 {summary.relationshipsModified}</Tag>
-        </Space>
-      </div>
-    )
-  }
+  const handleCloseDdlModal = useCallback(() => setShowDdlModal(false), [])
 
-  const renderColumnChanges = (col: ColumnDiff) => {
-    if (!col.changes || col.changes.length === 0) return null
-    return (
-      <div style={{ marginTop: 4, paddingLeft: 8, borderLeft: '2px solid #faad14' }}>
-        {col.changes.map((ch, idx) => (
-          <div key={idx} style={{ fontSize: 12, marginBottom: 2 }}>
-            <Text type="secondary">{fieldLabelMap[ch.field] || ch.field}:</Text>
-            <Text delete style={{ color: '#ff4d4f', marginLeft: 4 }}>{renderValue(ch.oldValue)}</Text>
-            <SwapOutlined style={{ margin: '0 4px', fontSize: 10 }} />
-            <Text style={{ color: '#52c41a' }}>{renderValue(ch.newValue)}</Text>
-          </div>
-        ))}
-      </div>
-    )
-  }
-
-  const tableColumns = [
+  const tableColumns = useMemo(() => [
     {
       title: '表名',
       dataIndex: 'name',
@@ -201,9 +276,9 @@ export const VersionCompareModal: React.FC<VersionCompareModalProps> = ({
             {record.changes.map((ch, idx) => (
               <div key={idx} style={{ fontSize: 12, marginBottom: 2 }}>
                 <Text type="secondary">{fieldLabelMap[ch.field] || ch.field}:</Text>
-                <Text delete style={{ color: '#ff4d4f', marginLeft: 4 }}>{renderValue(ch.oldValue)}</Text>
+                <Text delete style={{ color: UI_COLORS.RED, marginLeft: 4 }}>{renderValue(ch.oldValue)}</Text>
                 <SwapOutlined style={{ margin: '0 4px', fontSize: 10 }} />
-                <Text style={{ color: '#52c41a' }}>{renderValue(ch.newValue)}</Text>
+                <Text style={{ color: UI_COLORS.GREEN }}>{renderValue(ch.newValue)}</Text>
               </div>
             ))}
           </div>
@@ -226,9 +301,9 @@ export const VersionCompareModal: React.FC<VersionCompareModalProps> = ({
         )
       }
     }
-  ]
+  ], [])
 
-  const renderExpandedRow = (record: TableDiff) => {
+  const renderExpandedRow = useCallback((record: TableDiff) => {
     const changedColumns = record.columns.filter(c => c.status !== 'unchanged')
     if (changedColumns.length === 0) return <Text type="secondary">所有字段无变更</Text>
     return (
@@ -243,9 +318,9 @@ export const VersionCompareModal: React.FC<VersionCompareModalProps> = ({
         ))}
       </div>
     )
-  }
+  }, [])
 
-  const relColumns = [
+  const relColumns = useMemo(() => [
     {
       title: '关系',
       dataIndex: 'name',
@@ -269,20 +344,28 @@ export const VersionCompareModal: React.FC<VersionCompareModalProps> = ({
             {record.changes.map((ch, idx) => (
               <div key={idx} style={{ fontSize: 12, marginBottom: 2 }}>
                 <Text type="secondary">{fieldLabelMap[ch.field] || ch.field}:</Text>
-                <Text delete style={{ color: '#ff4d4f', marginLeft: 4 }}>{renderValue(ch.oldValue)}</Text>
+                <Text delete style={{ color: UI_COLORS.RED, marginLeft: 4 }}>{renderValue(ch.oldValue)}</Text>
                 <SwapOutlined style={{ margin: '0 4px', fontSize: 10 }} />
-                <Text style={{ color: '#52c41a' }}>{renderValue(ch.newValue)}</Text>
+                <Text style={{ color: UI_COLORS.GREEN }}>{renderValue(ch.newValue)}</Text>
               </div>
             ))}
           </div>
         )
       }
     }
-  ]
+  ], [])
 
-  const changedTables = result?.tables.filter(t => t.status !== 'unchanged') || []
-  const unchangedTables = result?.tables.filter(t => t.status === 'unchanged') || []
-  const changedRels = result?.relationships.filter(r => r.status !== 'unchanged') || []
+  const changedTables = useMemo(() => result?.tables.filter(t => t.status !== 'unchanged') || [], [result])
+  const unchangedTables = useMemo(() => result?.tables.filter(t => t.status === 'unchanged') || [], [result])
+  const changedRels = useMemo(() => result?.relationships.filter(r => r.status !== 'unchanged') || [], [result])
+
+  const DDL_DB_TYPE_OPTIONS = useMemo(() => [
+    { value: 'MYSQL', label: 'MySQL' },
+    { value: 'POSTGRESQL', label: 'PostgreSQL' },
+    { value: 'SQLITE', label: 'SQLite' },
+    { value: 'SQLSERVER', label: 'SQL Server' },
+    { value: 'ORACLE', label: 'Oracle' }
+  ], [])
 
   return (
     <>
@@ -305,13 +388,7 @@ export const VersionCompareModal: React.FC<VersionCompareModalProps> = ({
             onChange={setDdlDbType}
             size="small"
             style={{ width: 120 }}
-            options={[
-              { value: 'MYSQL', label: 'MySQL' },
-              { value: 'POSTGRESQL', label: 'PostgreSQL' },
-              { value: 'SQLITE', label: 'SQLite' },
-              { value: 'SQLSERVER', label: 'SQL Server' },
-              { value: 'ORACLE', label: 'Oracle' }
-            ]}
+            options={DDL_DB_TYPE_OPTIONS}
           />
           <Button
             type="primary"
@@ -335,7 +412,7 @@ export const VersionCompareModal: React.FC<VersionCompareModalProps> = ({
         <Empty description="无法加载对比数据" />
       ) : (
         <div>
-          {renderSummary()}
+          <CompareSummary summary={result.summary} />
 
           <Collapse defaultActiveKey={['tables']} style={{ marginBottom: 16 }}>
             <Panel header={
@@ -394,55 +471,13 @@ export const VersionCompareModal: React.FC<VersionCompareModalProps> = ({
         </div>
       )}
     </Modal>
-    <Modal
-      title={
-        <Space>
-          <CodeOutlined />
-          <span>增量DDL ({ddlDbType})</span>
-          <Tag color="blue">{ddlResult?.totalChanges || 0} 项变更</Tag>
-        </Space>
-      }
+    <DDLModal
       open={showDdlModal}
-      onCancel={() => setShowDdlModal(false)}
-      footer={
-        <Space>
-          <Button icon={<CopyOutlined />} onClick={handleCopyDdl}>复制DDL</Button>
-          <Button onClick={() => setShowDdlModal(false)}>关闭</Button>
-        </Space>
-      }
-      width={800}
-      destroyOnHidden
-    >
-      {ddlResult ? (
-        <div>
-          <div style={{ marginBottom: 12 }}>
-            <Space wrap>
-              {ddlResult.results.map((r) => (
-                <Tag key={r.tableName} color={r.statements.length > 0 ? 'processing' : 'default'}>
-                  {r.tableName}: {r.summary}
-                </Tag>
-              ))}
-            </Space>
-          </div>
-          <pre style={{
-            background: '#1e1e1e',
-            color: '#d4d4d4',
-            padding: 16,
-            borderRadius: 8,
-            maxHeight: 500,
-            overflow: 'auto',
-            fontSize: 13,
-            fontFamily: 'Consolas, Monaco, monospace',
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word'
-          }}>
-            {ddlResult.ddl || '-- 无变更'}
-          </pre>
-        </div>
-      ) : (
-        <Empty description="无增量DDL数据" />
-      )}
-    </Modal>
+      ddlDbType={ddlDbType}
+      ddlResult={ddlResult}
+      onClose={handleCloseDdlModal}
+      onCopy={handleCopyDdl}
+    />
     </>
   )
 }

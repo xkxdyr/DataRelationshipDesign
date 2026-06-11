@@ -53,7 +53,8 @@ export const projectApi = {
   delete: (id: string) => request<void>(`/projects/${id}`, { method: 'DELETE' }),
   duplicate: (id: string) => request<Project>(`/projects/${id}/duplicate`, { method: 'POST' }),
   generateDDL: (id: string, dbType?: string) => request<{ ddl: string; databaseType: string; tableCount: number; relationshipCount: number }>(`/projects/${id}/ddl${dbType ? `?type=${dbType}` : ''}`),
-  getUserProjects: () => request<ProjectWithRole[]>('/users/projects')
+  getUserProjects: () => request<ProjectWithRole[]>('/users/projects'),
+  checkPermission: (projectId: string, permission: 'view' | 'edit' | 'manage') => request<{ hasPermission: boolean }>(`/projects/${projectId}/permission?permission=${permission}`)
 }
 
 export const tableApi = {
@@ -130,6 +131,7 @@ export const indexApi = {
 export const versionApi = {
   getAll: (projectId: string) => request<Version[]>(`/projects/${projectId}/versions`),
   getById: (id: string) => request<Version>(`/versions/${id}`),
+  getVersion: (projectId: string, version: number) => request<Version>(`/versions/${projectId}/${version}`),
   create: (projectId: string, data: Partial<Version>) => request<Version>(`/projects/${projectId}/versions`, {
     method: 'POST',
     body: JSON.stringify(data)
@@ -342,10 +344,10 @@ export const llmApi = {
       method: 'POST',
       body: JSON.stringify(mockRequest)
     }),
-  generateBatchMockData: (requests: MockDataRequest[]) =>
+  generateBatchMockData: (requests: MockDataRequest[], configId?: string) =>
     request<MockDataResult[]>('/llm/mock-data/batch', {
       method: 'POST',
-      body: JSON.stringify(requests)
+      body: JSON.stringify({ requests, configId })
     }),
   getMockTemplates: () =>
     request<Array<{ id: string; name: string; description: string }>>('/llm/mock-templates'),
@@ -360,6 +362,62 @@ export const llmApi = {
     request<{ id: string }>('/llm/log-operation', {
       method: 'POST',
       body: JSON.stringify({ userId, projectId, operation, input, output, confirmed, snapshotId })
+    }),
+  restoreSnapshot: (snapshotId: string, projectId: string) =>
+    request<{ success: boolean; message: string }>(`/llm/snapshot/${snapshotId}/restore`, {
+      method: 'POST',
+      body: JSON.stringify({ projectId })
+    }),
+  getSnapshots: (projectId: string) =>
+    request<Array<{ id: string; operation: string; description: string | null; data: string; createdAt: string }>>(`/llm/snapshot/${projectId}/list`),
+  writeMockDataToDb: (data: { connection: any; tableName: string; data: any[] }) =>
+    request<{ success: boolean; insertedCount: number; errors?: string[] }>('/llm/mock-data/write-to-db', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+  testDbPerformance: (connection: any, options?: { testWrite?: boolean; testQuery?: boolean; writeRowCount?: number; tableName?: string }) =>
+    request<{
+      connectionTest: { success: boolean; connectTimeMs: number; error?: string }
+      queryTest?: { success: boolean; queryTimeMs: number; rowsReturned: number; error?: string }
+      writeTest?: { success: boolean; writeTimeMs: number; rowsWritten: number; writeSpeedPerSec: number; error?: string }
+      overallScore: 'excellent' | 'good' | 'fair' | 'poor'
+      summary: string
+    }>('/llm/db-performance', {
+      method: 'POST',
+      body: JSON.stringify({ connection, options })
+    }),
+  testDbConnectionSpeed: (connection: any) =>
+    request<{ success: boolean; connectTimeMs: number; error?: string }>('/llm/db-connection-speed', {
+      method: 'POST',
+      body: JSON.stringify({ connection })
+    }),
+  analyzeProject: (tables: any[], configId?: string) =>
+    request<{
+      summary: string
+      strengths: string[]
+      weaknesses: string[]
+      suggestions: string[]
+      normalizationScore: number
+      coverageScore: number
+    }>('/llm/analyze-project', {
+      method: 'POST',
+      body: JSON.stringify({ tables, configId })
+    }),
+  analyzeTable: (table: any, allTables: any[], configId?: string) =>
+    request<{
+      summary: string
+      columnAnalysis: Array<{ name: string; assessment: string; suggestion?: string }>
+      indexSuggestions: string[]
+      relationshipSuggestions: string[]
+      designScore: number
+    }>('/llm/analyze-table', {
+      method: 'POST',
+      body: JSON.stringify({ table, allTables, configId })
+    }),
+  recommendTables: (existingTables: any[], configId?: string) =>
+    request<TableSuggestion[]>('/llm/recommend-tables', {
+      method: 'POST',
+      body: JSON.stringify({ existingTables, configId })
     })
 }
 
@@ -664,6 +722,37 @@ export const updateLogApi = {
       method: 'POST',
       body: JSON.stringify(data)
     })
+}
+
+export interface ConversationMessage {
+  id: string
+  userId: string
+  projectId: string | null
+  role: string
+  content: string
+  configId: string | null
+  createdAt: string
+}
+
+export const conversationApi = {
+  saveMessage: (data: { userId: string; projectId?: string; role: string; content: string; configId?: string }) =>
+    request<{ id: string }>('/llm/conversation', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+  getHistory: (userId: string, projectId?: string, limit?: number) =>
+    request<ConversationMessage[]>(`/llm/conversation/${userId}${projectId ? `?projectId=${projectId}` : ''}${limit ? `${projectId ? '&' : '?'}limit=${limit}` : ''}`),
+  clearHistory: (userId: string, projectId?: string) =>
+    request<{ message: string }>(`/llm/conversation/${userId}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ projectId })
+    })
+}
+
+export interface MockTemplate {
+  id: string
+  name: string
+  description: string
 }
 
 export const commentApi = {

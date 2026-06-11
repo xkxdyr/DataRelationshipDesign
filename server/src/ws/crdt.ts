@@ -66,6 +66,7 @@ export interface IndexData {
 export class CRDTDocumentManager {
   private docs: Map<string, Y.Doc> = new Map()
   private projectId: string
+  private version: number = 0
 
   constructor(projectId: string) {
     this.projectId = projectId
@@ -435,6 +436,12 @@ export class CRDTDocumentManager {
   applyUpdate(update: Uint8Array): void {
     const doc = this.getOrCreateDoc()
     Y.applyUpdate(doc, update)
+    this.version++
+  }
+
+  // 获取当前版本号
+  getVersion(): number {
+    return this.version
   }
 
   // 序列化整个文档为 JSON（用于持久化）

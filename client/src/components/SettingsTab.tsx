@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo, useCallback } from 'react'
 import { Slider, Button, Space, Typography, Tag, Switch, Input, Tree, TreeDataNode, Select, Timeline, Divider, message } from 'antd'
 import type { Key } from 'react'
 import { SettingOutlined, FontSizeOutlined, BgColorsOutlined, CompressOutlined, AimOutlined, ThunderboltOutlined, LinkOutlined, SaveOutlined, SwapOutlined, RobotOutlined, AppstoreOutlined, EyeOutlined, DatabaseOutlined, KeyOutlined, StarOutlined, PlusOutlined, ClockCircleOutlined, HistoryOutlined } from '@ant-design/icons'
@@ -87,6 +87,48 @@ const treeData: TreeDataNode[] = [
   },
 ]
 
+const UI_COLORS = {
+  WHITE: '#fff',
+  BORDER: '#e8e8e8',
+  BG: '#fafafa',
+  SHORTCUT_BG: '#f5f5f5',
+  GRAY: '#d9d9d9',
+  BLUE: '#1890ff',
+}
+
+interface SettingSectionProps {
+  title: string
+  description?: string
+  children: React.ReactNode
+}
+
+const SettingSection = React.memo(({ title, description, children }: SettingSectionProps) => (
+  <div style={{ padding: '16px' }}>
+    <Title level={4} style={{ marginBottom: 16 }}>{title}</Title>
+    {description && <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>{description}</Text>}
+    {children}
+  </div>
+))
+
+interface ShortcutItemProps {
+  keys: string[]
+  action: string
+}
+
+const ShortcutItem = React.memo(({ keys, action }: ShortcutItemProps) => (
+  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: UI_COLORS.SHORTCUT_BG, borderRadius: 8 }}>
+    <Space>
+      {keys.map((key, i) => (
+        <React.Fragment key={i}>
+          {i > 0 && <span>+</span>}
+          <Tag color="blue">{key}</Tag>
+        </React.Fragment>
+      ))}
+    </Space>
+    <Text type="secondary">{action}</Text>
+  </div>
+))
+
 interface SettingsTabProps {
   onOpenTypeConvert?: () => void
   onOpenLLM?: () => void
@@ -128,9 +170,9 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ onOpenTypeConvert, onO
   const autoAddIdColumn = useAppStore(state => state.autoAddIdColumn)
   const setAutoAddIdColumn = useAppStore(state => state.setAutoAddIdColumn)
 
-  const handleReset = () => {
+  const handleReset = useCallback(() => {
     setFontSize('base', 14)
-    setThemeColor('#1890ff')
+    setThemeColor(UI_COLORS.BLUE)
     setThemeMode('light')
     setCompactMode(false)
     setCanvasZoom(1)
@@ -140,7 +182,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ onOpenTypeConvert, onO
     setShowEdgeLabels(true)
     setTablePrefix('')
     setAutoAddIdColumn(true)
-  }
+  }, [setFontSize, setThemeColor, setThemeMode, setCompactMode, setCanvasZoom, setShowMiniMap, setAutoSaveInterval, setEdgeStyle, setShowEdgeLabels, setTablePrefix, setAutoAddIdColumn])
 
   const formatInterval = (ms: number) => {
     if (ms < 1000) return `${ms}ms`
@@ -148,7 +190,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ onOpenTypeConvert, onO
     return `${ms / 60000}分钟`
   }
 
-  const renderContent = () => {
+  const renderContent = useMemo(() => {
     switch (selectedKey) {
       case 'theme':
         return (
@@ -176,7 +218,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ onOpenTypeConvert, onO
                     style={{
                       backgroundColor: color.value,
                       border: themeColor === color.value ? `3px solid ${theme.colors.text}` : '1px solid rgba(0,0,0,0.1)',
-                      color: '#fff',
+                      color: UI_COLORS.WHITE,
                       borderRadius: '50%',
                       width: 48,
                       height: 48,
@@ -203,10 +245,10 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ onOpenTypeConvert, onO
             }}>
               <Text strong style={{ color: theme.colors.text }}>主题预览</Text>
               <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-                <Tag style={{ background: theme.colors.primary, color: '#fff', border: 'none' }}>主色</Tag>
-                <Tag style={{ background: theme.colors.success, color: '#fff', border: 'none' }}>成功</Tag>
-                <Tag style={{ background: theme.colors.warning, color: '#fff', border: 'none' }}>警告</Tag>
-                <Tag style={{ background: theme.colors.error, color: '#fff', border: 'none' }}>错误</Tag>
+                <Tag style={{ background: theme.colors.primary, color: UI_COLORS.WHITE, border: 'none' }}>主色</Tag>
+                <Tag style={{ background: theme.colors.success, color: UI_COLORS.WHITE, border: 'none' }}>成功</Tag>
+                <Tag style={{ background: theme.colors.warning, color: UI_COLORS.WHITE, border: 'none' }}>警告</Tag>
+                <Tag style={{ background: theme.colors.error, color: UI_COLORS.WHITE, border: 'none' }}>错误</Tag>
               </div>
             </div>
           </div>
@@ -334,10 +376,17 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ onOpenTypeConvert, onO
               >
                 智能避让
               </Button>
+              <Button
+                type={edgeStyle === 'avoidNode' ? 'primary' : 'default'}
+                onClick={() => setEdgeStyle('avoidNode')}
+                size="small"
+              >
+                阶梯避让
+              </Button>
             </Space>
-            {edgeStyle === 'smart' && (
+            {(edgeStyle === 'smart' || edgeStyle === 'avoidNode') && (
               <div style={{ marginTop: 8 }}>
-                <Text type="secondary" style={{ fontSize: 12 }}>智能避让模式会自动检测关系线是否穿过中间表节点，并计算绕行路径</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>{edgeStyle === 'smart' ? '智能避让模式会自动检测关系线是否穿过中间表节点，并计算绕行路径' : '阶梯避让模式使用平滑阶梯线，自动绕过中间节点'}</Text>
               </div>
             )}
           </div>
@@ -368,131 +417,25 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ onOpenTypeConvert, onO
 
       case 'shortcuts':
         return (
-          <div style={{ padding: '16px' }}>
-            <Title level={4} style={{ marginBottom: 16 }}>键盘快捷键</Title>
+          <SettingSection title="键盘快捷键">
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f5f5f5', borderRadius: 8 }}>
-                <Space>
-                  <Tag color="blue">Ctrl</Tag>
-                  <span>+</span>
-                  <Tag color="blue">Z</Tag>
-                </Space>
-                <Text type="secondary">撤销</Text>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f5f5f5', borderRadius: 8 }}>
-                <Space>
-                  <Tag color="blue">Ctrl</Tag>
-                  <span>+</span>
-                  <Tag color="blue">Shift</Tag>
-                  <span>+</span>
-                  <Tag color="blue">Z</Tag>
-                </Space>
-                <Text type="secondary">重做</Text>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f5f5f5', borderRadius: 8 }}>
-                <Space>
-                  <Tag color="blue">Ctrl</Tag>
-                  <span>+</span>
-                  <Tag color="blue">S</Tag>
-                </Space>
-                <Text type="secondary">保存</Text>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f5f5f5', borderRadius: 8 }}>
-                <Space>
-                  <Tag color="blue">Ctrl</Tag>
-                  <span>+</span>
-                  <Tag color="blue">T</Tag>
-                </Space>
-                <Text type="secondary">新建表</Text>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f5f5f5', borderRadius: 8 }}>
-                <Space>
-                  <Tag color="blue">Ctrl</Tag>
-                  <span>+</span>
-                  <Tag color="blue">,</Tag>
-                </Space>
-                <Text type="secondary">打开设置</Text>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f5f5f5', borderRadius: 8 }}>
-                <Space>
-                  <Tag color="blue">Ctrl</Tag>
-                  <span>+</span>
-                  <Tag color="blue">Shift</Tag>
-                  <span>+</span>
-                  <Tag color="blue">E</Tag>
-                </Space>
-                <Text type="secondary">导入导出</Text>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f5f5f5', borderRadius: 8 }}>
-                <Space>
-                  <Tag color="blue">Delete</Tag>
-                </Space>
-                <Text type="secondary">删除选中表</Text>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f5f5f5', borderRadius: 8 }}>
-                <Space>
-                  <Tag color="blue">Esc</Tag>
-                </Space>
-                <Text type="secondary">关闭弹窗/取消选择</Text>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f5f5f5', borderRadius: 8 }}>
-                <Space>
-                  <Tag color="blue">Ctrl</Tag>
-                  <span>+</span>
-                  <Tag color="blue">0</Tag>
-                </Space>
-                <Text type="secondary">重置缩放</Text>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f5f5f5', borderRadius: 8 }}>
-                <Space>
-                  <Tag color="blue">Ctrl</Tag>
-                  <span>+</span>
-                  <Tag color="blue">+</Tag>
-                </Space>
-                <Text type="secondary">放大</Text>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f5f5f5', borderRadius: 8 }}>
-                <Space>
-                  <Tag color="blue">Ctrl</Tag>
-                  <span>+</span>
-                  <Tag color="blue">-</Tag>
-                </Space>
-                <Text type="secondary">缩小</Text>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f5f5f5', borderRadius: 8 }}>
-                <Space>
-                  <Tag color="blue">Ctrl</Tag>
-                  <span>+</span>
-                  <Tag color="blue">A</Tag>
-                </Space>
-                <Text type="secondary">全选</Text>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f5f5f5', borderRadius: 8 }}>
-                <Space>
-                  <Tag color="blue">Ctrl</Tag>
-                  <span>+</span>
-                  <Tag color="blue">C</Tag>
-                </Space>
-                <Text type="secondary">复制</Text>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f5f5f5', borderRadius: 8 }}>
-                <Space>
-                  <Tag color="blue">Ctrl</Tag>
-                  <span>+</span>
-                  <Tag color="blue">V</Tag>
-                </Space>
-                <Text type="secondary">粘贴</Text>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f5f5f5', borderRadius: 8 }}>
-                <Space>
-                  <Tag color="blue">Ctrl</Tag>
-                  <span>+</span>
-                  <Tag color="blue">F</Tag>
-                </Space>
-                <Text type="secondary">查找</Text>
-              </div>
+              <ShortcutItem keys={['Ctrl', 'Z']} action="撤销" />
+              <ShortcutItem keys={['Ctrl', 'Shift', 'Z']} action="重做" />
+              <ShortcutItem keys={['Ctrl', 'S']} action="保存" />
+              <ShortcutItem keys={['Ctrl', 'T']} action="新建表" />
+              <ShortcutItem keys={['Ctrl', ',']} action="打开设置" />
+              <ShortcutItem keys={['Ctrl', 'Shift', 'E']} action="导入导出" />
+              <ShortcutItem keys={['Delete']} action="删除选中表" />
+              <ShortcutItem keys={['Esc']} action="关闭弹窗/取消选择" />
+              <ShortcutItem keys={['Ctrl', '0']} action="重置缩放" />
+              <ShortcutItem keys={['Ctrl', '+']} action="放大" />
+              <ShortcutItem keys={['Ctrl', '-']} action="缩小" />
+              <ShortcutItem keys={['Ctrl', 'A']} action="全选" />
+              <ShortcutItem keys={['Ctrl', 'C']} action="复制" />
+              <ShortcutItem keys={['Ctrl', 'V']} action="粘贴" />
+              <ShortcutItem keys={['Ctrl', 'F']} action="查找" />
             </div>
-          </div>
+          </SettingSection>
         )
 
       case 'connections':
@@ -633,7 +576,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ onOpenTypeConvert, onO
 
             {isLocalMode ? (
               <div style={{ textAlign: 'center', padding: '40px 0' }}>
-                <HistoryOutlined style={{ fontSize: 48, color: '#d9d9d9', marginBottom: 16 }} />
+                <HistoryOutlined style={{ fontSize: 48, color: UI_COLORS.GRAY, marginBottom: 16 }} />
                 <Text type="secondary">操作历史功能需要在线模式</Text>
                 <br />
                 <Text type="secondary" style={{ fontSize: 12 }}>本地模式下暂不支持操作历史记录</Text>
@@ -701,19 +644,19 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ onOpenTypeConvert, onO
           </div>
         )
     }
-  }
+  }, [selectedKey, theme, themeOptions, fontConfig, compactMode, canvasZoom, showMiniMap, showEdgeLabels, edgeStyle, autoSaveInterval, tablePrefix, tablePrefixPresets, autoAddIdColumn, isLocalMode, currentProject, updateLogs, searchValue, onOpenConnections, onOpenLLM, onOpenTypeConvert, setTheme, setThemeColor, setFontSize, setCompactMode, setCanvasZoom, setShowMiniMap, setShowEdgeLabels, setEdgeStyle, setAutoSaveInterval, setTablePrefix, addTablePrefixPreset, removeTablePrefixPreset, setAutoAddIdColumn])
 
-  const onTreeSelect = (selectedKeys: Key[]) => {
+  const onTreeSelect = useCallback((selectedKeys: Key[]) => {
     if (selectedKeys.length > 0) {
       setSelectedKey(selectedKeys[0] as string)
     }
-  }
+  }, [])
 
   return (
     <>
       <div style={{ display: 'flex', height: '100%' }}>
-        <div style={{ width: 220, borderRight: '1px solid #e8e8e8', display: 'flex', flexDirection: 'column', background: '#fff' }}>
-          <div style={{ padding: '12px', borderBottom: '1px solid #e8e8e8', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ width: 220, borderRight: `1px solid ${UI_COLORS.BORDER}`, display: 'flex', flexDirection: 'column', background: UI_COLORS.WHITE }}>
+          <div style={{ padding: '12px', borderBottom: `1px solid ${UI_COLORS.BORDER}`, display: 'flex', alignItems: 'center', gap: 8 }}>
             <SettingOutlined />
             <span style={{ fontWeight: 500 }}>设置</span>
           </div>
@@ -721,7 +664,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ onOpenTypeConvert, onO
             placeholder="搜索设置..."
             value={searchValue}
             onChange={(e) => setSearchValue(e.target.value)}
-            style={{ padding: '12px', borderBottom: '1px solid #e8e8e8' }}
+            style={{ padding: '12px', borderBottom: `1px solid ${UI_COLORS.BORDER}` }}
             size="small"
           />
           <div style={{ flex: 1, overflow: 'auto', padding: '8px 0' }}>
@@ -734,12 +677,12 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ onOpenTypeConvert, onO
               showIcon
             />
           </div>
-          <div style={{ padding: '12px', borderTop: '1px solid #e8e8e8', display: 'flex', gap: 8 }}>
+          <div style={{ padding: '12px', borderTop: `1px solid ${UI_COLORS.BORDER}`, display: 'flex', gap: 8 }}>
             <Button onClick={handleReset} size="small" style={{ flex: 1 }}>重置默认</Button>
           </div>
         </div>
-        <div style={{ flex: 1, overflow: 'auto', background: '#fafafa' }}>
-          {renderContent()}
+        <div style={{ flex: 1, overflow: 'auto', background: UI_COLORS.BG }}>
+          {renderContent}
         </div>
       </div>
 

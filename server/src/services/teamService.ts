@@ -405,8 +405,30 @@ export const teamService = {
 
         const updatedProject = await tx.project.update({
           where: { id: projectId },
-          data: { createdBy: `team_${targetTeamId}` }
+          data: {
+            createdBy: `team_${targetTeamId}`,
+            collaborationEnabled: true
+          }
         })
+
+        // 自动添加团队成员为项目成员
+        const teamMembers = await tx.teamMember.findMany({
+          where: { teamId: targetTeamId },
+          select: { userId: true, role: true }
+        })
+        for (const member of teamMembers) {
+          await tx.projectMember.upsert({
+            where: {
+              projectId_userId: { projectId, userId: member.userId }
+            },
+            create: {
+              projectId,
+              userId: member.userId,
+              role: member.role === 'owner' || member.role === 'admin' ? 'admin' : 'editor'
+            },
+            update: {}
+          })
+        }
 
         return updatedProject
       })

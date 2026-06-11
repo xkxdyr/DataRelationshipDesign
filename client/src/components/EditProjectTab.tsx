@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useMemo, useCallback } from 'react'
 import { Form, Input, Select, Button, message, Space, Typography, Card, Tag, Tooltip, Switch, Divider, Row, Col, Modal } from 'antd'
 import { useAppStore } from '../stores/appStore'
 import { Project } from '../types'
@@ -17,6 +17,146 @@ interface TeamOption {
   name: string
   role: string
 }
+
+const UI_COLORS = {
+  GREEN: '#52c41a',
+  GRAY: '#999',
+  YELLOW: '#faad14',
+}
+
+interface CollaborationPanelProps {
+  collaborationEnabled: boolean
+  collaborationLoading: boolean
+  activeCollaborators: number
+  isAuthenticated: boolean | null
+  onToggleCollaboration: (checked: boolean) => void
+}
+
+const CollaborationPanel = React.memo(({
+  collaborationEnabled, collaborationLoading, activeCollaborators,
+  isAuthenticated, onToggleCollaboration
+}: CollaborationPanelProps) => (
+  <div style={{ 
+    padding: '16px', 
+    backgroundColor: 'var(--theme-background-secondary)', 
+    borderRadius: 8,
+    marginBottom: 16 
+  }}>
+    <Row justify="space-between" align="middle">
+      <Col>
+        <Space align="center">
+          <ThunderboltOutlined style={{ fontSize: 20, color: collaborationEnabled ? UI_COLORS.GREEN : UI_COLORS.GRAY }} />
+          <div>
+            <div style={{ fontWeight: 600 }}>实时协作模式</div>
+            <div style={{ fontSize: 12, color: 'var(--theme-text-secondary)' }}>
+              {collaborationEnabled 
+                ? '已开启，其他成员可以实时协作编辑' 
+                : '未开启，只有项目所有者可以编辑'}
+            </div>
+          </div>
+        </Space>
+      </Col>
+      <Col>
+        {isAuthenticated === true ? (
+          <Switch 
+            checked={collaborationEnabled} 
+            onChange={onToggleCollaboration}
+            loading={collaborationLoading}
+            checkedChildren="开启"
+            unCheckedChildren="关闭"
+          />
+        ) : (
+          <Tooltip title="请先登录">
+            <Switch disabled checkedChildren="开启" unCheckedChildren="关闭" />
+          </Tooltip>
+        )}
+      </Col>
+    </Row>
+    
+    {collaborationEnabled && (
+      <div style={{ 
+        marginTop: 16, 
+        padding: 12, 
+        backgroundColor: `rgba(82, 196, 26, 0.1)`,
+        borderRadius: 8,
+        border: `1px solid rgba(82, 196, 26, 0.3)`
+      }}>
+        <Space size={8}>
+          <SyncOutlined spin style={{ color: UI_COLORS.GREEN }} />
+          <span style={{ color: UI_COLORS.GREEN, fontSize: 13 }}>
+            实时协作已就绪，当前 {activeCollaborators} 人在线协作
+          </span>
+        </Space>
+      </div>
+    )}
+  </div>
+))
+
+interface ConvertToTeamModalProps {
+  open: boolean
+  teamsLoading: boolean
+  convertLoading: boolean
+  userTeams: TeamOption[]
+  selectedTeam: string
+  onSelectTeam: (teamId: string) => void
+  onCancel: () => void
+  onConfirm: () => void
+}
+
+const ConvertToTeamModal = React.memo(({
+  open, teamsLoading, convertLoading, userTeams, selectedTeam,
+  onSelectTeam, onCancel, onConfirm
+}: ConvertToTeamModalProps) => (
+  <Modal
+    title="转换为团队项目"
+    open={open}
+    onCancel={onCancel}
+    footer={[
+      <Button key="cancel" onClick={onCancel}>取消</Button>,
+      <Button 
+        key="confirm" 
+        type="primary" 
+        onClick={onConfirm}
+        loading={convertLoading}
+        disabled={!selectedTeam}
+      >确认转换</Button>
+    ]}
+  >
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ marginBottom: 8, color: UI_COLORS.YELLOW }}>
+        ⚠️ 注意：转换后项目所有权将转移给目标团队，不可撤销
+      </div>
+      <div style={{ color: 'var(--theme-text-secondary)', fontSize: 13 }}>
+        团队项目优势：无协作人数限制、团队成员自动获得访问权限、统一团队管理
+      </div>
+    </div>
+    
+    <div style={{ marginBottom: 8 }}>选择目标团队：</div>
+    {teamsLoading ? (
+      <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--theme-text-secondary)' }}>
+        加载中...
+      </div>
+    ) : userTeams.length === 0 ? (
+      <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--theme-text-secondary)' }}>
+        您没有可管理的团队，请先创建团队
+      </div>
+    ) : (
+      <Select
+        style={{ width: '100%' }}
+        placeholder="选择目标团队"
+        value={selectedTeam || undefined}
+        onChange={onSelectTeam}
+      >
+        {userTeams.map(team => (
+          <Option key={team.id} value={team.id}>
+            {team.name}
+            <Tag color="purple" style={{ marginLeft: 8 }}>{team.role}</Tag>
+          </Option>
+        ))}
+      </Select>
+    )}
+  </Modal>
+))
 
 export const EditProjectTab: React.FC<EditProjectTabProps> = ({ projectId, onClose }) => {
   const [form] = Form.useForm()
@@ -44,7 +184,7 @@ export const EditProjectTab: React.FC<EditProjectTabProps> = ({ projectId, onClo
     }
   }, [project?.id, project?.name, project?.description, project?.databaseType, project?.collaborationEnabled, form])
 
-  const handleUpdate = async (values: any) => {
+  const handleUpdate = useCallback(async (values: any) => {
     if (!project?.id) return
     
     setLoading(true)
@@ -69,9 +209,9 @@ export const EditProjectTab: React.FC<EditProjectTabProps> = ({ projectId, onClo
     } finally {
       setLoading(false)
     }
-  }
+  }, [project, updateProject, openTabs, closeTab, projectId, onClose])
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     const editTab = openTabs.find((tab: any) => tab.type === 'editProject' && tab.projectId === projectId)
     if (editTab) {
       closeTab(editTab.id)
@@ -79,16 +219,16 @@ export const EditProjectTab: React.FC<EditProjectTabProps> = ({ projectId, onClo
     if (onClose) {
       onClose()
     }
-  }
+  }, [openTabs, closeTab, projectId, onClose])
 
-  const handleOpenMemberTab = () => {
+  const handleOpenMemberTab = useCallback(() => {
     if (project) {
       openMemberTab(project.id, project.name)
       handleClose()
     }
-  }
+  }, [project, openMemberTab, handleClose])
 
-  const handleToggleCollaboration = async (checked: boolean) => {
+  const handleToggleCollaboration = useCallback(async (checked: boolean) => {
     if (!project?.id) return
     
     setCollaborationLoading(true)
@@ -118,7 +258,7 @@ export const EditProjectTab: React.FC<EditProjectTabProps> = ({ projectId, onClo
     } finally {
       setCollaborationLoading(false)
     }
-  }
+  }, [project, updateProject])
 
   const loadUserTeams = async () => {
     setTeamsLoading(true)
@@ -157,13 +297,13 @@ export const EditProjectTab: React.FC<EditProjectTabProps> = ({ projectId, onClo
     }
   }
 
-  const handleOpenConvertModal = async () => {
+  const handleOpenConvertModal = useCallback(async () => {
     setConvertModalVisible(true)
     setSelectedTeam('')
     await loadUserTeams()
-  }
+  }, [])
 
-  const handleConvertToTeamProject = async () => {
+  const handleConvertToTeamProject = useCallback(async () => {
     if (!project?.id || !selectedTeam) {
       message.warning('请选择目标团队')
       return
@@ -183,7 +323,7 @@ export const EditProjectTab: React.FC<EditProjectTabProps> = ({ projectId, onClo
       
       const data = await response.json()
       if (data.success) {
-        message.success(data.message)
+        message.success('转换成功！协作模式已自动开启，团队成员已自动添加为项目成员')
         setConvertModalVisible(false)
         if (refreshProjects) {
           await refreshProjects()
@@ -197,7 +337,7 @@ export const EditProjectTab: React.FC<EditProjectTabProps> = ({ projectId, onClo
     } finally {
       setConvertLoading(false)
     }
-  }
+  }, [project, selectedTeam, refreshProjects, handleClose])
 
   if (!project) {
     return (
@@ -323,61 +463,13 @@ export const EditProjectTab: React.FC<EditProjectTabProps> = ({ projectId, onClo
             {isCloudProject && (
               <>
                 <Divider />
-                
-                <div style={{ 
-                  padding: '16px', 
-                  backgroundColor: 'var(--theme-background-secondary)', 
-                  borderRadius: 8,
-                  marginBottom: 16 
-                }}>
-                  <Row justify="space-between" align="middle">
-                    <Col>
-                      <Space align="center">
-                        <ThunderboltOutlined style={{ fontSize: 20, color: collaborationEnabled ? '#52c41a' : '#999' }} />
-                        <div>
-                          <div style={{ fontWeight: 600 }}>实时协作模式</div>
-                          <div style={{ fontSize: 12, color: 'var(--theme-text-secondary)' }}>
-                            {collaborationEnabled 
-                              ? '已开启，其他成员可以实时协作编辑' 
-                              : '未开启，只有项目所有者可以编辑'}
-                          </div>
-                        </div>
-                      </Space>
-                    </Col>
-                    <Col>
-                      {isAuthenticated === true ? (
-                        <Switch 
-                          checked={collaborationEnabled} 
-                          onChange={handleToggleCollaboration}
-                          loading={collaborationLoading}
-                          checkedChildren="开启"
-                          unCheckedChildren="关闭"
-                        />
-                      ) : (
-                        <Tooltip title="请先登录">
-                          <Switch disabled checkedChildren="开启" unCheckedChildren="关闭" />
-                        </Tooltip>
-                      )}
-                    </Col>
-                  </Row>
-                  
-                  {collaborationEnabled && (
-                    <div style={{ 
-                      marginTop: 16, 
-                      padding: 12, 
-                      backgroundColor: 'rgba(82, 196, 26, 0.1)',
-                      borderRadius: 8,
-                      border: '1px solid rgba(82, 196, 26, 0.3)'
-                    }}>
-                      <Space size={8}>
-                        <SyncOutlined spin style={{ color: '#52c41a' }} />
-                        <span style={{ color: '#52c41a', fontSize: 13 }}>
-                          实时协作已就绪，当前 {activeCollaborators} 人在线协作
-                        </span>
-                      </Space>
-                    </div>
-                  )}
-                </div>
+                <CollaborationPanel
+                  collaborationEnabled={collaborationEnabled}
+                  collaborationLoading={collaborationLoading}
+                  activeCollaborators={activeCollaborators}
+                  isAuthenticated={isAuthenticated}
+                  onToggleCollaboration={handleToggleCollaboration}
+                />
               </>
             )}
 
@@ -429,64 +521,16 @@ export const EditProjectTab: React.FC<EditProjectTabProps> = ({ projectId, onClo
         </Card>
       </div>
 
-      <Modal
-        title="转换为团队项目"
+      <ConvertToTeamModal
         open={convertModalVisible}
+        teamsLoading={teamsLoading}
+        convertLoading={convertLoading}
+        userTeams={userTeams}
+        selectedTeam={selectedTeam}
+        onSelectTeam={setSelectedTeam}
         onCancel={() => setConvertModalVisible(false)}
-        footer={[
-          <Button key="cancel" onClick={() => setConvertModalVisible(false)}>
-            取消
-          </Button>,
-          <Button 
-            key="confirm" 
-            type="primary" 
-            onClick={handleConvertToTeamProject}
-            loading={convertLoading}
-            disabled={!selectedTeam}
-          >
-            确认转换
-          </Button>
-        ]}
-      >
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ marginBottom: 8, color: '#faad14' }}>
-            ⚠️ 注意：转换后项目所有权将转移给目标团队，不可撤销
-          </div>
-          <div style={{ color: 'var(--theme-text-secondary)', fontSize: 13 }}>
-            团队项目优势：无协作人数限制、团队成员自动获得访问权限、统一团队管理
-          </div>
-        </div>
-        
-        <div style={{ marginBottom: 8 }}>选择目标团队：</div>
-        {teamsLoading ? (
-          <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--theme-text-secondary)' }}>
-            加载中...
-          </div>
-        ) : userTeams.length === 0 ? (
-          <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--theme-text-secondary)' }}>
-            您没有可管理的团队，请先创建团队
-          </div>
-        ) : (
-          <Select
-            value={selectedTeam}
-            onChange={setSelectedTeam}
-            style={{ width: '100%' }}
-            placeholder="请选择目标团队"
-          >
-            {userTeams.map(team => (
-              <Option key={team.id} value={team.id}>
-                <Space>
-                  <TeamOutlined />
-                  <span>{team.name}</span>
-                  <Tag color={team.role === 'owner' ? 'red' : 'blue'}>
-                    {team.role === 'owner' ? '所有者' : '管理员'}
-                  </Tag>
-                </Space>
-              </Option>
-            ))}
-          </Select>
-        )}
-      </Modal>
+        onConfirm={handleConvertToTeamProject}
+      />
     </div>
   )
 }

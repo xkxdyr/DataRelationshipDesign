@@ -2,6 +2,7 @@ import { Request, Response } from 'express'
 import { llmConfigService, LLMConfigCreate, LLMConfigUpdate } from '../services/llmConfigService'
 import { llmDataMockService, MockDataRequest } from '../services/llmDataMockService'
 import { llmService, TableSuggestion, ColumnSuggestion, RelationshipSuggestion } from '../services/llmService'
+import { llmConversationService } from '../services/llmConversationService'
 import { Table } from '../generators/ddlGenerator'
 
 export const llmController = {
@@ -258,8 +259,9 @@ export const llmController = {
 
   async generateMockData(req: Request, res: Response) {
     try {
-      const request = req.body as MockDataRequest
-      const result = llmDataMockService.generateMockData(request)
+      const request = req.body as MockDataRequest & { configId?: string }
+      const configId = request.configId
+      const result = await llmDataMockService.generateMockData(request, configId)
       res.json({ success: true, data: result })
     } catch (error) {
       console.error('生成模拟数据失败:', error)
@@ -269,8 +271,8 @@ export const llmController = {
 
   async generateBatchMockData(req: Request, res: Response) {
     try {
-      const requests = req.body as MockDataRequest[]
-      const results = await llmDataMockService.generateBatchMockData(requests)
+      const { requests, configId } = req.body as { requests: MockDataRequest[]; configId?: string }
+      const results = await llmDataMockService.generateBatchMockData(requests, configId)
       res.json({ success: true, data: results })
     } catch (error) {
       console.error('批量生成模拟数据失败:', error)
@@ -325,6 +327,210 @@ export const llmController = {
       res.json({ success: true, data: { id: log.id } })
     } catch (error) {
       console.error('记录操作日志失败:', error)
+      res.status(500).json({ success: false, error: (error as Error).message })
+    }
+  },
+
+  async restoreSnapshot(req: Request, res: Response) {
+    try {
+      const { snapshotId } = req.params
+      const { projectId } = req.body
+      const result = await llmConfigService.restoreSnapshot(snapshotId, projectId)
+      res.json({ success: true, data: result })
+    } catch (error) {
+      console.error('恢复快照失败:', error)
+      res.status(500).json({ success: false, error: (error as Error).message })
+    }
+  },
+
+  async getSnapshots(req: Request, res: Response) {
+    try {
+      const { projectId } = req.params
+      const snapshots = await llmConfigService.getSnapshotsByProject(projectId)
+      res.json({ success: true, data: snapshots })
+    } catch (error) {
+      console.error('获取快照列表失败:', error)
+      res.status(500).json({ success: false, error: (error as Error).message })
+    }
+  },
+
+  async saveConversationMessage(req: Request, res: Response) {
+    try {
+      const { userId, projectId, role, content, configId } = req.body
+      const message = await llmConversationService.saveMessage(userId, projectId, role, content, configId)
+      res.json({ success: true, data: { id: message.id } })
+    } catch (error) {
+      console.error('保存对话消息失败:', error)
+      res.status(500).json({ success: false, error: (error as Error).message })
+    }
+  },
+
+  async getConversationHistory(req: Request, res: Response) {
+    try {
+      const { userId } = req.params
+      const { projectId, limit } = req.query
+      const history = await llmConversationService.getConversationHistory(
+        userId,
+        projectId as string | undefined,
+        limit ? parseInt(limit as string) : 20
+      )
+      res.json({ success: true, data: history })
+    } catch (error) {
+      console.error('获取对话历史失败:', error)
+      res.status(500).json({ success: false, error: (error as Error).message })
+    }
+  },
+
+  async clearConversationHistory(req: Request, res: Response) {
+    try {
+      const { userId } = req.params
+      const { projectId } = req.body
+      await llmConversationService.clearHistory(userId, projectId)
+      res.json({ success: true, message: '对话历史已清空' })
+    } catch (error) {
+      console.error('清空对话历史失败:', error)
+      res.status(500).json({ success: false, error: (error as Error).message })
+    }
+  },
+
+  async writeMockDataToDb(req: Request, res: Response) {
+    try {
+      const { connection, tableName, data } = req.body
+      const result = await llmDataMockService.writeMockDataToDatabase(connection, tableName, data)
+      res.json({ success: true, data: result })
+    } catch (error) {
+      console.error('写入数据库失败:', error)
+      res.status(500).json({ success: false, error: (error as Error).message })
+    }
+  },
+
+  async testDbPerformance(req: Request, res: Response) {
+    try {
+      const { connection, options } = req.body
+      if (!connection) {
+        res.status(400).json({ success: false, error: '缺少连接配置' })
+        return
+      }
+      const { dbPerformanceService } = await import('../services/dbPerformanceService')
+      const result = await dbPerformanceService.runFullPerformanceTest(connection, options)
+      res.json({ success: true, data: result })
+    } catch (error: any) {
+      console.error('数据库性能测试失败:', error)
+      res.status(500).json({ success: false, error: error.message })
+    }
+  },
+
+  async testDbConnectionSpeed(req: Request, res: Response) {
+    try {
+      const { connection } = req.body
+      if (!connection) {
+        res.status(400).json({ success: false, error: '缺少连接配置' })
+        return
+      }
+      const { dbPerformanceService } = await import('../services/dbPerformanceService')
+      const result = await dbPerformanceService.testConnectionSpeed(connection)
+      res.json({ success: true, data: result })
+    } catch (error: any) {
+      console.error('数据库连接速度测试失败:', error)
+      res.status(500).json({ success: false, error: error.message })
+    }
+  },
+
+  async analyzeProject(req: Request, res: Response) {
+    try {
+      const { tables, configId } = req.body
+      if (!tables || !Array.isArray(tables) || tables.length === 0) {
+        res.status(400).json({ success: false, error: 'tables是必填项且不能为空' })
+        return
+      }
+
+      if (configId) {
+        const config = await llmConfigService.getDecryptedConfig(configId)
+        if (config) {
+          llmService.configure({
+            apiKey: config.apiKey,
+            endpoint: config.endpoint,
+            model: config.model,
+            provider: config.provider
+          })
+        }
+      }
+
+      if (!llmService.isConfigured()) {
+        res.status(400).json({ success: false, error: 'LLM服务未配置，请先设置API密钥' })
+        return
+      }
+
+      const result = await llmService.analyzeProject(tables as Table[], configId)
+      res.json({ success: true, data: result })
+    } catch (error) {
+      console.error('项目分析失败:', error)
+      res.status(500).json({ success: false, error: (error as Error).message })
+    }
+  },
+
+  async analyzeTable(req: Request, res: Response) {
+    try {
+      const { table, allTables, configId } = req.body
+      if (!table) {
+        res.status(400).json({ success: false, error: 'table是必填项' })
+        return
+      }
+
+      if (configId) {
+        const config = await llmConfigService.getDecryptedConfig(configId)
+        if (config) {
+          llmService.configure({
+            apiKey: config.apiKey,
+            endpoint: config.endpoint,
+            model: config.model,
+            provider: config.provider
+          })
+        }
+      }
+
+      if (!llmService.isConfigured()) {
+        res.status(400).json({ success: false, error: 'LLM服务未配置，请先设置API密钥' })
+        return
+      }
+
+      const result = await llmService.analyzeTable(table as Table, (allTables || []) as Table[], configId)
+      res.json({ success: true, data: result })
+    } catch (error) {
+      console.error('表分析失败:', error)
+      res.status(500).json({ success: false, error: (error as Error).message })
+    }
+  },
+
+  async recommendTables(req: Request, res: Response) {
+    try {
+      const { existingTables, configId } = req.body
+      if (!existingTables || !Array.isArray(existingTables)) {
+        res.status(400).json({ success: false, error: 'existingTables是必填项' })
+        return
+      }
+
+      if (configId) {
+        const config = await llmConfigService.getDecryptedConfig(configId)
+        if (config) {
+          llmService.configure({
+            apiKey: config.apiKey,
+            endpoint: config.endpoint,
+            model: config.model,
+            provider: config.provider
+          })
+        }
+      }
+
+      if (!llmService.isConfigured()) {
+        res.status(400).json({ success: false, error: 'LLM服务未配置，请先设置API密钥' })
+        return
+      }
+
+      const result = await llmService.recommendTables(existingTables as Table[], configId)
+      res.json({ success: true, data: result })
+    } catch (error) {
+      console.error('推荐表失败:', error)
       res.status(500).json({ success: false, error: (error as Error).message })
     }
   }

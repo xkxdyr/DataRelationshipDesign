@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   Modal,
   Table,
@@ -33,15 +33,26 @@ import {
   EditOutlined,
   DeleteOutlined,
   SafetyCertificateOutlined,
-  SyncOutlined
+  SyncOutlined,
+  UndoOutlined,
+  ImportOutlined
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import type { Dayjs } from 'dayjs'
 import { historyApi, OperationRecord, OperationStats, HistoryReminder } from '../services/historyApi'
 import { useAppStore } from '../stores/appStore'
+import { versionApi } from '../services/api'
 
 const { Text } = Typography
 const { RangePicker } = DatePicker
+
+const UI_COLORS = {
+  GREEN: '#52c41a',
+  BLUE: '#1890ff',
+  PURPLE: '#722ed1',
+  RED: '#cf1322',
+  GRAY: '#8c8c8c',
+}
 
 interface HistoryModalProps {
   open: boolean
@@ -72,6 +83,185 @@ const targetTypeMap: Record<string, { label: string; color: string }> = {
   SYSTEM: { label: '系统', color: 'default' }
 }
 
+const REMINDER_STYLE = {
+  background: '#fff2f0',
+  borderColor: '#ffccc7',
+} as const
+
+interface HistoryReminderBannerProps {
+  reminder: HistoryReminder
+  onExport: () => void
+}
+
+const HistoryReminderBanner = React.memo(({ reminder, onExport }: HistoryReminderBannerProps) => (
+  <Card
+    type="inner"
+    style={{
+      marginBottom: 16,
+      background: REMINDER_STYLE.background,
+      borderColor: REMINDER_STYLE.borderColor,
+    }}
+  >
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+      <div style={{ fontSize: 20 }}>⚠️</div>
+      <div>
+        <Text strong style={{ color: UI_COLORS.RED }}>
+          操作历史已超过半年（{reminder.daysSinceOldest} 天）
+        </Text>
+        <div style={{ marginTop: 4 }}>
+          <Text type="secondary">
+            共 {reminder.recordCount} 条操作记录，建议导出备份后清理历史数据以提升性能。
+          </Text>
+        </div>
+        <Space style={{ marginTop: 8 }}>
+          <Button
+            size="small"
+            type="primary"
+            danger
+            onClick={onExport}
+          >
+            导出备份
+          </Button>
+        </Space>
+      </div>
+    </div>
+  </Card>
+))
+
+interface HistoryStatsPanelProps {
+  stats: OperationStats
+}
+
+const HistoryStatsPanel = React.memo(({ stats }: HistoryStatsPanelProps) => (
+  <div style={{ marginBottom: 16 }}>
+    <Row gutter={[16, 16]}>
+      <Col xs={12} sm={6}>
+        <Card size="small">
+          <Statistic
+            title="总操作数"
+            value={stats.totalOperations}
+            prefix={<HistoryOutlined />}
+          />
+        </Card>
+      </Col>
+      <Col xs={12} sm={6}>
+        <Card size="small">
+          <Statistic
+            title="创建"
+            value={stats.createCount}
+            valueStyle={{ color: UI_COLORS.GREEN }}
+            prefix={<PlusOutlined />}
+          />
+        </Card>
+      </Col>
+      <Col xs={12} sm={6}>
+        <Card size="small">
+          <Statistic
+            title="更新"
+            value={stats.updateCount}
+            valueStyle={{ color: UI_COLORS.BLUE }}
+            prefix={<EditOutlined />}
+          />
+        </Card>
+      </Col>
+      <Col xs={12} sm={6}>
+        <Card size="small">
+          <Statistic
+            title="参与人数"
+            value={stats.uniqueUsers}
+            valueStyle={{ color: UI_COLORS.PURPLE }}
+            prefix={<UserOutlined />}
+          />
+        </Card>
+      </Col>
+    </Row>
+
+    {stats.mostActiveUser && (
+      <div style={{ marginTop: 12 }}>
+        <Text type="secondary">
+          最活跃用户：{stats.mostActiveUser.userName}（{stats.mostActiveUser.count} 次操作）
+        </Text>
+      </div>
+    )}
+  </div>
+))
+
+interface FilterBarProps {
+  searchText: string
+  onSearchChange: (value: string) => void
+  operationTypeFilter: string | undefined
+  onOperationTypeChange: (value: string | undefined) => void
+  targetTypeFilter: string | undefined
+  onTargetTypeChange: (value: string | undefined) => void
+  dateRange: [Dayjs, Dayjs] | null
+  onDateRangeChange: (dates: [Dayjs, Dayjs] | null) => void
+  loading: boolean
+  onRefresh: () => void
+  exportMenu: React.ReactElement
+  onImport: () => void
+}
+
+const FilterBar = React.memo(({
+  searchText, onSearchChange, operationTypeFilter, onOperationTypeChange,
+  targetTypeFilter, onTargetTypeChange, dateRange, onDateRangeChange,
+  loading, onRefresh, exportMenu, onImport
+}: FilterBarProps) => (
+  <div style={{ marginBottom: 16 }}>
+    <Space wrap>
+      <Input.Search
+        placeholder="搜索操作人、目标名称、描述..."
+        allowClear
+        style={{ width: 280 }}
+        value={searchText}
+        onChange={e => onSearchChange(e.target.value)}
+        prefix={<FilterOutlined />}
+      />
+      <Select
+        placeholder="操作类型"
+        allowClear
+        style={{ width: 120 }}
+        value={operationTypeFilter}
+        onChange={onOperationTypeChange}
+        options={Object.entries(operationTypeMap).map(([key, value]) => ({
+          label: value.label,
+          value: key
+        }))}
+      />
+      <Select
+        placeholder="目标类型"
+        allowClear
+        style={{ width: 120 }}
+        value={targetTypeFilter}
+        onChange={onTargetTypeChange}
+        options={Object.entries(targetTypeMap).map(([key, value]) => ({
+          label: value.label,
+          value: key
+        }))}
+      />
+      <RangePicker
+        value={dateRange}
+        onChange={(dates) => onDateRangeChange(dates as [Dayjs, Dayjs] | null)}
+        placeholder={['开始时间', '结束时间']}
+      />
+      <Tooltip title="刷新">
+        <Button
+          icon={<ReloadOutlined />}
+          onClick={onRefresh}
+          loading={loading}
+        />
+      </Tooltip>
+      <Dropdown overlay={exportMenu} placement="bottomRight">
+        <Button type="primary" icon={<DownloadOutlined />}>
+          导出
+        </Button>
+      </Dropdown>
+      <Button icon={<ImportOutlined />} onClick={onImport}>
+        导入
+      </Button>
+    </Space>
+  </div>
+))
+
 export const HistoryModal: React.FC<HistoryModalProps> = ({ open, onCancel, projectId, projectName }) => {
   const [loading, setLoading] = useState(false)
   const [statsLoading, setStatsLoading] = useState(false)
@@ -86,7 +276,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ open, onCancel, proj
 
   const currentUser = useAppStore(state => state.currentUser)
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!projectId) return
 
     try {
@@ -110,25 +300,21 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ open, onCancel, proj
       setLoading(false)
       setStatsLoading(false)
     }
-  }
+  }, [projectId])
 
-  // 打开模态框时加载数据
   useEffect(() => {
     if (open) {
       loadData()
-      // 重置筛选
       setSearchText('')
       setOperationTypeFilter(undefined)
       setTargetTypeFilter(undefined)
       setDateRange(null)
     }
-  }, [open, projectId])
+  }, [open, projectId, loadData])
 
-  // 筛选数据
   useEffect(() => {
     let result = [...records]
 
-    // 搜索筛选
     if (searchText) {
       const lowerSearch = searchText.toLowerCase()
       result = result.filter(
@@ -139,17 +325,14 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ open, onCancel, proj
       )
     }
 
-    // 操作类型筛选
     if (operationTypeFilter) {
       result = result.filter(r => r.operationType === operationTypeFilter)
     }
 
-    // 目标类型筛选
     if (targetTypeFilter) {
       result = result.filter(r => r.targetType === targetTypeFilter)
     }
 
-    // 日期范围筛选
     if (dateRange && dateRange[0] && dateRange[1]) {
       const start = dateRange[0].startOf('day').valueOf()
       const end = dateRange[1].endOf('day').valueOf()
@@ -162,18 +345,71 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ open, onCancel, proj
     setFilteredRecords(result)
   }, [records, searchText, operationTypeFilter, targetTypeFilter, dateRange])
 
-  // 导出
-  const handleExport = (format: 'json' | 'csv') => {
+  const handleExport = useCallback((format: 'json' | 'csv') => {
     try {
       historyApi.exportProjectHistory(projectId, format, 1000)
       message.success(`正在导出为 ${format.toUpperCase()} 格式...`)
     } catch (error) {
       message.error('导出失败')
     }
-  }
+  }, [projectId])
 
-  // 表列定义
-  const columns: ColumnsType<OperationRecord> = [
+  const handleExportJson = useCallback(() => handleExport('json'), [handleExport])
+
+  const handleRollback = useCallback(async (snapshotId: string) => {
+    if (!projectId) return
+    Modal.confirm({
+      title: '确认回滚',
+      content: '回滚到该历史版本将覆盖当前数据，确定要继续吗？',
+      okText: '确认回滚',
+      cancelText: '取消',
+      okType: 'danger',
+      onOk: async () => {
+        try {
+          const result = await versionApi.update(snapshotId, {})
+          if (result) {
+            message.success('已回滚到历史版本')
+            loadData()
+          } else {
+            message.error('回滚失败')
+          }
+        } catch (error) {
+          message.error('回滚失败')
+        }
+      }
+    })
+  }, [projectId, loadData])
+
+  const handleImport = useCallback(() => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.json'
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0]
+      if (!file) return
+      try {
+        const text = await file.text()
+        const data = JSON.parse(text)
+        const records = data.records || data
+        if (!Array.isArray(records)) {
+          message.error('无效的导入数据格式')
+          return
+        }
+        const result = await historyApi.importHistory(projectId, records)
+        if (result.success) {
+          message.success(`成功导入 ${result.data?.imported || 0} 条记录`)
+          loadData()
+        } else {
+          message.error('导入失败')
+        }
+      } catch (error) {
+        message.error('导入文件解析失败')
+      }
+    }
+    input.click()
+  }, [projectId, loadData])
+
+  const columns: ColumnsType<OperationRecord> = useMemo(() => [
     {
       title: '操作类型',
       key: 'operationType',
@@ -262,11 +498,32 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ open, onCancel, proj
       sorter: (a, b) =>
         new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
       defaultSortOrder: 'descend'
+    },
+    {
+      title: '操作',
+      key: 'actions',
+      width: 80,
+      fixed: 'right',
+      render: (_, record) => {
+        const snapshotId = (record as any).changes?.snapshotId
+        if (!snapshotId) return null
+        return (
+          <Tooltip title="回滚到此版本">
+            <Button
+              type="link"
+              size="small"
+              icon={<UndoOutlined />}
+              onClick={() => handleRollback(snapshotId)}
+            >
+              回滚
+            </Button>
+          </Tooltip>
+        )
+      }
     }
-  ]
+  ], [currentUser, projectId])
 
-  // 导出菜单
-  const exportMenu = (
+  const exportMenu = useMemo(() => (
     <Menu>
       <Menu.Item
         key="json"
@@ -283,7 +540,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ open, onCancel, proj
         导出为 CSV
       </Menu.Item>
     </Menu>
-  )
+  ), [handleExport])
 
   return (
     <Modal
@@ -306,150 +563,31 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ open, onCancel, proj
       ]}
     >
       {reminder?.shouldRemind && (
-        <Card
-          type="inner"
-          style={{
-            marginBottom: 16,
-            background: '#fff2f0',
-            borderColor: '#ffccc7'
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-            <div style={{ fontSize: 20 }}>⚠️</div>
-            <div>
-              <Text strong style={{ color: '#cf1322' }}>
-                操作历史已超过半年（{reminder.daysSinceOldest} 天）
-              </Text>
-              <div style={{ marginTop: 4 }}>
-                <Text type="secondary">
-                  共 {reminder.recordCount} 条操作记录，建议导出备份后清理历史数据以提升性能。
-                </Text>
-              </div>
-              <Space style={{ marginTop: 8 }}>
-                <Button
-                  size="small"
-                  type="primary"
-                  danger
-                  onClick={() => handleExport('json')}
-                >
-                  导出备份
-                </Button>
-              </Space>
-            </div>
-          </div>
-        </Card>
+        <HistoryReminderBanner
+          reminder={reminder}
+          onExport={handleExportJson}
+        />
       )}
 
-      {stats && (
-        <div style={{ marginBottom: 16 }}>
-          <Row gutter={[16, 16]}>
-            <Col xs={12} sm={6}>
-              <Card size="small">
-                <Statistic
-                  title="总操作数"
-                  value={stats.totalOperations}
-                  prefix={<HistoryOutlined />}
-                />
-              </Card>
-            </Col>
-            <Col xs={12} sm={6}>
-              <Card size="small">
-                <Statistic
-                  title="创建"
-                  value={stats.createCount}
-                  valueStyle={{ color: '#52c41a' }}
-                  prefix={<PlusOutlined />}
-                />
-              </Card>
-            </Col>
-            <Col xs={12} sm={6}>
-              <Card size="small">
-                <Statistic
-                  title="更新"
-                  value={stats.updateCount}
-                  valueStyle={{ color: '#1890ff' }}
-                  prefix={<EditOutlined />}
-                />
-              </Card>
-            </Col>
-            <Col xs={12} sm={6}>
-              <Card size="small">
-                <Statistic
-                  title="参与人数"
-                  value={stats.uniqueUsers}
-                  valueStyle={{ color: '#722ed1' }}
-                  prefix={<UserOutlined />}
-                />
-              </Card>
-            </Col>
-          </Row>
-
-          {stats.mostActiveUser && (
-            <div style={{ marginTop: 12 }}>
-              <Text type="secondary">
-                最活跃用户：{stats.mostActiveUser.userName}（{stats.mostActiveUser.count} 次操作）
-              </Text>
-            </div>
-          )}
-        </div>
-      )}
+      {stats && <HistoryStatsPanel stats={stats} />}
 
       <Divider style={{ margin: '12px 0' }} />
 
-      {/* 筛选栏 */}
-      <div style={{ marginBottom: 16 }}>
-        <Space wrap>
-          <Input.Search
-            placeholder="搜索操作人、目标名称、描述..."
-            allowClear
-            style={{ width: 280 }}
-            value={searchText}
-            onChange={e => setSearchText(e.target.value)}
-            prefix={<FilterOutlined />}
-          />
-          <Select
-            placeholder="操作类型"
-            allowClear
-            style={{ width: 120 }}
-            value={operationTypeFilter}
-            onChange={setOperationTypeFilter}
-            options={Object.entries(operationTypeMap).map(([key, value]) => ({
-              label: value.label,
-              value: key
-            }))}
-          />
-          <Select
-            placeholder="目标类型"
-            allowClear
-            style={{ width: 120 }}
-            value={targetTypeFilter}
-            onChange={setTargetTypeFilter}
-            options={Object.entries(targetTypeMap).map(([key, value]) => ({
-              label: value.label,
-              value: key
-            }))}
-          />
-          <RangePicker
-            value={dateRange}
-            onChange={(dates) => setDateRange(dates as [Dayjs, Dayjs] | null)}
-            placeholder={['开始时间', '结束时间']}
-          />
-          <Tooltip title="刷新">
-            <Button
-              icon={<ReloadOutlined />}
-              onClick={loadData}
-              loading={loading}
-            />
-          </Tooltip>
-          <Dropdown overlay={exportMenu} placement="bottomRight">
-            <Button type="primary" icon={<DownloadOutlined />}>
-              导出
-            </Button>
-          </Dropdown>
-        </Space>
-      </div>
+      <FilterBar
+        searchText={searchText}
+        onSearchChange={setSearchText}
+        operationTypeFilter={operationTypeFilter}
+        onOperationTypeChange={setOperationTypeFilter}
+        targetTypeFilter={targetTypeFilter}
+        onTargetTypeChange={setTargetTypeFilter}
+        dateRange={dateRange}
+        onDateRangeChange={setDateRange}
+        loading={loading}
+        onRefresh={loadData}
+        exportMenu={exportMenu}
+        onImport={handleImport}
+      />
 
-      {/* 操作记录表格 */}
       <Spin spinning={loading}>
         {filteredRecords.length > 0 ? (
           <Table
@@ -457,7 +595,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ open, onCancel, proj
             dataSource={filteredRecords}
             rowKey="id"
             size="middle"
-            scroll={{ x: 900, y: 400 }}
+            scroll={{ x: 980, y: 400 }}
             pagination={{
               pageSize: 10,
               showSizeChanger: true,

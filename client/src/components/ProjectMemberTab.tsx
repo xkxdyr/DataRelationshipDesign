@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { Form, Input, Select, Button, message, Table, Space, Popconfirm, Spin, Typography, Tabs, Card } from 'antd'
 import { CopyOutlined, ReloadOutlined, LinkOutlined, MailOutlined, TeamOutlined, UserOutlined, XOutlined, KeyOutlined } from '@ant-design/icons'
 import { userApi, teamApi } from '../services/api'
@@ -8,6 +8,13 @@ const API_BASE = `${window.location.protocol}//${window.location.hostname}:3001/
 
 const { Title } = Typography
 const { Option } = Select
+
+const UI_COLORS = {
+  GRAY: '#8c8c8c',
+  BORDER: '#e8e8e8',
+  BG_LIGHT: '#f5f5f5',
+  TEXT_SECONDARY: '#999',
+}
 
 interface ProjectMemberTabProps {
   projectId: string
@@ -26,6 +33,265 @@ interface ProjectMember {
   joinedAt: string
 }
 
+const getRoleLabel = (role: string) => {
+  switch (role) {
+    case 'owner': return '所有者'
+    case 'editor': return '编辑者'
+    case 'viewer': return '查看者'
+    default: return role
+  }
+}
+
+const ROLE_OPTIONS: { value: ProjectRole; label: string }[] = [
+  { value: 'viewer', label: '查看者' },
+  { value: 'editor', label: '编辑者' },
+  { value: 'owner', label: '所有者' },
+]
+
+interface InviteCodePanelProps {
+  inviteCode: string
+  linkRole: ProjectRole
+  onRoleChange: (role: ProjectRole) => void
+  onCopy: () => void
+  onReset: () => void
+}
+
+const InviteCodePanel = React.memo(({
+  inviteCode, linkRole, onRoleChange, onCopy, onReset
+}: InviteCodePanelProps) => (
+  <div style={{ marginTop: 16 }}>
+    <p style={{ color: UI_COLORS.GRAY, marginBottom: 16 }}>邀请成员加入您的项目。邀请码将在 7 天后过期。</p>
+    <Card style={{ marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <KeyOutlined style={{ fontSize: 18, color: UI_COLORS.GRAY }} />
+          <span style={{ fontFamily: 'monospace', fontSize: '18px', fontWeight: 'bold', letterSpacing: '2px', padding: '8px 16px', backgroundColor: UI_COLORS.BG_LIGHT, borderRadius: '4px' }}>
+            {inviteCode.match(/.{4}/g)?.join('-')}
+          </span>
+        </div>
+        <Button type="primary" icon={<CopyOutlined />} onClick={onCopy}>
+          复制邀请码
+        </Button>
+      </div>
+      <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+        <span>权限：</span>
+        <Select value={linkRole} onChange={onRoleChange} style={{ width: 120 }}>
+          {ROLE_OPTIONS.map(opt => (
+            <Option key={opt.value} value={opt.value}>{opt.label}</Option>
+          ))}
+        </Select>
+      </div>
+      <div style={{ marginTop: 16 }}>
+        <Button icon={<ReloadOutlined />} onClick={onReset} style={{ color: UI_COLORS.GRAY }} type="text">
+          重置邀请码
+        </Button>
+      </div>
+    </Card>
+  </div>
+))
+
+interface EmailInvitePanelProps {
+  emailInput: string
+  emailRole: ProjectRole
+  onEmailChange: (value: string) => void
+  onRoleChange: (role: ProjectRole) => void
+  onSend: () => void
+}
+
+const EmailInvitePanel = React.memo(({
+  emailInput, emailRole, onEmailChange, onRoleChange, onSend
+}: EmailInvitePanelProps) => (
+  <div style={{ marginTop: 16 }}>
+    <p style={{ color: UI_COLORS.GRAY, marginBottom: 16 }}>通过邮箱直接邀请用户加入项目。</p>
+    <Card>
+      <div style={{ marginBottom: 16 }}>
+        <Input
+          placeholder="请输入邮箱"
+          value={emailInput}
+          onChange={(e) => onEmailChange(e.target.value)}
+          prefix={<MailOutlined />}
+          style={{ marginBottom: 16 }}
+        />
+        <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginBottom: 16 }}>
+          <span>权限：</span>
+          <Select value={emailRole} onChange={onRoleChange} style={{ width: 120 }}>
+            {ROLE_OPTIONS.map(opt => (
+              <Option key={opt.value} value={opt.value}>{opt.label}</Option>
+            ))}
+          </Select>
+        </div>
+        <Button type="primary" onClick={onSend}>
+          发送邀请
+        </Button>
+      </div>
+    </Card>
+  </div>
+))
+
+interface TeamInvitePanelProps {
+  teams: Team[]
+  selectedTeam: string | null
+  onTeamChange: (teamId: string) => void
+  selectedTeamMember: string | null
+  onTeamMemberChange: (userId: string) => void
+  teamMembers: User[]
+  teamMemberRole: ProjectRole
+  onRoleChange: (role: ProjectRole) => void
+  onAdd: () => void
+}
+
+const TeamInvitePanel = React.memo(({
+  teams, selectedTeam, onTeamChange, selectedTeamMember, onTeamMemberChange,
+  teamMembers, teamMemberRole, onRoleChange, onAdd
+}: TeamInvitePanelProps) => (
+  <div style={{ marginTop: 16 }}>
+    <p style={{ color: UI_COLORS.GRAY, marginBottom: 16 }}>从您的团队中选择成员加入项目。</p>
+    <Card>
+      <div style={{ marginBottom: 16 }}>
+        <Select
+          value={selectedTeam}
+          onChange={onTeamChange}
+          placeholder="选择团队"
+          style={{ width: 300, marginBottom: 16 }}
+          showSearch
+          filterOption={(input, option) =>
+            (option?.children as unknown as string)?.toLowerCase().includes(input.toLowerCase())
+          }
+        >
+          {teams.map(team => (
+            <Option key={team.id} value={team.id}>
+              {team.name}
+            </Option>
+          ))}
+        </Select>
+        {selectedTeam && (
+          <>
+            <Select
+              value={selectedTeamMember}
+              onChange={onTeamMemberChange}
+              placeholder="选择团队成员"
+              style={{ width: 300, marginBottom: 16 }}
+              showSearch
+              filterOption={(input, option) =>
+                (option?.children as unknown as string)?.toLowerCase().includes(input.toLowerCase())
+              }
+            >
+              {teamMembers.map(user => (
+                <Option key={user.id} value={user.id}>
+                  <Space>
+                    <UserOutlined />
+                    <span>{user.username}</span>
+                    {user.displayName && <span style={{ color: UI_COLORS.TEXT_SECONDARY }}>- {user.displayName}</span>}
+                  </Space>
+                </Option>
+              ))}
+            </Select>
+            <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginBottom: 16 }}>
+              <span>权限：</span>
+              <Select value={teamMemberRole} onChange={onRoleChange} style={{ width: 120 }}>
+                {ROLE_OPTIONS.map(opt => (
+                  <Option key={opt.value} value={opt.value}>{opt.label}</Option>
+                ))}
+              </Select>
+            </div>
+            <Button 
+              type="primary" 
+              onClick={onAdd} 
+              disabled={!selectedTeamMember}
+            >
+              添加
+            </Button>
+          </>
+        )}
+      </div>
+    </Card>
+  </div>
+))
+
+interface MemberTableProps {
+  members: ProjectMember[]
+  loading: boolean
+  onUpdateRole: (memberId: string, userId: string, newRole: ProjectRole) => void
+  onRemoveMember: (memberId: string, userId: string) => void
+}
+
+const MemberTable = React.memo(({
+  members, loading, onUpdateRole, onRemoveMember
+}: MemberTableProps) => (
+  <div style={{ marginTop: 32 }}>
+    <Title level={5} style={{ marginBottom: 16 }}>当前项目成员</Title>
+    <Spin spinning={loading}>
+      <Table
+        dataSource={members}
+        rowKey="id"
+        pagination={false}
+        size="small"
+        columns={[
+          {
+            title: '用户',
+            dataIndex: 'userName',
+            key: 'userName',
+            render: (name: string) => (
+              <Space>
+                <UserOutlined />
+                <span>{name}</span>
+              </Space>
+            )
+          },
+          {
+            title: '角色',
+            dataIndex: 'role',
+            key: 'role',
+            width: 120,
+            render: (role: string, record: ProjectMember) => (
+              <Select
+                value={role}
+                onChange={(newRole) => onUpdateRole(record.id, record.userId, newRole as ProjectRole)}
+                style={{ width: 100 }}
+                disabled={role === 'owner'}
+              >
+                {ROLE_OPTIONS.map(opt => (
+                  <Option key={opt.value} value={opt.value}>{opt.label}</Option>
+                ))}
+              </Select>
+            )
+          },
+          {
+            title: '加入时间',
+            dataIndex: 'joinedAt',
+            key: 'joinedAt',
+            width: 150,
+            render: (date: string) => new Date(date).toLocaleString()
+          },
+          {
+            title: '操作',
+            key: 'action',
+            width: 100,
+            render: (_, record: ProjectMember) => (
+              <Popconfirm
+                title="确定移除该成员吗？"
+                onConfirm={() => onRemoveMember(record.id, record.userId)}
+                okText="确定"
+                cancelText="取消"
+                disabled={record.role === 'owner'}
+              >
+                <Button
+                  type="text"
+                  danger
+                  size="small"
+                  disabled={record.role === 'owner'}
+                >
+                  移除
+                </Button>
+              </Popconfirm>
+            )
+          }
+        ]}
+      />
+    </Spin>
+  </div>
+))
+
 export const ProjectMemberTab: React.FC<ProjectMemberTabProps> = ({ projectId, projectName, onClose }) => {
   const [members, setMembers] = useState<ProjectMember[]>([])
   const [loading, setLoading] = useState(false)
@@ -40,15 +306,7 @@ export const ProjectMemberTab: React.FC<ProjectMemberTabProps> = ({ projectId, p
   const [teams, setTeams] = useState<Team[]>([])
   const [teamMembers, setTeamMembers] = useState<User[]>([])
 
-  useEffect(() => {
-    if (projectId) {
-      loadMembers()
-      loadTeams()
-      generateInviteCode()
-    }
-  }, [projectId])
-
-  const loadMembers = async () => {
+  const loadMembers = useCallback(async () => {
     setLoading(true)
     try {
       const response = await fetch(`${API_BASE}/projects/${projectId}/members`, {
@@ -66,9 +324,9 @@ export const ProjectMemberTab: React.FC<ProjectMemberTabProps> = ({ projectId, p
     } finally {
       setLoading(false)
     }
-  }
+  }, [projectId])
 
-  const loadTeams = async () => {
+  const loadTeams = useCallback(async () => {
     try {
       const response = await teamApi.getAllTeams()
       if (response.success && response.data) {
@@ -77,9 +335,9 @@ export const ProjectMemberTab: React.FC<ProjectMemberTabProps> = ({ projectId, p
     } catch (error) {
       console.error('加载团队失败:', error)
     }
-  }
+  }, [])
 
-  const generateInviteCode = async () => {
+  const generateInviteCode = useCallback(async () => {
     try {
       const response = await fetch(`${API_BASE}/projects/${projectId}/invites`, {
         method: 'POST',
@@ -99,28 +357,36 @@ export const ProjectMemberTab: React.FC<ProjectMemberTabProps> = ({ projectId, p
       console.error('生成邀请码失败:', error)
       message.error('生成邀请码失败')
     }
-  }
+  }, [projectId, linkRole])
 
-  const copyInviteCode = () => {
+  useEffect(() => {
+    if (projectId) {
+      loadMembers()
+      loadTeams()
+      generateInviteCode()
+    }
+  }, [projectId, loadMembers, loadTeams, generateInviteCode])
+
+  const copyInviteCode = useCallback(() => {
     const formattedCode = inviteCode.match(/.{4}/g)?.join('-') || inviteCode
     navigator.clipboard.writeText(formattedCode)
     message.success('邀请码已复制')
-  }
+  }, [inviteCode])
 
-  const resetInviteCode = async () => {
+  const resetInviteCode = useCallback(async () => {
     await generateInviteCode()
     message.success('邀请码已重置')
-  }
+  }, [generateInviteCode])
 
-  const handleAddByEmail = async () => {
+  const handleAddByEmail = useCallback(async () => {
     if (!emailInput) {
       message.error('请输入邮箱')
       return
     }
     message.info('邮箱邀请功能开发中')
-  }
+  }, [emailInput])
 
-  const handleAddFromTeam = async () => {
+  const handleAddFromTeam = useCallback(async () => {
     if (!selectedTeamMember) {
       message.error('请选择团队成员')
       return
@@ -145,9 +411,9 @@ export const ProjectMemberTab: React.FC<ProjectMemberTabProps> = ({ projectId, p
     } catch (error) {
       message.error('添加成员失败: ' + (error as Error).message)
     }
-  }
+  }, [projectId, selectedTeamMember, teamMemberRole, loadMembers])
 
-  const handleRemoveMember = async (memberId: string, userId: string) => {
+  const handleRemoveMember = useCallback(async (memberId: string, userId: string) => {
     try {
       const response = await fetch(`${API_BASE}/projects/${projectId}/members/${userId}`, {
         method: 'DELETE',
@@ -165,9 +431,9 @@ export const ProjectMemberTab: React.FC<ProjectMemberTabProps> = ({ projectId, p
     } catch (error) {
       message.error('移除成员失败: ' + (error as Error).message)
     }
-  }
+  }, [projectId, loadMembers])
 
-  const handleUpdateRole = async (memberId: string, userId: string, newRole: ProjectRole) => {
+  const handleUpdateRole = useCallback(async (memberId: string, userId: string, newRole: ProjectRole) => {
     try {
       const response = await fetch(`${API_BASE}/projects/${projectId}/members/${userId}/role`, {
         method: 'PUT',
@@ -187,18 +453,9 @@ export const ProjectMemberTab: React.FC<ProjectMemberTabProps> = ({ projectId, p
     } catch (error) {
       message.error('更新角色失败: ' + (error as Error).message)
     }
-  }
+  }, [projectId, loadMembers])
 
-  const getRoleLabel = (role: string) => {
-    switch (role) {
-      case 'owner': return '所有者'
-      case 'editor': return '编辑者'
-      case 'viewer': return '查看者'
-      default: return role
-    }
-  }
-
-  const handleTeamChange = async (teamId: string) => {
+  const handleTeamChange = useCallback(async (teamId: string) => {
     setSelectedTeam(teamId)
     try {
       const response = await teamApi.getTeamById(teamId)
@@ -213,11 +470,11 @@ export const ProjectMemberTab: React.FC<ProjectMemberTabProps> = ({ projectId, p
     } catch (error) {
       console.error('加载团队成员失败:', error)
     }
-  }
+  }, [])
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ padding: '16px', borderBottom: '1px solid #e8e8e8', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ padding: '16px', borderBottom: `1px solid ${UI_COLORS.BORDER}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Title level={4} style={{ margin: 0 }}>邀请加入项目：{projectName}</Title>
         {onClose && (
           <Button
@@ -239,211 +496,54 @@ export const ProjectMemberTab: React.FC<ProjectMemberTabProps> = ({ projectId, p
               key: 'link',
               label: <span><KeyOutlined />邀请码</span>,
               children: (
-                <div style={{ marginTop: 16 }}>
-                  <p style={{ color: '#8c8c8c', marginBottom: 16 }}>邀请成员加入您的项目。邀请码将在 7 天后过期。</p>
-                  <Card style={{ marginBottom: 16 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <KeyOutlined style={{ fontSize: 18, color: '#8c8c8c' }} />
-                        <span style={{ fontFamily: 'monospace', fontSize: '18px', fontWeight: 'bold', letterSpacing: '2px', padding: '8px 16px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
-                          {inviteCode.match(/.{4}/g)?.join('-')}
-                        </span>
-                      </div>
-                      <Button type="primary" icon={<CopyOutlined />} onClick={copyInviteCode}>
-                        复制邀请码
-                      </Button>
-                    </div>
-                    <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-                      <span>权限：</span>
-                      <Select value={linkRole} onChange={setLinkRole} style={{ width: 120 }}>
-                        <Option value="viewer">查看者</Option>
-                        <Option value="editor">编辑者</Option>
-                        <Option value="owner">所有者</Option>
-                      </Select>
-                    </div>
-                    <div style={{ marginTop: 16 }}>
-                      <Button icon={<ReloadOutlined />} onClick={resetInviteCode} style={{ color: '#8c8c8c' }} type="text">
-                        重置邀请码
-                      </Button>
-                    </div>
-                  </Card>
-                </div>
+                <InviteCodePanel
+                  inviteCode={inviteCode}
+                  linkRole={linkRole}
+                  onRoleChange={setLinkRole}
+                  onCopy={copyInviteCode}
+                  onReset={resetInviteCode}
+                />
               )
             },
             {
               key: 'email',
               label: <span><MailOutlined />邮箱邀请</span>,
               children: (
-                <div style={{ marginTop: 16 }}>
-                  <p style={{ color: '#8c8c8c', marginBottom: 16 }}>通过邮箱直接邀请用户加入项目。</p>
-                  <Card>
-                    <div style={{ marginBottom: 16 }}>
-                      <Input
-                        placeholder="请输入邮箱"
-                        value={emailInput}
-                        onChange={(e) => setEmailInput(e.target.value)}
-                        prefix={<MailOutlined />}
-                        style={{ marginBottom: 16 }}
-                      />
-                      <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginBottom: 16 }}>
-                        <span>权限：</span>
-                        <Select value={emailRole} onChange={setEmailRole} style={{ width: 120 }}>
-                          <Option value="viewer">查看者</Option>
-                          <Option value="editor">编辑者</Option>
-                          <Option value="owner">所有者</Option>
-                        </Select>
-                      </div>
-                      <Button type="primary" onClick={handleAddByEmail}>
-                        发送邀请
-                      </Button>
-                    </div>
-                  </Card>
-                </div>
+                <EmailInvitePanel
+                  emailInput={emailInput}
+                  emailRole={emailRole}
+                  onEmailChange={setEmailInput}
+                  onRoleChange={setEmailRole}
+                  onSend={handleAddByEmail}
+                />
               )
             },
             {
               key: 'team',
               label: <span><TeamOutlined />从团队中选择</span>,
               children: (
-                <div style={{ marginTop: 16 }}>
-                  <p style={{ color: '#8c8c8c', marginBottom: 16 }}>从您的团队中选择成员加入项目。</p>
-                  <Card>
-                    <div style={{ marginBottom: 16 }}>
-                      <Select
-                        value={selectedTeam}
-                        onChange={handleTeamChange}
-                        placeholder="选择团队"
-                        style={{ width: 300, marginBottom: 16 }}
-                        showSearch
-                        filterOption={(input, option) =>
-                          (option?.children as unknown as string)?.toLowerCase().includes(input.toLowerCase())
-                        }
-                      >
-                        {teams.map(team => (
-                          <Option key={team.id} value={team.id}>
-                            {team.name}
-                          </Option>
-                        ))}
-                      </Select>
-                      {selectedTeam && (
-                        <>
-                          <Select
-                            value={selectedTeamMember}
-                            onChange={setSelectedTeamMember}
-                            placeholder="选择团队成员"
-                            style={{ width: 300, marginBottom: 16 }}
-                            showSearch
-                            filterOption={(input, option) =>
-                              (option?.children as unknown as string)?.toLowerCase().includes(input.toLowerCase())
-                            }
-                          >
-                            {teamMembers.map(user => (
-                              <Option key={user.id} value={user.id}>
-                                <Space>
-                                  <UserOutlined />
-                                  <span>{user.username}</span>
-                                  {user.displayName && <span style={{ color: '#999' }}>- {user.displayName}</span>}
-                                </Space>
-                              </Option>
-                            ))}
-                          </Select>
-                          <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginBottom: 16 }}>
-                            <span>权限：</span>
-                            <Select value={teamMemberRole} onChange={setTeamMemberRole} style={{ width: 120 }}>
-                              <Option value="viewer">查看者</Option>
-                              <Option value="editor">编辑者</Option>
-                              <Option value="owner">所有者</Option>
-                            </Select>
-                          </div>
-                          <Button 
-                            type="primary" 
-                            onClick={handleAddFromTeam} 
-                            disabled={!selectedTeamMember}
-                          >
-                            添加
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </Card>
-                </div>
+                <TeamInvitePanel
+                  teams={teams}
+                  selectedTeam={selectedTeam}
+                  onTeamChange={handleTeamChange}
+                  selectedTeamMember={selectedTeamMember}
+                  onTeamMemberChange={setSelectedTeamMember}
+                  teamMembers={teamMembers}
+                  teamMemberRole={teamMemberRole}
+                  onRoleChange={setTeamMemberRole}
+                  onAdd={handleAddFromTeam}
+                />
               )
             }
           ]}
         />
 
-        <div style={{ marginTop: 32 }}>
-          <Title level={5} style={{ marginBottom: 16 }}>当前项目成员</Title>
-          <Spin spinning={loading}>
-            <Table
-              dataSource={members}
-              rowKey="id"
-              pagination={false}
-              size="small"
-              columns={[
-                {
-                  title: '用户',
-                  dataIndex: 'userName',
-                  key: 'userName',
-                  render: (name: string) => (
-                    <Space>
-                      <UserOutlined />
-                      <span>{name}</span>
-                    </Space>
-                  )
-                },
-                {
-                  title: '角色',
-                  dataIndex: 'role',
-                  key: 'role',
-                  width: 120,
-                  render: (role: string, record: ProjectMember) => (
-                    <Select
-                      value={role}
-                      onChange={(newRole) => handleUpdateRole(record.id, record.userId, newRole as ProjectRole)}
-                      style={{ width: 100 }}
-                      disabled={role === 'owner'}
-                    >
-                      <Option value="viewer">查看者</Option>
-                      <Option value="editor">编辑者</Option>
-                      <Option value="owner">所有者</Option>
-                    </Select>
-                  )
-                },
-                {
-                  title: '加入时间',
-                  dataIndex: 'joinedAt',
-                  key: 'joinedAt',
-                  width: 150,
-                  render: (date: string) => new Date(date).toLocaleString()
-                },
-                {
-                  title: '操作',
-                  key: 'action',
-                  width: 100,
-                  render: (_, record: ProjectMember) => (
-                    <Popconfirm
-                      title="确定移除该成员吗？"
-                      onConfirm={() => handleRemoveMember(record.id, record.userId)}
-                      okText="确定"
-                      cancelText="取消"
-                      disabled={record.role === 'owner'}
-                    >
-                      <Button
-                        type="text"
-                        danger
-                        size="small"
-                        disabled={record.role === 'owner'}
-                      >
-                        移除
-                      </Button>
-                    </Popconfirm>
-                  )
-                }
-              ]}
-            />
-          </Spin>
-        </div>
+        <MemberTable
+          members={members}
+          loading={loading}
+          onUpdateRole={handleUpdateRole}
+          onRemoveMember={handleRemoveMember}
+        />
       </div>
     </div>
   )

@@ -70,7 +70,7 @@ interface AppState {
   gridSize: number
   showMiniMap: boolean
   autoSaveInterval: number
-  edgeStyle: 'straight' | 'step' | 'smooth' | 'smart'
+  edgeStyle: 'straight' | 'step' | 'smooth' | 'smart' | 'avoidNode'
   showEdgeLabels: boolean
   tablePrefix: string
   tablePrefixPresets: string[]
@@ -85,6 +85,10 @@ interface AppState {
   authToken: string | null
   authLoading: boolean
   isAuthenticated: boolean
+  // 权限相关
+  currentProjectRole: 'owner' | 'editor' | 'viewer' | null
+  canEdit: boolean
+  canManage: boolean
   // 标签页相关
   openTabs: { id: string; title: string; projectId?: string; type: 'project' | 'table' | 'settings' | 'members' | 'createProject' | 'importExport' | 'teamManagement' | 'llm' | 'editProject' | 'versionManagement' | 'comments' | 'sqliteImport' | 'branchManagement' | 'gitConfig' | 'typeConvert' | 'sqlEditor' }[]
   activeTabId: string | null
@@ -153,7 +157,7 @@ interface AppStore extends AppState {
   setGridSize: (size: number) => void
   setShowMiniMap: (show: boolean) => void
   setAutoSaveInterval: (interval: number) => void
-  setEdgeStyle: (style: 'straight' | 'step' | 'smooth' | 'smart') => void
+  setEdgeStyle: (style: 'straight' | 'step' | 'smooth' | 'smart' | 'avoidNode') => void
   setShowEdgeLabels: (show: boolean) => void
   setTablePrefix: (prefix: string) => void
   addTablePrefixPreset: (prefix: string) => void
@@ -191,6 +195,10 @@ interface AppStore extends AppState {
   uploadProjectToCloud: (projectId: string) => Promise<{ success: boolean; message?: string }>
   saveProjectToLocal: (projectId: string) => Promise<{ success: boolean; message?: string }>
   
+  // 权限相关
+  setCurrentProjectRole: (role: 'owner' | 'editor' | 'viewer' | null) => void
+  loadProjectPermission: (projectId: string) => Promise<void>
+
   // 标签页相关操作
   openProjectTab: (project: Project) => void
   closeTab: (tabId: string) => void
@@ -333,6 +341,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
   authToken: null,
   authLoading: false,
   isAuthenticated: true,
+  // 权限状态
+  currentProjectRole: null,
+  canEdit: true,
+  canManage: true,
   // 标签页状态
   openTabs: [],
   activeTabId: null,
@@ -479,7 +491,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({ autoSaveInterval: interval })
     localStorageService.setMeta('autoSaveInterval', interval)
   },
-  setEdgeStyle: (style: 'straight' | 'step' | 'smooth' | 'smart') => {
+  setEdgeStyle: (style: 'straight' | 'step' | 'smooth' | 'smart' | 'avoidNode') => {
     set({ edgeStyle: style })
     localStorageService.setMeta('edgeStyle', style)
   },
@@ -558,7 +570,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       set({ autoSaveInterval: savedAutoSaveInterval })
     }
 
-    const savedEdgeStyle = await localStorageService.getMeta<'straight' | 'step' | 'smooth' | 'smart'>('edgeStyle')
+    const savedEdgeStyle = await localStorageService.getMeta<'straight' | 'step' | 'smooth' | 'smart' | 'avoidNode'>('edgeStyle')
     if (savedEdgeStyle !== undefined) {
       set({ edgeStyle: savedEdgeStyle })
     }
@@ -936,6 +948,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
       authToken: get().authToken,
       authLoading: get().authLoading,
       isAuthenticated: get().isAuthenticated,
+      currentProjectRole: get().currentProjectRole,
+      canEdit: get().canEdit,
+      canManage: get().canManage,
       openTabs: get().openTabs,
       activeTabId: get().activeTabId
     }
@@ -1014,6 +1029,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
       authToken: get().authToken,
       authLoading: get().authLoading,
       isAuthenticated: get().isAuthenticated,
+      currentProjectRole: get().currentProjectRole,
+      canEdit: get().canEdit,
+      canManage: get().canManage,
       openTabs: get().openTabs,
       activeTabId: get().activeTabId
     }
@@ -1101,6 +1119,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
         // 本地模式或本地项目，从本地加载
         await get().loadFromLocal(id)
         get().pushHistory()
+        // 本地项目默认拥有全部权限
+        set({ currentProjectRole: 'owner', canEdit: true, canManage: true })
       } else if (isOnline) {
         const response = await projectApi.getById(id)
         if (response.success && response.data) {
@@ -1137,11 +1157,15 @@ export const useAppStore = create<AppStore>((set, get) => ({
           
           await get().loadRelationships(id)
           await get().syncToLocal()
+          // 加载项目权限
+          await get().loadProjectPermission(id)
         }
       } else {
         // 离线模式，从本地加载
         await get().loadFromLocal(id)
         get().pushHistory()
+        // 离线模式默认拥有全部权限
+        set({ currentProjectRole: 'owner', canEdit: true, canManage: true })
       }
     } finally {
       set({ projectLoading: false })
@@ -3080,6 +3104,50 @@ export const useAppStore = create<AppStore>((set, get) => ({
       return { success: false, message: '保存失败: ' + (error as Error).message }
     } finally {
       set({ isSyncing: false })
+    }
+  },
+
+  // 权限相关方法
+  setCurrentProjectRole: (role: 'owner' | 'editor' | 'viewer' | null) => {
+    set({
+      currentProjectRole: role,
+      canEdit: role === 'owner' || role === 'editor',
+      canManage: role === 'owner',
+    })
+  },
+
+  loadProjectPermission: async (projectId: string) => {
+    const { isLocalMode, isAuthenticated, currentProject } = get()
+    // 本地模式或未登录时默认拥有全部权限
+    if (isLocalMode || !isAuthenticated) {
+      set({ currentProjectRole: 'owner', canEdit: true, canManage: true })
+      return
+    }
+    // 项目创建者始终拥有全部权限
+    const currentUser = get().currentUser
+    if (currentProject && currentUser && currentProject.createdBy === currentUser.id) {
+      set({ currentProjectRole: 'owner', canEdit: true, canManage: true })
+      return
+    }
+    try {
+      const response = await projectApi.getUserProjects()
+      if (response.success && response.data) {
+        const projectWithRole = response.data.find((p: ProjectWithRole) => p.projectId === projectId)
+        if (projectWithRole) {
+          set({
+            currentProjectRole: projectWithRole.role,
+            canEdit: projectWithRole.role === 'owner' || projectWithRole.role === 'editor',
+            canManage: projectWithRole.role === 'owner',
+          })
+        } else {
+          // 非项目成员，无权限
+          set({ currentProjectRole: null, canEdit: false, canManage: false })
+        }
+      }
+    } catch (error) {
+      console.error('加载项目权限失败:', error)
+      // 加载失败时默认有权限（兼容旧逻辑）
+      set({ currentProjectRole: 'owner', canEdit: true, canManage: true })
     }
   },
 

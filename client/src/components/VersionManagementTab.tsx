@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react'
-import { Table, Button, Space, Typography, Card, Tag, Popconfirm, message, Empty, Modal, Form, Input } from 'antd'
+import { Table, Button, Space, Typography, Card, Tag, Popconfirm, message, Empty, Modal, Form, Input, Select, Row, Col } from 'antd'
 import { useAppStore } from '../stores/appStore'
 import { Version } from '../types'
-import { HistoryOutlined, PlusOutlined, DeleteOutlined, RotateLeftOutlined, XOutlined, SwapOutlined } from '@ant-design/icons'
+import { HistoryOutlined, PlusOutlined, DeleteOutlined, RotateLeftOutlined, XOutlined, SwapOutlined, DiffOutlined } from '@ant-design/icons'
 import VersionCompareModal from './VersionCompareModal'
 
 const { Title } = Typography
@@ -19,6 +19,9 @@ export const VersionManagementTab: React.FC<VersionManagementTabProps> = ({ proj
   const [createForm] = Form.useForm()
   const [compareModalOpen, setCompareModalOpen] = useState(false)
   const [compareVersions, setCompareVersions] = useState<{ id1: string; name1: string; id2: string; name2: string } | null>(null)
+  const [freeCompareOpen, setFreeCompareOpen] = useState(false)
+  const [freeCompareLeft, setFreeCompareLeft] = useState<string>('')
+  const [freeCompareRight, setFreeCompareRight] = useState<string>('')
 
   useEffect(() => {
     if (projectId) {
@@ -177,6 +180,12 @@ export const VersionManagementTab: React.FC<VersionManagementTabProps> = ({ proj
           版本管理 - {projectName}
         </Title>
         <Space>
+          <Button
+            icon={<DiffOutlined />}
+            onClick={() => setFreeCompareOpen(true)}
+          >
+            版本对比
+          </Button>
           <Button 
             type="primary" 
             icon={<PlusOutlined />}
@@ -253,6 +262,58 @@ export const VersionManagementTab: React.FC<VersionManagementTabProps> = ({ proj
           onClose={() => setCompareModalOpen(false)}
         />
       )}
+
+      <Modal
+        title={<Space><DiffOutlined /> 版本对比</Space>}
+        open={freeCompareOpen}
+        onCancel={() => { setFreeCompareOpen(false); setFreeCompareLeft(''); setFreeCompareRight('') }}
+        onOk={() => {
+          const left = versions.find(v => v.id === freeCompareLeft)
+          const right = versions.find(v => v.id === freeCompareRight)
+          if (!left || !right) { message.warning('请选择两个版本'); return }
+          if (left.id === right.id) { message.warning('请选择不同的版本'); return }
+          setCompareVersions({
+            id1: left.id,
+            name1: left.name || `v${left.version}`,
+            id2: right.id,
+            name2: right.name || `v${right.version}`
+          })
+          setCompareModalOpen(true)
+          setFreeCompareOpen(false)
+          setFreeCompareLeft('')
+          setFreeCompareRight('')
+        }}
+        okText="开始对比"
+        cancelText="取消"
+        okButtonProps={{ disabled: !freeCompareLeft || !freeCompareRight || freeCompareLeft === freeCompareRight }}
+        width={600}
+      >
+        <Row gutter={16} align="middle">
+          <Col span={10}>
+            <div style={{ marginBottom: 4, fontSize: 12, color: '#999' }}>旧版本</div>
+            <Select
+              style={{ width: '100%' }}
+              placeholder="选择旧版本"
+              value={freeCompareLeft || undefined}
+              onChange={setFreeCompareLeft}
+              options={versions.map(v => ({ value: v.id, label: v.name || `v${v.version}` }))}
+            />
+          </Col>
+          <Col span={4} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: 16 }}>
+            <SwapOutlined style={{ fontSize: 20, color: '#999' }} />
+          </Col>
+          <Col span={10}>
+            <div style={{ marginBottom: 4, fontSize: 12, color: '#999' }}>新版本</div>
+            <Select
+              style={{ width: '100%' }}
+              placeholder="选择新版本"
+              value={freeCompareRight || undefined}
+              onChange={setFreeCompareRight}
+              options={versions.map(v => ({ value: v.id, label: v.name || `v${v.version}` }))}
+            />
+          </Col>
+        </Row>
+      </Modal>
     </div>
   )
 }

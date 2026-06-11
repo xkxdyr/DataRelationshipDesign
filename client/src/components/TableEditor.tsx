@@ -15,6 +15,112 @@ const DATA_TYPES = [
   'BOOLEAN', 'JSON', 'BLOB', 'UUID'
 ]
 
+const UI_COLORS = {
+  GREEN: '#52c41a',
+  RED: '#ff4d4f',
+  LOCK_BG: '#f5f5f5',
+  GRAY: '#666',
+}
+
+interface ResizeHandleProps {
+  width?: number
+  large?: boolean
+  onMouseDown: (e: React.MouseEvent) => void
+}
+
+const ResizeHandle = React.memo(({ width = 6, large = false, onMouseDown }: ResizeHandleProps) => (
+  <div
+    className="resize-handle"
+    style={{
+      width,
+      cursor: 'col-resize',
+      backgroundColor: large ? 'transparent' : 'var(--theme-border)',
+    }}
+    onMouseDown={onMouseDown}
+  />
+))
+
+interface ConstraintTagProps {
+  label: string
+  active: boolean
+  activeColor: string
+  isColumnReadOnly: boolean
+  onClick: () => void
+  fontConfig: { caption: number }
+}
+
+const ConstraintTag = React.memo(({ label, active, activeColor, isColumnReadOnly, onClick, fontConfig }: ConstraintTagProps) => (
+  <Tag
+    color={active ? activeColor : 'default'}
+    onClick={onClick}
+    style={{
+      cursor: isColumnReadOnly ? 'not-allowed' : 'pointer',
+      fontSize: `${fontConfig.caption}px`,
+      padding: '2px 8px',
+      opacity: isColumnReadOnly ? 0.6 : 1,
+    }}
+  >{label}</Tag>
+))
+
+interface IndexModalProps {
+  open: boolean
+  editingIndex: Index | null
+  indexForm: any
+  table: TableType
+  onSave: (values: any) => void
+  onCancel: () => void
+}
+
+const IndexModal = React.memo(({ open, editingIndex, indexForm, table, onSave, onCancel }: IndexModalProps) => (
+  <Modal
+    title={editingIndex ? "编辑索引" : "新建索引"}
+    open={open}
+    onOk={() => indexForm.submit()}
+    onCancel={onCancel}
+    okText="保存"
+    cancelText="取消"
+    width={500}
+    destroyOnHidden
+  >
+    <Form
+      form={indexForm}
+      layout="vertical"
+      onFinish={onSave}
+      initialValues={editingIndex ? {
+        name: editingIndex.name,
+        columns: editingIndex.columns,
+        unique: editingIndex.unique,
+        type: editingIndex.type
+      } : {}}
+      key={editingIndex?.id || 'new'}
+    >
+      <Form.Item name="name" label="索引名" rules={[{ required: true, message: "请输入索引名" }]}>
+        <Input placeholder="请输入索引名" />
+      </Form.Item>
+      <Form.Item name="columns" label="包含列" rules={[{ required: true, message: "请选择包含列" }]}>
+        <Select mode="multiple" placeholder="请选择列">
+          {(table.columns || []).map(col => (
+            <Option key={col.id} value={col.name}>{col.name}</Option>
+          ))}
+        </Select>
+      </Form.Item>
+      <Form.Item name="unique" label="约束类型" initialValue={false}>
+        <Select>
+          <Option value={false}>普通索引</Option>
+          <Option value={true}>唯一索引</Option>
+        </Select>
+      </Form.Item>
+      <Form.Item name="type" label="索引类型" initialValue="BTREE">
+        <Select>
+          <Option value="BTREE">BTREE</Option>
+          <Option value="HASH">HASH</Option>
+          <Option value="FULLTEXT">FULLTEXT</Option>
+        </Select>
+      </Form.Item>
+    </Form>
+  </Modal>
+))
+
 interface TableEditorProps {
   table: TableType
   onClose: () => void
@@ -55,7 +161,7 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
   const {
     updateTable, loadColumns, createColumn, updateColumn, deleteColumn,
     loadIndexes, createIndex, updateIndex, deleteIndex, updateColumnOrder,
-    autoAddIdColumn, fontConfig
+    autoAddIdColumn, fontConfig, canEdit
   } = useAppStore()
   const { 
     isTableLocked, 
@@ -125,6 +231,7 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
   }, [form, table.id, updateTable, onClose])
 
   const handleAddColumn = useCallback(async () => {
+    if (!canEdit) { message.warning('当前为查看者，无法添加列'); return }
     const existingNames = editingColumns.map(c => c.name.toLowerCase())
     let newName = 'new_column'
     let counter = 1
@@ -144,6 +251,7 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
   }, [table.id, editingColumns.length, createColumn])
 
   const handleDeleteColumn = useCallback(async (columnId: string) => {
+    if (!canEdit) { message.warning('当前为查看者，无法删除列'); return }
     await deleteColumn(columnId)
   }, [deleteColumn])
 
@@ -277,7 +385,7 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
         <Alert
           message={
             <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <LockOutlined style={{ color: '#52c41a' }} />
+              <LockOutlined style={{ color: UI_COLORS.GREEN }} />
               <span>您已获得编辑权限，正在编辑此表</span>
             </span>
           }
@@ -289,7 +397,11 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
       
       <div style={{ marginBottom: '12px' }}>
         <Form form={form} layout="inline">
-          <Form.Item label="表名" name="name">
+          <Form.Item label={
+            isTableReadOnly
+              ? <span>表名 <LockOutlined style={{ color: UI_COLORS.RED, fontSize: 12 }} /> <UserOutlined style={{ fontSize: 12 }} /> {tableLock?.userName}</span>
+              : '表名'
+          } name="name">
             <Input 
               style={{ width: 200 }} 
               disabled={isTableReadOnly}
@@ -322,12 +434,12 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
             <div>
               <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3 style={{ margin: 0, fontSize: `${fontConfig.subtitle}px`, color: 'var(--theme-text)', fontWeight: 600 }}>列列表</h3>
-                <Button 
-                  type="primary" 
-                  icon={<PlusOutlined />} 
-                  onClick={handleAddColumn} 
+                <Button
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  onClick={handleAddColumn}
                   size="middle"
-                  disabled={isTableReadOnly}
+                  disabled={isTableReadOnly || !canEdit}
                 >
                   添加列
                 </Button>
@@ -346,55 +458,15 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
                   }}>
                     <div style={{ width: 48, textAlign: 'center', color: 'var(--theme-text-secondary)' }}>排序</div>
                     <div style={{ width: columnWidths.name, color: 'var(--theme-text-secondary)' }}>列名</div>
-                    <div 
-                      className="resize-handle"
-                      style={{ 
-                        width: 6, 
-                        cursor: 'col-resize', 
-                        backgroundColor: 'transparent'
-                      }}
-                      onMouseDown={(e) => handleStartResize('name', e)}
-                    />
+                    <ResizeHandle large onMouseDown={(e) => handleStartResize('name', e)} />
                     <div style={{ width: columnWidths.type, color: 'var(--theme-text-secondary)' }}>类型</div>
-                    <div 
-                      className="resize-handle"
-                      style={{ 
-                        width: 6, 
-                        cursor: 'col-resize', 
-                        backgroundColor: 'transparent'
-                      }}
-                      onMouseDown={(e) => handleStartResize('type', e)}
-                    />
+                    <ResizeHandle large onMouseDown={(e) => handleStartResize('type', e)} />
                     <div style={{ width: columnWidths.length, color: 'var(--theme-text-secondary)' }}>长度</div>
-                    <div 
-                      className="resize-handle"
-                      style={{ 
-                        width: 6, 
-                        cursor: 'col-resize', 
-                        backgroundColor: 'transparent'
-                      }}
-                      onMouseDown={(e) => handleStartResize('length', e)}
-                    />
+                    <ResizeHandle large onMouseDown={(e) => handleStartResize('length', e)} />
                     <div style={{ width: columnWidths.constraint, color: 'var(--theme-text-secondary)' }}>约束</div>
-                    <div 
-                      className="resize-handle"
-                      style={{ 
-                        width: 4, 
-                        cursor: 'col-resize', 
-                        backgroundColor: 'var(--theme-border)'
-                      }}
-                      onMouseDown={(e) => handleStartResize('constraint', e)}
-                    />
+                    <ResizeHandle width={4} onMouseDown={(e) => handleStartResize('constraint', e)} />
                     <div style={{ width: columnWidths.default, color: 'var(--theme-text-secondary)' }}>默认值</div>
-                    <div 
-                      className="resize-handle"
-                      style={{ 
-                        width: 4, 
-                        cursor: 'col-resize', 
-                        backgroundColor: 'var(--theme-border)'
-                      }}
-                      onMouseDown={(e) => handleStartResize('default', e)}
-                    />
+                    <ResizeHandle width={4} onMouseDown={(e) => handleStartResize('default', e)} />
                     <div style={{ width: columnWidths.comment, color: 'var(--theme-text-secondary)' }}>注释</div>
                     <div style={{ width: 48, textAlign: 'center', color: 'var(--theme-text-secondary)' }}>操作</div>
                   </div>
@@ -410,7 +482,7 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
                           style={{ 
                             display: 'flex',
                             alignItems: 'center',
-                            background: columnLock ? '#fff2f0' : 'var(--theme-background)', 
+                            background: columnLock ? UI_COLORS.LOCK_BG : 'var(--theme-background)', 
                             borderBottom: '1px solid var(--theme-border)',
                             padding: '8px 12px',
                             gap: 6,
@@ -478,69 +550,62 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
                           <div style={{ width: 4 }} />
                           <div style={{ width: columnWidths.constraint }}>
                             <Space size="small" wrap>
-                              <Tag
-                                color={col.primaryKey ? 'green' : 'default'}
+                              <ConstraintTag
+                                label="PK"
+                                active={col.primaryKey}
+                                activeColor="green"
+                                isColumnReadOnly={isColumnReadOnly}
+                                fontConfig={fontConfig}
                                 onClick={() => {
                                   if (!isColumnReadOnly) {
                                     handleUpdateColumnField(col.id, 'primaryKey', !col.primaryKey)
                                     handleSaveColumn(col.id)
                                   }
                                 }}
-                                style={{ 
-                                  cursor: isColumnReadOnly ? 'not-allowed' : 'pointer', 
-                                  fontSize: `${fontConfig.caption}px`, 
-                                  padding: '2px 8px',
-                                  opacity: isColumnReadOnly ? 0.6 : 1
-                                }}
-                              >PK</Tag>
-                              <Tag
-                                color={col.unique ? 'orange' : 'default'}
+                              />
+                              <ConstraintTag
+                                label="UQ"
+                                active={col.unique}
+                                activeColor="orange"
+                                isColumnReadOnly={isColumnReadOnly}
+                                fontConfig={fontConfig}
                                 onClick={() => {
                                   if (!isColumnReadOnly) {
                                     handleUpdateColumnField(col.id, 'unique', !col.unique)
                                     handleSaveColumn(col.id)
                                   }
                                 }}
-                                style={{ 
-                                  cursor: isColumnReadOnly ? 'not-allowed' : 'pointer', 
-                                  fontSize: `${fontConfig.caption}px`, 
-                                  padding: '2px 8px',
-                                  opacity: isColumnReadOnly ? 0.6 : 1
-                                }}
-                              >UQ</Tag>
-                              <Tag
-                                color={!col.nullable ? 'red' : 'default'}
+                              />
+                              <ConstraintTag
+                                label={col.nullable ? 'NULL' : 'NOT NULL'}
+                                active={!col.nullable}
+                                activeColor="red"
+                                isColumnReadOnly={isColumnReadOnly}
+                                fontConfig={fontConfig}
                                 onClick={() => {
                                   if (!isColumnReadOnly) {
                                     handleUpdateColumnField(col.id, 'nullable', !col.nullable)
                                     handleSaveColumn(col.id)
                                   }
                                 }}
-                                style={{ 
-                                  cursor: isColumnReadOnly ? 'not-allowed' : 'pointer', 
-                                  fontSize: `${fontConfig.caption}px`, 
-                                  padding: '2px 8px',
-                                  opacity: isColumnReadOnly ? 0.6 : 1
+                              />
+                              <ConstraintTag
+                                label="AI"
+                                active={col.autoIncrement}
+                                activeColor="blue"
+                                isColumnReadOnly={isColumnReadOnly}
+                                fontConfig={fontConfig}
+                                onClick={() => {
+                                  if (!isColumnReadOnly) {
+                                    handleUpdateColumnField(col.id, 'autoIncrement', !col.autoIncrement)
+                                    handleSaveColumn(col.id)
+                                  }
                                 }}
-                              >{col.nullable ? 'NULL' : 'NOT NULL'}</Tag>
-                            <Tag
-                              color={col.autoIncrement ? 'blue' : 'default'}
-                              onClick={() => {
-                                if (!isColumnReadOnly) {
-                                  handleUpdateColumnField(col.id, 'autoIncrement', !col.autoIncrement)
-                                  handleSaveColumn(col.id)
-                                }
-                              }}
-                              style={{ 
-                                cursor: isColumnReadOnly ? 'not-allowed' : 'pointer', 
-                                fontSize: `${fontConfig.caption}px`, 
-                                padding: '2px 8px',
-                                opacity: isColumnReadOnly ? 0.6 : 1
-                              }}
-                            >AI</Tag>
+                              />
                             {columnLock && (
                               <Tooltip title={`${columnLock.userName} 正在编辑此字段`}>
-                                <LockOutlined style={{ color: '#ff4d4f', fontSize: '12px' }} />
+                                <LockOutlined style={{ color: UI_COLORS.RED, fontSize: '12px' }} />
+                                <span style={{ fontSize: '11px', color: UI_COLORS.GRAY, marginLeft: 2 }}>{columnLock.userName}</span>
                               </Tooltip>
                             )}
                           </Space>
@@ -628,7 +693,7 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
                     }}>
                       <Row gutter={12} align="middle">
                         <Col span={4}>
-                          <div style={{ fontSize: `${fontConfig.caption}px`, color: '#666', marginBottom: '4px' }}>索引名</div>
+                          <div style={{ fontSize: `${fontConfig.caption}px`, color: UI_COLORS.GRAY, marginBottom: '4px' }}>索引名</div>
                           <Input
                             value={idx.name}
                             onChange={(e) => updateIndex(idx.id, { name: e.target.value })}
@@ -636,11 +701,11 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
                           />
                         </Col>
                         <Col span={6}>
-                          <div style={{ fontSize: `${fontConfig.caption}px`, color: '#666', marginBottom: '4px' }}>包含列</div>
+                          <div style={{ fontSize: `${fontConfig.caption}px`, color: UI_COLORS.GRAY, marginBottom: '4px' }}>包含列</div>
                           <div>{idx.columns?.join(', ') || '-'}</div>
                         </Col>
                         <Col span={3}>
-                          <div style={{ fontSize: `${fontConfig.caption}px`, color: '#666', marginBottom: '4px' }}>类型</div>
+                          <div style={{ fontSize: `${fontConfig.caption}px`, color: UI_COLORS.GRAY, marginBottom: '4px' }}>类型</div>
                           <Select
                             value={idx.type}
                             onChange={(val) => updateIndex(idx.id, { type: val })}
@@ -652,7 +717,7 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
                           </Select>
                         </Col>
                         <Col span={4}>
-                          <div style={{ fontSize: `${fontConfig.caption}px`, color: '#666', marginBottom: '4px' }}>约束</div>
+                          <div style={{ fontSize: `${fontConfig.caption}px`, color: UI_COLORS.GRAY, marginBottom: '4px' }}>约束</div>
                           <Tag
                             color={idx.unique ? 'red' : 'default'}
                             onClick={() => updateIndex(idx.id, { unique: !idx.unique })}
@@ -684,72 +749,14 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
         }
       ]} />
 
-      <Modal
-        title={editingIndex ? "编辑索引" : "新建索引"}
+      <IndexModal
         open={isIndexModalOpen}
-        onOk={() => indexForm.submit()}
+        editingIndex={editingIndex}
+        indexForm={indexForm}
+        table={table}
+        onSave={handleSaveIndex}
         onCancel={() => setIsIndexModalOpen(false)}
-        okText="保存"
-        cancelText="取消"
-        width={500}
-        destroyOnHidden
-      >
-        <Form
-          form={indexForm}
-          layout="vertical"
-          onFinish={handleSaveIndex}
-          initialValues={editingIndex ? {
-            name: editingIndex.name,
-            columns: editingIndex.columns,
-            unique: editingIndex.unique,
-            type: editingIndex.type
-          } : {}}
-          key={editingIndex?.id || 'new'}
-        >
-          <Form.Item
-            name="name"
-            label="索引名"
-            rules={[{ required: true, message: "请输入索引名" }]}
-          >
-            <Input placeholder="请输入索引名" />
-          </Form.Item>
-          
-          <Form.Item
-            name="columns"
-            label="包含列"
-            rules={[{ required: true, message: "请选择包含列" }]}
-          >
-            <Select mode="multiple" placeholder="请选择列">
-              {(table.columns || []).map(col => (
-                <Option key={col.id} value={col.name}>{col.name}</Option>
-              ))}
-            </Select>
-          </Form.Item>
-          
-          <Form.Item
-            name="unique"
-            label="约束类型"
-            initialValue={false}
-          >
-            <Select>
-              <Option value={false}>普通索引</Option>
-              <Option value={true}>唯一索引</Option>
-            </Select>
-          </Form.Item>
-          
-          <Form.Item
-            name="type"
-            label="索引类型"
-            initialValue="BTREE"
-          >
-            <Select>
-              <Option value="BTREE">BTREE</Option>
-              <Option value="HASH">HASH</Option>
-              <Option value="FULLTEXT">FULLTEXT</Option>
-            </Select>
-          </Form.Item>
-        </Form>
-      </Modal>
+      />
     </div>
   )
 }

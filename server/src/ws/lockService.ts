@@ -21,6 +21,8 @@ class LockService {
   private tableLocks: Map<string, Map<string, Set<string>>> = new Map()
   // 清理定时器
   private cleanupTimer: NodeJS.Timeout | null = null
+  // 过期锁回调
+  private lockExpiredCallback: ((projectId: string, expiredLocks: LockInfo[]) => void) | null = null
 
   constructor() {
     this.startCleanupTimer()
@@ -291,6 +293,24 @@ class LockService {
     return true
   }
 
+  // 通过 lockId 续租锁
+  renewLockById(projectId: string, lockId: string, userId: string): boolean {
+    const projectLocks = this.getProjectLocks(projectId)
+
+    const lock = projectLocks.get(lockId)
+    if (!lock || lock.userId !== userId) {
+      return false
+    }
+
+    lock.expiresAt = Date.now() + LOCK_TIMEOUT_MS
+    return true
+  }
+
+  // 设置过期锁回调
+  setOnLockExpired(callback: (projectId: string, expiredLocks: LockInfo[]) => void): void {
+    this.lockExpiredCallback = callback
+  }
+
   // 获取项目所有锁
   getProjectLocksInfo(projectId: string): LockInfo[] {
     const projectLocks = this.getProjectLocks(projectId)
@@ -337,15 +357,22 @@ class LockService {
 
     for (const [projectId, projectLocks] of this.projectLocks) {
       const locksToRemove: string[] = []
+      const expiredLocks: LockInfo[] = []
 
       for (const [lockId, lock] of projectLocks) {
         if (lock.expiresAt < now) {
           locksToRemove.push(lockId)
+          expiredLocks.push(lock)
         }
       }
 
       if (locksToRemove.length > 0) {
         console.warn(`[LockService] 清理过期锁: ${locksToRemove.length} 个`)
+
+        // 通知过期锁持有者
+        if (this.lockExpiredCallback && expiredLocks.length > 0) {
+          this.lockExpiredCallback(projectId, expiredLocks)
+        }
 
         const userLocks = this.getUserLocks(projectId)
         const tableLocks = this.getTableLocks(projectId)

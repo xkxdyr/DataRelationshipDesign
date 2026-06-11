@@ -17,11 +17,25 @@ router.post('/suggest-relationships', llmController.suggestRelationships)
 
 router.post('/mock-data', llmController.generateMockData)
 router.post('/mock-data/batch', llmController.generateBatchMockData)
+router.post('/mock-data/write-to-db', llmController.writeMockDataToDb)
 router.get('/mock-templates', llmController.getMockTemplates)
 
 router.post('/snapshot', llmController.createSnapshot)
 router.get('/snapshot/:projectId/latest', llmController.getLatestSnapshot)
+router.get('/snapshot/:projectId/list', llmController.getSnapshots)
+router.post('/snapshot/:snapshotId/restore', llmController.restoreSnapshot)
 
 router.post('/log-operation', llmController.logOperation)
+
+router.post('/conversation', llmController.saveConversationMessage)
+router.get('/conversation/:userId', llmController.getConversationHistory)
+router.delete('/conversation/:userId', llmController.clearConversationHistory)
+
+router.post('/db-performance', llmController.testDbPerformance)
+router.post('/db-connection-speed', llmController.testDbConnectionSpeed)
+
+router.post('/analyze-project', llmController.analyzeProject)
+router.post('/analyze-table', llmController.analyzeTable)
+router.post('/recommend-tables', llmController.recommendTables)
 
 export default router

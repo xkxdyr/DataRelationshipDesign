@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react'
-import { Modal, Form, Input, Select, Switch, Button, Checkbox, Space, Typography, Tag, message, Card } from 'antd'
+import React, { useState, useEffect, useCallback } from 'react'
+import { Modal, Form, Input, Select, Switch, Button, Checkbox, Typography, Tag, message, Card } from 'antd'
 import { DatabaseOutlined, PlayCircleOutlined, EyeOutlined, CheckCircleOutlined, CiCircleOutlined } from '@ant-design/icons'
 import { connectionApi, databaseSyncApi, ConnectionConfig, SyncConnection, TableSchema, ColumnSchema, IndexSchema, ForeignKeySchema } from '../services/api'
 import { Table } from '../types'
@@ -263,10 +263,14 @@ export const DatabaseSyncModal: React.FC<DatabaseSyncModalProps> = ({ visible, o
               <Select
                 style={{ width: '100%' }}
                 placeholder="选择已保存的连接配置"
-                options={connections.map(c => ({ value: c.id, label: c.name }))}
                 onChange={handleConnectionSelect}
                 allowClear
-              />
+                virtual={false}
+              >
+                {connections.map(c => (
+                  <Select.Option key={c.id} value={c.id}>{c.name}</Select.Option>
+                ))}
+              </Select>
               {selectedConnection && (
                 <Tag color="blue" style={{ marginTop: 8, display: 'inline-block' }}>
                   已加载: {selectedConnection.name}
@@ -285,9 +289,13 @@ export const DatabaseSyncModal: React.FC<DatabaseSyncModalProps> = ({ visible, o
               >
                 <Select
                   placeholder="选择数据库类型"
-                  options={databaseTypes}
                   onChange={handleDatabaseTypeChange}
-                />
+                  virtual={false}
+                >
+                  {databaseTypes.map(dt => (
+                    <Select.Option key={dt.value} value={dt.value}>{dt.label}</Select.Option>
+                  ))}
+                </Select>
               </Form.Item>
 
               <Form.Item
@@ -366,7 +374,7 @@ export const DatabaseSyncModal: React.FC<DatabaseSyncModalProps> = ({ visible, o
               </div>
             </div>
 
-            <Space style={{ marginTop: 24 }}>
+            <div style={{ marginTop: 24, display: 'flex', gap: 8 }}>
               <Button
                 type="primary"
                 icon={<EyeOutlined />}
@@ -376,7 +384,7 @@ export const DatabaseSyncModal: React.FC<DatabaseSyncModalProps> = ({ visible, o
               >
                 预览DDL
               </Button>
-            </Space>
+            </div>
           </div>
         )}
 
@@ -391,7 +399,7 @@ export const DatabaseSyncModal: React.FC<DatabaseSyncModalProps> = ({ visible, o
               </pre>
             </Card>
 
-            <Space>
+            <div style={{ display: 'flex', gap: 8 }}>
               <Button
                 onClick={() => setStep('connection')}
               >
@@ -406,7 +414,7 @@ export const DatabaseSyncModal: React.FC<DatabaseSyncModalProps> = ({ visible, o
               >
                 执行同步
               </Button>
-            </Space>
+            </div>
           </div>
         )}
 
@@ -448,14 +456,14 @@ export const DatabaseSyncModal: React.FC<DatabaseSyncModalProps> = ({ visible, o
               </Card>
             )}
 
-            <Space style={{ marginTop: 16 }}>
+            <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
               <Button
                 type="primary"
                 onClick={resetAndClose}
               >
                 完成
               </Button>
-            </Space>
+            </div>
           </div>
         )}
       </div>

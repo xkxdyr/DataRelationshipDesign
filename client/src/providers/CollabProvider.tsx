@@ -1,8 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react'
 import * as Y from 'yjs'
+import { notification } from 'antd'
 import { collabManager, CollabState, UserInfo } from '../services/collabManager'
 import { useAppStore } from '../stores/appStore'
 import { Table, Column, Relationship, Index } from '../types'
+import { historyApi } from '../services/historyApi'
 
 export interface TableData {
   id: string
@@ -190,6 +192,30 @@ export function CollabProvider({ children }: CollabProviderProps) {
   const isInitializedRef = useRef(false)
   const lastProjectIdRef = useRef<string | null>(null)
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const reminderCheckedRef = useRef(false)
+  const remoteUpdateCountRef = useRef(0)
+  const remoteUpdateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // 检查历史清理提醒
+  useEffect(() => {
+    if (!currentUser || !currentProject || reminderCheckedRef.current) return
+    const checkHistoryReminder = async () => {
+      try {
+        const response = await historyApi.getUserHistoryReminders(currentUser.id)
+        if (response && response.length > 0) {
+          notification.warning({
+            message: '操作日志清理提醒',
+            description: `有 ${response.length} 个项目的操作日志超过半年，建议清理`,
+            duration: 10
+          })
+        }
+        reminderCheckedRef.current = true
+      } catch (e) {
+        // 忽略
+      }
+    }
+    checkHistoryReminder()
+  }, [currentUser, currentProject])
 
   const updateFromDocData = useCallback(() => {
     const doc = collabManager.getDoc()
@@ -295,6 +321,22 @@ export function CollabProvider({ children }: CollabProviderProps) {
     
     const unsubscribeCRDT = collabManager.onCRDTUpdate(() => {
       updateFromDocData()
+
+      // 检测大量远程更新，提示用户数据已自动合并
+      remoteUpdateCountRef.current++
+      if (!remoteUpdateTimerRef.current) {
+        remoteUpdateTimerRef.current = setTimeout(() => {
+          if (remoteUpdateCountRef.current > 5) {
+            notification.info({
+              message: '协作更新',
+              description: `收到 ${remoteUpdateCountRef.current} 条远程更新，数据已自动合并`,
+              duration: 3
+            })
+          }
+          remoteUpdateCountRef.current = 0
+          remoteUpdateTimerRef.current = null
+        }, 2000)
+      }
     })
     
     return () => {
@@ -305,6 +347,11 @@ export function CollabProvider({ children }: CollabProviderProps) {
       if (syncTimerRef.current) {
         clearTimeout(syncTimerRef.current)
         syncTimerRef.current = null
+      }
+      // 清理远程更新计数定时器
+      if (remoteUpdateTimerRef.current) {
+        clearTimeout(remoteUpdateTimerRef.current)
+        remoteUpdateTimerRef.current = null
       }
     }
   }, [updateFromDocData])

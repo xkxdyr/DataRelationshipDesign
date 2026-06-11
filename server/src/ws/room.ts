@@ -170,6 +170,14 @@ export class CollabRoom {
     }
   }
 
+  // 处理锁续租请求
+  handleLockRenew(userId: string, data: { lockId: string }) {
+    const renewed = lockService.renewLockById(this.projectId, data.lockId, userId)
+    if (renewed) {
+      this.broadcastLockState()
+    }
+  }
+
   // 发送锁状态给指定用户
   private sendLockState(userId: string) {
     const locks = lockService.getProjectLocksInfo(this.projectId)

@@ -7,7 +7,10 @@ import ReactFlow, {
   useNodesState,
   useEdgesState,
   useReactFlow,
-  ReactFlowProvider
+  ReactFlowProvider,
+  getSmoothStepPath,
+  BaseEdge,
+  EdgeProps
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { Table, Relationship } from '../types'
@@ -47,12 +50,37 @@ const defaultLayoutOptions: AutoLayoutOptions = {
   direction: 'horizontal'
 }
 
+const AvoidNodeEdge = ({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  style = {},
+  markerEnd,
+}: EdgeProps) => {
+  const [edgePath] = getSmoothStepPath({
+    sourceX,
+    sourceY,
+    targetX,
+    targetY,
+    sourcePosition,
+    targetPosition,
+    borderRadius: 8,
+  })
+
+  return <BaseEdge id={id} path={edgePath} style={style} markerEnd={markerEnd} />
+}
+
 const nodeTypes = {
   tableNode: TableNode
 }
 
 const edgeTypes = {
-  smart: SmartEdge
+  smart: SmartEdge,
+  avoidNode: AvoidNodeEdge
 }
 
 const NODE_WIDTH = 280
@@ -182,7 +210,7 @@ const DragInfoTooltip = React.memo(({ dragInfo, snapToGrid }: { dragInfo: { x: n
 DragInfoTooltip.displayName = 'DragInfoTooltip'
 
 const CanvasContent: React.FC = () => {
-  const { tables, currentProject, updateTablePosition, selectTable, selectedTableId, selectedTableIds, deleteTable, createTable, loadTables, relationships, loadRelationships, canvasZoom, setCanvasZoom, snapToGrid, gridSize, setSnapToGrid, setGridSize, showMiniMap, setShowMiniMap, edgeStyle, showEdgeLabels, updateTable, selectMultipleTables, addSelectedTable, removeSelectedTable, clearSelectedTables, copyTable, pasteTable, copiedTable, undo, redo, canUndo, canRedo, deleteRelationship, createRelationship, updateRelationship } = useAppStore()
+  const { tables, currentProject, updateTablePosition, selectTable, selectedTableId, selectedTableIds, deleteTable, createTable, loadTables, relationships, loadRelationships, canvasZoom, setCanvasZoom, snapToGrid, gridSize, setSnapToGrid, setGridSize, showMiniMap, setShowMiniMap, edgeStyle, showEdgeLabels, updateTable, selectMultipleTables, addSelectedTable, removeSelectedTable, clearSelectedTables, copyTable, pasteTable, copiedTable, undo, redo, canUndo, canRedo, deleteRelationship, createRelationship, updateRelationship, canEdit, canManage, currentProjectRole } = useAppStore()
   const { isConnected, onlineUsers } = useCollab()
   const reactFlow = useReactFlow()
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
@@ -212,6 +240,7 @@ const CanvasContent: React.FC = () => {
   const [edgeContextMenuPos, setEdgeContextMenuPos] = useState<{ x: number; y: number; edgeId: string } | null>(null)
   const [searchText, setSearchText] = useState('')
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null)
+  const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null)
   const lastCursorSendRef = useRef(0)
 
   useEffect(() => {
@@ -282,7 +311,7 @@ const CanvasContent: React.FC = () => {
           id: rel.id,
           source: rel.sourceTableId,
           target: rel.targetTableId,
-          animated: edgeStyle !== 'smart',
+          animated: edgeStyle !== 'smart' && edgeStyle !== 'avoidNode',
           label: showEdgeLabels ? label : undefined,
           labelStyle: {
             fontSize: 11,
@@ -292,7 +321,7 @@ const CanvasContent: React.FC = () => {
             stroke: 'var(--theme-primary)',
             strokeWidth: 2
           },
-          type: edgeStyle === 'smart' ? 'smart' : edgeStyle
+          type: edgeStyle === 'smart' ? 'smart' : edgeStyle === 'avoidNode' ? 'avoidNode' : edgeStyle
         }
       }
       return null
@@ -303,24 +332,33 @@ const CanvasContent: React.FC = () => {
   const [edgeState, setEdgeState, onEdgesChange] = useEdgesState(initialEdges)
 
   const displayEdges = useMemo(() => {
-    if (!hoveredNodeId) return edgeState
+    if (!hoveredNodeId && !hoveredEdgeId) return edgeState
+
     const connectedEdgeIds = new Set<string>()
-    edgeState.forEach(edge => {
-      if (edge.source === hoveredNodeId || edge.target === hoveredNodeId) {
-        connectedEdgeIds.add(edge.id)
-      }
-    })
+    if (hoveredNodeId) {
+      edgeState.forEach(edge => {
+        if (edge.source === hoveredNodeId || edge.target === hoveredNodeId) {
+          connectedEdgeIds.add(edge.id)
+        }
+      })
+    }
+
     return edgeState.map(edge => {
-      if (connectedEdgeIds.has(edge.id)) {
+      const isHighlighted = hoveredEdgeId === edge.id || connectedEdgeIds.has(edge.id)
+      if (isHighlighted) {
         return {
           ...edge,
-          style: { ...edge.style, stroke: 'var(--theme-primary)', strokeWidth: 3, opacity: 1 },
+          style: { ...edge.style, stroke: '#1890ff', strokeWidth: 3, opacity: 1 },
           animated: true
         }
       }
-      return { ...edge, style: { ...edge.style, opacity: 0.15 } }
+      // 当有节点或边悬停时，淡化其他边
+      if (hoveredNodeId || hoveredEdgeId) {
+        return { ...edge, style: { ...edge.style, opacity: 0.15 } }
+      }
+      return edge
     })
-  }, [edgeState, hoveredNodeId])
+  }, [edgeState, hoveredNodeId, hoveredEdgeId])
 
   const isDraggingRef = React.useRef(false)
 
@@ -484,6 +522,7 @@ const CanvasContent: React.FC = () => {
   }
 
   const onConnect = useCallback((connection: any) => {
+    if (!canEdit) { message.warning('当前为查看者，无法创建关系'); return }
     const { source, target } = connection
     const sourceTable = tables.find(t => t.id === source)
     const targetTable = tables.find(t => t.id === target)
@@ -614,6 +653,7 @@ const CanvasContent: React.FC = () => {
   }, [canvasZoom, setCanvasZoom])
 
   const handleBatchDelete = () => {
+    if (!canEdit) { message.warning('当前为查看者，无法删除表'); return }
     if (selectedTableIds.length === 0) return
     Modal.confirm({
       title: `确认删除`,
@@ -790,39 +830,85 @@ const CanvasContent: React.FC = () => {
         }
       })
     } else if (opts.layoutType === 'hierarchical') {
-      const rowSizes = [1, 2, 3, Math.ceil(tablesToLayout.length / 2)]
-      let currentIndex = 0
-      let currentRow = 0
-      let currentCol = 0
-      let currentY = opts.startY
-      
-      const rowHeights: number[] = []
-      
-      return tablesToLayout.map((table) => {
-        const rowTables = rowSizes[currentRow] || 4
-        const height = calculateTableHeight(table)
-        
-        if (currentCol === 0) {
-          rowHeights[currentRow] = height
-        } else {
-          rowHeights[currentRow] = Math.max(rowHeights[currentRow], height)
-        }
-        
-        const result = {
-          ...table,
-          positionX: opts.startX + currentCol * (opts.tableWidth + opts.paddingX),
-          positionY: currentY
-        }
-        
-        currentCol++
-        if (currentCol >= rowTables) {
-          currentCol = 0
-          currentRow++
-          currentY += rowHeights[currentRow - 1] + opts.paddingY
-        }
-        
-        return result
+      // 层级布局 - 基于依赖关系
+      const dependencyMap = new Map<string, Set<string>>() // tableId -> 它依赖的表
+      const dependentsMap = new Map<string, Set<string>>() // tableId -> 依赖它的表
+
+      tablesToLayout.forEach(t => {
+        dependencyMap.set(t.id, new Set())
+        dependentsMap.set(t.id, new Set())
       })
+
+      // 从关系中提取依赖
+      relationships.forEach(rel => {
+        // source 依赖 target（source 有外键指向 target）
+        dependencyMap.get(rel.sourceTableId)?.add(rel.targetTableId)
+        dependentsMap.get(rel.targetTableId)?.add(rel.sourceTableId)
+      })
+
+      // 拓扑排序确定层级
+      const levels = new Map<string, number>()
+      const visited = new Set<string>()
+
+      function assignLevel(tableId: string, level: number) {
+        if (visited.has(tableId)) {
+          levels.set(tableId, Math.max(levels.get(tableId) || 0, level))
+          return
+        }
+        visited.add(tableId)
+        levels.set(tableId, level)
+
+        // 依赖的表在更高层级
+        const deps = dependencyMap.get(tableId) || new Set()
+        deps.forEach(depId => {
+          if (dependencyMap.has(depId)) {
+            assignLevel(depId, level + 1)
+          }
+        })
+      }
+
+      // 从没有依赖的表开始（根节点）
+      const roots = tablesToLayout.filter(t => (dependencyMap.get(t.id)?.size || 0) === 0)
+      roots.forEach(t => assignLevel(t.id, 0))
+
+      // 处理未被访问的表（循环依赖）
+      tablesToLayout.forEach(t => {
+        if (!visited.has(t.id)) {
+          assignLevel(t.id, 0)
+        }
+      })
+
+      // 按层级分组
+      const levelGroups = new Map<number, string[]>()
+      levels.forEach((level, tableId) => {
+        if (!levelGroups.has(level)) levelGroups.set(level, [])
+        levelGroups.get(level)!.push(tableId)
+      })
+
+      // 分配位置
+      const maxLevel = Math.max(...levels.values(), 0)
+      const levelHeight = opts.tableHeight + opts.paddingY
+      const tableSpacing = opts.tableWidth + opts.paddingX
+
+      const positions: Record<string, { x: number; y: number }> = {}
+      levelGroups.forEach((tableIds, level) => {
+        const totalWidth = tableIds.length * tableSpacing
+        const startX = opts.startX + (opts.maxColumns ? 0 : 0)
+        const y = (maxLevel - level) * levelHeight + opts.startY
+
+        tableIds.forEach((tableId, index) => {
+          positions[tableId] = {
+            x: startX + index * tableSpacing,
+            y
+          }
+        })
+      })
+
+      return tablesToLayout.map(table => ({
+        ...table,
+        positionX: positions[table.id]?.x ?? opts.startX,
+        positionY: positions[table.id]?.y ?? opts.startY
+      }))
     } else if (opts.layoutType === 'compact') {
       const cols = opts.maxColumns ? Math.min(Math.ceil(Math.sqrt(tablesToLayout.length)), opts.maxColumns) : Math.ceil(Math.sqrt(tablesToLayout.length))
       const compactPaddingX = 30
@@ -870,29 +956,53 @@ const CanvasContent: React.FC = () => {
     })
   }
 
-  const applyAutoLayout = () => {
+  const applyAutoLayout = async () => {
     if (tables.length === 0) {
       message.warning('没有表需要布局')
       return
     }
-    
-    const values = autoLayoutForm.getFieldsValue()
-    const options: Partial<AutoLayoutOptions> = {
-      layoutType: values.layoutType,
-      paddingX: values.paddingX,
-      paddingY: values.paddingY,
-      maxColumns: values.maxColumns
+
+    // 请求布局锁
+    if (isConnected) {
+      collabManager.acquireLock('table', 'layout')
+      // 等待锁获取结果（简化处理，给一个短暂延迟）
+      await new Promise(resolve => setTimeout(resolve, 500))
+      const layoutLock = collabManager.isTableLocked('layout')
+      if (layoutLock) {
+        message.warning('其他用户正在编辑，无法执行自动布局')
+        return
+      }
     }
-    
-    const layoutedTables = autoLayoutTables(tables, options)
-    
-    layoutedTables.forEach(table => {
-      updateTablePosition(table.id, table.positionX, table.positionY)
-    })
-    
-    setLayoutOptions(prev => ({ ...prev, ...options }))
-    setShowAutoLayoutModal(false)
-    message.success('布局整理完成')
+
+    try {
+      const values = autoLayoutForm.getFieldsValue()
+      const options: Partial<AutoLayoutOptions> = {
+        layoutType: values.layoutType,
+        paddingX: values.paddingX,
+        paddingY: values.paddingY,
+        maxColumns: values.maxColumns
+      }
+
+      const layoutedTables = autoLayoutTables(tables, options)
+
+      layoutedTables.forEach(table => {
+        updateTablePosition(table.id, table.positionX, table.positionY)
+      })
+
+      setLayoutOptions(prev => ({ ...prev, ...options }))
+      setShowAutoLayoutModal(false)
+      message.success('布局整理完成')
+
+      // 广播布局完成通知
+      if (isConnected) {
+        collabManager.sendCursorUpdate(-1, -1) // 触发同步
+      }
+    } finally {
+      // 释放布局锁
+      if (isConnected) {
+        collabManager.releaseLock('table', 'layout')
+      }
+    }
   }
 
   const resetLayoutOptions = () => {
@@ -1225,15 +1335,28 @@ const CanvasContent: React.FC = () => {
           boxShadow: '0 2px 8px var(--theme-shadow)'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenModal} size="small">
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenModal} size="small" disabled={!canEdit}>
               新建表
             </Button>
-            <Button icon={<LinkOutlined />} onClick={() => setIsRelationshipEditorOpen(true)} size="small">
+            <Button icon={<LinkOutlined />} onClick={() => setIsRelationshipEditorOpen(true)} size="small" disabled={!canEdit}>
               关系管理
             </Button>
             <Button icon={<SettingOutlined />} onClick={handleAutoLayout} size="small">
               自动布局
             </Button>
+            {currentProjectRole && currentProjectRole !== 'owner' && (
+              <span style={{
+                fontSize: 11,
+                padding: '2px 8px',
+                borderRadius: 4,
+                background: currentProjectRole === 'viewer' ? '#fff1f0' : '#e6f7ff',
+                color: currentProjectRole === 'viewer' ? '#cf1322' : '#096dd9',
+                border: `1px solid ${currentProjectRole === 'viewer' ? '#ffa39e' : '#91d5ff'}`,
+                whiteSpace: 'nowrap',
+              }}>
+                {currentProjectRole === 'viewer' ? '只读' : '编辑者'}
+              </span>
+            )}
           </div>
           
           <Divider type="vertical" style={{ height: 28, margin: '0 2px' }} />
@@ -1576,6 +1699,8 @@ const CanvasContent: React.FC = () => {
           onNodeDoubleClick={onNodeDoubleClick}
           onNodeMouseEnter={(e, node) => setHoveredNodeId(node.id)}
           onNodeMouseLeave={() => setHoveredNodeId(null)}
+          onEdgeMouseEnter={(e, edge) => setHoveredEdgeId(edge.id)}
+          onEdgeMouseLeave={() => setHoveredEdgeId(null)}
           onEdgeClick={onEdgeClick}
           onEdgeDoubleClick={onEdgeDoubleClick}
           onEdgeContextMenu={onEdgeContextMenu}

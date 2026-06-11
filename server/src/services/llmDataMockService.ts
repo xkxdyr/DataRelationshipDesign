@@ -751,7 +751,69 @@ function generateValueByType(
 }
 
 export const llmDataMockService = {
-  generateMockData(request: MockDataRequest): MockDataResult {
+  async generateMockData(request: MockDataRequest, configId?: string): Promise<MockDataResult> {
+    // 当 configId 存在时，使用 LLM 生成数据
+    if (configId) {
+      return this.generateMockDataWithLLM(request, configId)
+    }
+    return this.generateMockDataByRules(request)
+  },
+
+  async generateMockDataWithLLM(request: MockDataRequest, configId: string): Promise<MockDataResult> {
+    const { llmService } = await import('./llmService')
+    const { tableName, tableComment, columns, rowCount } = request
+
+    const fieldList = columns.map(col => {
+      let desc = `${col.name} (${col.dataType})`
+      if (col.comment) desc += ` - ${col.comment}`
+      if (col.primaryKey) desc += ' [主键]'
+      if (col.unique) desc += ' [唯一]'
+      if (!col.nullable) desc += ' [非空]'
+      return desc
+    }).join(', ')
+
+    const prompt = `根据表 ${tableName} 的字段结构生成 ${rowCount} 条模拟数据。字段: ${fieldList}。请以JSON数组格式返回，每个元素是一个对象，键为字段名。只返回JSON数组，不要有其他文字。`
+
+    const systemPrompt = '你是一个数据生成专家，根据表结构生成真实合理的模拟数据。只返回JSON数组，不要有其他文字。'
+
+    const response = await llmService.callLLMWithConfig(configId, prompt, systemPrompt)
+
+    // 解析 LLM 返回的 JSON 数据
+    let rows: Record<string, any>[] = []
+    try {
+      const jsonMatch = response.match(/\[[\s\S]*\]/)
+      if (jsonMatch) {
+        rows = JSON.parse(jsonMatch[0])
+      }
+    } catch (e) {
+      console.error('解析LLM生成的数据失败，回退到规则生成:', e)
+      return this.generateMockDataByRules(request)
+    }
+
+    // 如果解析失败或数据为空，回退到规则生成
+    if (!rows || rows.length === 0) {
+      return this.generateMockDataByRules(request)
+    }
+
+    const columnData: MockDataColumn[] = columns.map(col => ({
+      name: col.name,
+      dataType: col.dataType,
+      values: rows.map(row => row[col.name] ?? null)
+    }))
+
+    rows.forEach((row, i) => { row._key = `mock-row-${tableName}-${i}` })
+
+    const sql = this.generateInsertSQL(tableName, columns, rows)
+
+    return {
+      tableName,
+      columns: columnData,
+      rows,
+      sql
+    }
+  },
+
+  generateMockDataByRules(request: MockDataRequest): MockDataResult {
     const { tableName, tableComment, columns, rowCount } = request
     const rows: Record<string, any>[] = []
     const columnData: MockDataColumn[] = columns.map(col => ({
@@ -824,7 +886,107 @@ export const llmDataMockService = {
     ]
   },
 
-  async generateBatchMockData(requests: MockDataRequest[]): Promise<MockDataResult[]> {
-    return requests.map(req => this.generateMockData(req))
+  async generateBatchMockData(requests: MockDataRequest[], configId?: string): Promise<MockDataResult[]> {
+    return Promise.all(requests.map(req => this.generateMockData(req, configId)))
+  },
+
+  async writeMockDataToDatabase(connection: any, tableName: string, data: any[]): Promise<{ success: boolean; insertedCount: number; errors?: string[] }> {
+    const errors: string[] = []
+    let insertedCount = 0
+
+    try {
+      // 动态导入数据库驱动
+      const dbType = (connection.databaseType || 'MYSQL').toUpperCase()
+
+      if (dbType === 'SQLITE') {
+        const Database = (await import('better-sqlite3')).default
+        const db = new Database(connection.databaseName || connection.host)
+        db.pragma('journal_mode = WAL')
+
+        const insertStmt = data.map(row => {
+          const columns = Object.keys(row).filter(k => k !== '_key')
+          const values = columns.map(col => {
+            const val = row[col]
+            if (val === null || val === undefined) return 'NULL'
+            if (typeof val === 'number' || typeof val === 'boolean') return String(val)
+            return `'${String(val).replace(/'/g, "''")}'`
+          })
+          return `INSERT INTO ${tableName} (${columns.join(', ')}) VALUES (${values.join(', ')});`
+        })
+
+        const transaction = db.transaction(() => {
+          for (const sql of insertStmt) {
+            try {
+              db.exec(sql)
+              insertedCount++
+            } catch (e: any) {
+              errors.push(`行 ${insertedCount + 1}: ${e.message}`)
+            }
+          }
+        })
+        transaction()
+        db.close()
+      } else {
+        // 对于 MySQL/PostgreSQL/SQL Server 等，使用 mysql2/pg 驱动
+        if (dbType === 'MYSQL') {
+          const mysql = await import('mysql2/promise')
+          const conn = await mysql.createConnection({
+            host: connection.host,
+            port: connection.port,
+            user: connection.username,
+            password: connection.password,
+            database: connection.databaseName,
+            ssl: connection.sslEnabled ? { rejectUnauthorized: false } : undefined
+          })
+
+          for (const row of data) {
+            const columns = Object.keys(row).filter(k => k !== '_key')
+            const values = columns.map(col => row[col])
+            const placeholders = columns.map(() => '?').join(', ')
+            const sql = `INSERT INTO ${tableName} (${columns.join(', ')}) VALUES (${placeholders})`
+            try {
+              await conn.execute(sql, values)
+              insertedCount++
+            } catch (e: any) {
+              errors.push(`行 ${insertedCount + 1}: ${e.message}`)
+            }
+          }
+          await conn.end()
+        } else if (dbType === 'POSTGRESQL') {
+          // @ts-ignore - pg 为可选依赖
+          const pg = await import('pg')
+          const client = new pg.Client({
+            host: connection.host,
+            port: connection.port,
+            user: connection.username,
+            password: connection.password,
+            database: connection.databaseName,
+            ssl: connection.sslEnabled ? { rejectUnauthorized: false } : undefined
+          })
+          await client.connect()
+
+          for (const row of data) {
+            const columns = Object.keys(row).filter(k => k !== '_key')
+            const values = columns.map(col => row[col])
+            const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ')
+            const sql = `INSERT INTO ${tableName} (${columns.join(', ')}) VALUES (${placeholders})`
+            try {
+              await client.query(sql, values)
+              insertedCount++
+            } catch (e: any) {
+              errors.push(`行 ${insertedCount + 1}: ${e.message}`)
+            }
+          }
+          await client.end()
+        } else {
+          // 其他数据库类型，生成SQL语句但不执行
+          return { success: false, insertedCount: 0, errors: [`暂不支持 ${dbType} 数据库的直接写入，请复制SQL手动执行`] }
+        }
+      }
+
+      return { success: insertedCount > 0, insertedCount, errors: errors.length > 0 ? errors : undefined }
+    } catch (error: any) {
+      return { success: false, insertedCount: 0, errors: [error.message] }
+    }
   }
 }

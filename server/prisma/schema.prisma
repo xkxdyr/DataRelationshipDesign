@@ -108,14 +108,16 @@ model Index {
 }
 
 model Version {
-  id        String   @id @default(cuid())
-  projectId String
-  branchId  String?
-  version   Int
-  name      String
-  comment   String?
-  data      String   @default("{}")
-  createdAt DateTime @default(now())
+  id            String   @id @default(cuid())
+  projectId     String
+  branchId      String?
+  version       Int
+  name          String
+  comment       String?
+  data          String   @default("{}")
+  collabState   String?   // CRDT 二进制状态的 base64 编码
+  collabVersion Int?      @default(0) // CRDT 版本号
+  createdAt     DateTime @default(now())
   
   project Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   branch  Branch?  @relation(fields: [branchId], references: [id], onDelete: SetNull)
@@ -374,6 +376,20 @@ model LLMOperationLog {
   snapshotId  String?
   createdAt   DateTime @default(now())
   
+  @@index([userId])
+  @@index([projectId])
+  @@index([createdAt])
+}
+
+model LLMConversation {
+  id        String   @id @default(cuid())
+  userId    String
+  projectId String?
+  role      String   // 'user' | 'assistant' | 'system'
+  content   String
+  configId  String?
+  createdAt DateTime @default(now())
+
   @@index([userId])
   @@index([projectId])
   @@index([createdAt])

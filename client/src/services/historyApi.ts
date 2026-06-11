@@ -182,5 +182,12 @@ export const historyApi = {
       `/history/user/${userId}/reminders`
     )
     return response.data || []
+  },
+
+  async importHistory(projectId: string, records: any[]): Promise<{ success: boolean; data?: { imported: number } }> {
+    return request<{ imported: number }>(`/history/${projectId}/import`, {
+      method: 'POST',
+      body: JSON.stringify({ records })
+    })
   }
 }

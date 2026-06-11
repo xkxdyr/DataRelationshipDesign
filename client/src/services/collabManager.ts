@@ -21,6 +21,7 @@ export enum MessageType {
   LOCK_DENIED = 'lock:denied',
   LOCK_STATE = 'lock:state',
   LOCK_TIMEOUT = 'lock:timeout',
+  LOCK_RENEW = 'lock:renew',
 }
 
 export interface CollabMessage {
@@ -175,9 +176,16 @@ class CollabManager {
   private lockGrantedCallbacks: Set<LockCallback> = new Set()
   private lockDeniedCallbacks: Set<LockDeniedCallback> = new Set()
   private lockStateCallbacks: Set<LockStateCallback> = new Set()
+  private lockTimeoutCallbacks: Set<(data: { lockId: string; lockType: LockType; tableId: string; columnId?: string }) => void> = new Set()
   private locks: LockInfo[] = []
   private myLocks: LockInfo[] = []
-  
+
+  private pendingUpdates: Uint8Array[] = []
+  private offlineQueue: Uint8Array[] = []
+  private batchTimer: ReturnType<typeof setTimeout> | null = null
+  private readonly BATCH_INTERVAL = 50
+  private lastSyncVersion: number = 0
+
   private constructor() {
     this.userId = 'user_' + Math.random().toString(36).substring(2)
   }
@@ -264,6 +272,11 @@ class CollabManager {
     this.lockDeniedCallbacks.add(callback)
     return () => this.lockDeniedCallbacks.delete(callback)
   }
+
+  onLockTimeout(callback: (data: { lockId: string; lockType: LockType; tableId: string; columnId?: string }) => void): () => void {
+    this.lockTimeoutCallbacks.add(callback)
+    return () => this.lockTimeoutCallbacks.delete(callback)
+  }
   
   onLockState(callback: LockStateCallback): () => void {
     this.lockStateCallbacks.add(callback)
@@ -331,6 +344,18 @@ class CollabManager {
     this.myLocks.forEach(lock => {
       this.releaseLock(lock.lockType, lock.tableId, lock.columnId)
     })
+  }
+
+  sendLockRenewal(lockId: string): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return
+    const msg = {
+      type: MessageType.LOCK_RENEW,
+      projectId: this.projectId!,
+      userId: this.userId,
+      data: { lockId },
+      timestamp: Date.now()
+    }
+    this.ws.send(JSON.stringify(msg))
   }
   
   getDoc(): Y.Doc | null {
@@ -491,6 +516,7 @@ class CollabManager {
           this.reconnectAttempts = 0
           this.startHeartbeat()
           this.requestSync()
+          this.flushOfflineQueue()
           resolve()
         }
         
@@ -592,6 +618,15 @@ class CollabManager {
         case MessageType.LOCK_STATE:
           this.handleLockState(message.data)
           break
+        case MessageType.LOCK_TIMEOUT:
+          this.lockTimeoutCallbacks.forEach(cb => cb(message.data))
+          break
+        default:
+          // 处理自定义消息类型（如 snapshot_restored）
+          if (message.type === 'snapshot_restored' as any) {
+            this.handleSnapshotRestored(message.data)
+          }
+          break
       }
     } catch (err) {
       console.error('[CollabManager] 消息解析失败:', err)
@@ -636,14 +671,20 @@ class CollabManager {
   }
   
   private handleSyncResponse(data: any): void {
-    if (!this.doc || !data?.state) {
+    if (!this.doc) {
       return
     }
-    
+
     try {
-      const state = new Uint8Array(data.state)
-      Y.applyUpdate(this.doc, state, 'remote')
+      if (data.state) {
+        const state = new Uint8Array(data.state)
+        Y.applyUpdate(this.doc, state, 'remote')
+      }
+      if (data.version !== undefined) {
+        this.lastSyncVersion = data.version
+      }
       this.setState(CollabState.READY, '同步完成')
+      this.flushOfflineQueue()
     } catch (err) {
       console.error('[CollabManager] 同步失败:', err)
       this.setState(CollabState.ERROR, '同步失败')
@@ -699,6 +740,7 @@ class CollabManager {
       type: MessageType.SYNC_REQUEST,
       projectId: this.projectId!,
       userId: this.userId,
+      data: { lastUpdate: this.lastSyncVersion },
       timestamp: Date.now()
     }
     
@@ -711,10 +753,36 @@ class CollabManager {
   }
   
   private sendCRDTUpdate(update: Uint8Array): void {
+    this.pendingUpdates.push(update)
+    if (!this.batchTimer) {
+      this.batchTimer = setTimeout(() => this.flushPendingUpdates(), this.BATCH_INTERVAL)
+    }
+  }
+
+  private flushPendingUpdates(): void {
+    this.batchTimer = null
+    if (this.pendingUpdates.length === 0) return
+
+    const updates = [...this.pendingUpdates]
+    this.pendingUpdates = []
+
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      // 离线：推入离线队列，等待重连后发送
+      this.offlineQueue.push(...updates)
       return
     }
-    
+
+    if (updates.length === 1) {
+      this.sendBinary(updates[0])
+    } else {
+      const merged = Y.mergeUpdates(updates)
+      this.sendBinary(merged)
+    }
+  }
+
+  private sendBinary(update: Uint8Array): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return
+
     const message = {
       type: MessageType.OP_UPDATE,
       projectId: this.projectId!,
@@ -722,13 +790,20 @@ class CollabManager {
       data: { update: Array.from(update) },
       timestamp: Date.now()
     }
-    
+
     const binaryData = pack(message)
     if (binaryData.length > MESSAGE_COMPRESSION_THRESHOLD) {
       this.ws.send(pako.gzip(binaryData))
     } else {
       this.ws.send(binaryData)
     }
+  }
+
+  private flushOfflineQueue(): void {
+    if (this.offlineQueue.length === 0) return
+    const merged = Y.mergeUpdates(this.offlineQueue)
+    this.offlineQueue = []
+    this.sendBinary(merged)
   }
   
   private startHeartbeat(): void {
@@ -789,11 +864,35 @@ class CollabManager {
     this.myLocks = data.filter(l => l.userId === this.userId)
     this.lockStateCallbacks.forEach(cb => cb([...this.locks]))
   }
+
+  private handleSnapshotRestored(data: { projectId: string; snapshotId: string; restoredBy: string }): void {
+    if (!data) return
+    // 通知所有 snapshot_restored 监听器
+    const handlers = this.messageHandlers.get('snapshot_restored' as any)
+    if (handlers) {
+      handlers.forEach(handler => handler({
+        type: 'snapshot_restored' as any,
+        projectId: data.projectId,
+        userId: 'system',
+        data,
+        timestamp: Date.now()
+      }))
+    }
+    // 触发全量同步
+    this.requestSync()
+  }
   
   stop(): void {
     this.isManualDisconnect = true
     this.stopHeartbeat()
-    
+
+    // flush 剩余更新
+    if (this.batchTimer) {
+      clearTimeout(this.batchTimer)
+      this.batchTimer = null
+    }
+    this.flushPendingUpdates()
+
     if (this.ws) {
       try {
         this.ws.close()

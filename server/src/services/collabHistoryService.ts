@@ -335,6 +335,44 @@ class CollabHistoryService {
       return []
     }
   }
+
+  async importOperations(projectId: string, records: any[]): Promise<number> {
+    let imported = 0
+    for (const record of records) {
+      try {
+        await prisma.operationRecord.create({
+          data: {
+            projectId,
+            userId: record.userId || 'imported',
+            userName: record.userName || '导入用户',
+            operationType: record.operationType || 'unknown',
+            targetType: record.targetType || 'unknown',
+            targetId: record.targetId || '',
+            targetName: record.targetName || '',
+            changes: record.changes ? JSON.stringify(record.changes) : null,
+            timestamp: record.timestamp ? new Date(record.timestamp) : new Date()
+          }
+        })
+        imported++
+      } catch (e) {
+        // 跳过无效记录
+      }
+    }
+    return imported
+  }
+
+  async autoCleanupOldRecords(projectId: string, daysToKeep: number = 180): Promise<number> {
+    const cutoff = new Date()
+    cutoff.setDate(cutoff.getDate() - daysToKeep)
+
+    const result = await prisma.operationRecord.deleteMany({
+      where: {
+        projectId,
+        timestamp: { lt: cutoff }
+      }
+    })
+    return result.count
+  }
 }
 
 export const collabHistoryService = new CollabHistoryService()

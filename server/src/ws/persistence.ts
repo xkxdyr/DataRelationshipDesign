@@ -20,6 +20,7 @@ class CollabPersistence {
 
       const state = manager.getState()
       const jsonState = manager.toJSON()
+      const version = manager.getVersion()
 
       await prisma.version.upsert({
         where: {
@@ -30,14 +31,18 @@ class CollabPersistence {
         },
         update: {
           data: JSON.stringify(jsonState),
-          comment: '协作自动保存'
+          comment: '协作自动保存',
+          collabState: Buffer.from(state).toString('base64'),
+          collabVersion: version
         },
         create: {
           projectId,
           version: 0,
           name: '协作自动保存',
           comment: '协作自动保存',
-          data: JSON.stringify(jsonState)
+          data: JSON.stringify(jsonState),
+          collabState: Buffer.from(state).toString('base64'),
+          collabVersion: version
         }
       })
 
@@ -62,14 +67,38 @@ class CollabPersistence {
       }
 
       const manager = crdtFactory.getManager(projectId)
-      const data = JSON.parse(version.data)
-      manager.fromJSON(data)
 
-      console.warn(`[Persistence] 项目 ${projectId} 已从数据库恢复`)
+      // 优先使用 CRDT 二进制状态恢复（更精确）
+      if (version.collabState) {
+        const stateBuffer = Buffer.from(version.collabState, 'base64')
+        manager.applyState(new Uint8Array(stateBuffer))
+      } else {
+        const data = JSON.parse(version.data)
+        manager.fromJSON(data)
+      }
+
+      console.warn(`[Persistence] 项目 ${projectId} 已从数据库恢复 (collabVersion: ${version.collabVersion || 0})`)
       return true
     } catch (error) {
       console.error(`加载项目 ${projectId} 失败:`, error)
       return false
+    }
+  }
+
+  async getLastVersion(projectId: string): Promise<number> {
+    try {
+      const record = await prisma.version.findUnique({
+        where: {
+          projectId_version: {
+            projectId,
+            version: 0
+          }
+        }
+      })
+      return record?.collabVersion || 0
+    } catch (error) {
+      console.error(`获取项目 ${projectId} 版本号失败:`, error)
+      return 0
     }
   }
 

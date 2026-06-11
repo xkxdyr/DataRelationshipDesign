@@ -311,7 +311,7 @@ class LLMService {
     }
   }
 
-  async generateTables(request: GenerateTableRequest): Promise<TableSuggestion[]> {
+  async generateTables(request: GenerateTableRequest, conversationHistory?: Array<{ role: string; content: string }>): Promise<TableSuggestion[]> {
     if (!this.isConfigured()) {
       throw new Error('LLM服务未配置，请先设置API密钥和端点')
     }
@@ -319,7 +319,7 @@ class LLMService {
     const prompt = this.buildTableGenerationPrompt(request)
 
     try {
-      const response = await this.callLLM(prompt)
+      const response = await this.callLLM(prompt, undefined, conversationHistory)
       return this.parseTableSuggestions(response)
     } catch (error) {
       console.error('LLM生成表结构失败:', error)
@@ -474,7 +474,45 @@ ${JSON.stringify(tableInfos, null, 2)}
 4. 只返回JSON，不要有其他文字`
   }
 
-  private async callLLM(prompt: string): Promise<string> {
+  async callLLMWithConfig(configId: string, prompt: string, systemPrompt?: string): Promise<string> {
+    const { llmConfigService } = await import('./llmConfigService')
+    const config = await llmConfigService.getDecryptedConfig(configId)
+    if (!config) throw new Error('配置不存在')
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    }
+    if (config.apiKey && config.provider !== 'ollama') {
+      headers['Authorization'] = `Bearer ${config.apiKey}`
+    }
+
+    const messages: Array<{ role: string; content: string }> = []
+    if (systemPrompt) {
+      messages.push({ role: 'system', content: systemPrompt })
+    }
+    messages.push({ role: 'user', content: prompt })
+
+    const response = await fetch(`${config.endpoint}/chat/completions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: config.model,
+        messages,
+        temperature: 0.7,
+        max_tokens: 4000
+      })
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({})) as { error?: { message?: string } }
+      throw new Error(`LLM API调用失败: ${response.status} - ${errorData.error?.message || response.statusText}`)
+    }
+
+    const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> }
+    return data.choices?.[0]?.message?.content || ''
+  }
+
+  private async callLLM(prompt: string, systemPrompt?: string, conversationHistory?: Array<{ role: string; content: string }>): Promise<string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json'
     }
@@ -482,21 +520,29 @@ ${JSON.stringify(tableInfos, null, 2)}
       headers['Authorization'] = `Bearer ${this.config.apiKey}`
     }
 
+    const messages: Array<{ role: string; content: string }> = []
+
+    // 添加系统提示
+    const sysPrompt = systemPrompt || '你是一个专业的数据库设计师助手，擅长根据需求设计高效的数据库表结构。'
+    messages.push({ role: 'system', content: sysPrompt })
+
+    // 添加对话历史
+    if (conversationHistory && conversationHistory.length > 0) {
+      messages.push(...conversationHistory)
+    }
+
+    // 添加当前用户消息
+    messages.push({
+      role: 'user',
+      content: prompt
+    })
+
     const response = await fetch(`${this.config.endpoint}/chat/completions`, {
       method: 'POST',
       headers,
       body: JSON.stringify({
         model: this.config.model,
-        messages: [
-          {
-            role: 'system',
-            content: '你是一个专业的数据库设计师助手，擅长根据需求设计高效的数据库表结构。'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
+        messages,
         temperature: 0.7,
         max_tokens: 4000
       })
@@ -573,6 +619,228 @@ ${JSON.stringify(tableInfos, null, 2)}
       return []
     } catch (error) {
       console.error('解析字段建议失败:', error)
+      throw new Error('解析LLM返回内容失败: ' + (error as Error).message)
+    }
+  }
+
+  async analyzeProject(tables: Table[], configId?: string): Promise<{
+    summary: string
+    strengths: string[]
+    weaknesses: string[]
+    suggestions: string[]
+    normalizationScore: number
+    coverageScore: number
+  }> {
+    const prompt = this.buildProjectAnalysisPrompt(tables)
+    const response = configId
+      ? await this.callLLMWithConfig(configId, prompt)
+      : await this.callLLM(prompt)
+    return this.parseProjectAnalysis(response)
+  }
+
+  async analyzeTable(table: Table, allTables: Table[], configId?: string): Promise<{
+    summary: string
+    columnAnalysis: Array<{ name: string; assessment: string; suggestion?: string }>
+    indexSuggestions: string[]
+    relationshipSuggestions: string[]
+    designScore: number
+  }> {
+    const prompt = this.buildTableAnalysisPrompt(table, allTables)
+    const response = configId
+      ? await this.callLLMWithConfig(configId, prompt)
+      : await this.callLLM(prompt)
+    return this.parseTableAnalysis(response)
+  }
+
+  async recommendTables(existingTables: Table[], configId?: string): Promise<TableSuggestion[]> {
+    const prompt = this.buildTableRecommendationPrompt(existingTables)
+    const response = configId
+      ? await this.callLLMWithConfig(configId, prompt)
+      : await this.callLLM(prompt)
+    return this.parseTableSuggestions(response)
+  }
+
+  private buildProjectAnalysisPrompt(tables: Table[]): string {
+    const tableInfos = tables.map(t => ({
+      name: t.name,
+      comment: t.comment || '',
+      columns: t.columns.map(c => ({
+        name: c.name,
+        type: c.dataType,
+        isPK: c.primaryKey,
+        nullable: c.nullable,
+        comment: c.comment || ''
+      }))
+    }))
+
+    return `你是一个资深的数据库架构师。请分析以下项目的数据库设计，给出专业的评估和建议。
+
+项目表结构:
+${JSON.stringify(tableInfos, null, 2)}
+
+请生成符合以下JSON格式的分析结果:
+{
+  "summary": "项目整体概述（100字以内）",
+  "strengths": ["设计优点1", "设计优点2", ...],
+  "weaknesses": ["设计不足1", "设计不足2", ...],
+  "suggestions": ["改进建议1", "改进建议2", ...],
+  "normalizationScore": 范式评分(0-100),
+  "coverageScore": 业务覆盖度评分(0-100)
+}
+
+请确保:
+1. strengths至少列出2条优点
+2. weaknesses如实指出设计问题
+3. suggestions给出具体可操作的改进方案
+4. normalizationScore评估是否满足第三范式
+5. coverageScore评估表结构是否覆盖常见业务场景
+6. 只返回JSON，不要有其他文字`
+  }
+
+  private buildTableAnalysisPrompt(table: Table, allTables: Table[]): string {
+    const tableInfo = {
+      name: table.name,
+      comment: table.comment || '',
+      columns: table.columns.map(c => ({
+        name: c.name,
+        type: c.dataType,
+        isPK: c.primaryKey,
+        nullable: c.nullable,
+        unique: c.unique,
+        comment: c.comment || ''
+      }))
+    }
+    const relatedTables = allTables
+      .filter(t => t.name !== table.name)
+      .map(t => ({ name: t.name, comment: t.comment || '' }))
+
+    return `你是一个资深的数据库架构师。请深入分析以下表的设计质量。
+
+当前表:
+${JSON.stringify(tableInfo, null, 2)}
+
+项目中的其他表:
+${JSON.stringify(relatedTables, null, 2)}
+
+请生成符合以下JSON格式的分析结果:
+{
+  "summary": "表设计概述（50字以内）",
+  "columnAnalysis": [
+    {
+      "name": "字段名",
+      "assessment": "字段评估",
+      "suggestion": "改进建议（可选，无建议则省略）"
+    }
+  ],
+  "indexSuggestions": ["索引建议1", "索引建议2"],
+  "relationshipSuggestions": ["关系建议1", "关系建议2"],
+  "designScore": 设计评分(0-100)
+}
+
+请确保:
+1. 对每个字段给出评估
+2. 索引建议基于查询场景
+3. 关系建议考虑与其他表的关联
+4. designScore综合评估字段类型、命名、约束等
+5. 只返回JSON，不要有其他文字`
+  }
+
+  private buildTableRecommendationPrompt(existingTables: Table[]): string {
+    const tableInfos = existingTables.map(t => ({
+      name: t.name,
+      comment: t.comment || '',
+      columns: t.columns.map(c => ({
+        name: c.name,
+        type: c.dataType,
+        isPK: c.primaryKey,
+        comment: c.comment || ''
+      }))
+    }))
+
+    return `你是一个专业的数据库设计师。根据以下已有的表结构，推荐可能还需要的新表。
+
+已有表结构:
+${JSON.stringify(tableInfos, null, 2)}
+
+请推荐3-5个与现有表互补的新表，生成符合以下JSON格式的表结构:
+{
+  "tables": [
+    {
+      "tableName": "表名(使用PascalCase)",
+      "tableComment": "表的中文注释",
+      "columns": [
+        {
+          "name": "字段名(使用camelCase)",
+          "dataType": "数据类型",
+          "length": 字段长度(数字，可选),
+          "nullable": 是否可空(true/false),
+          "primaryKey": 是否为主键(true/false),
+          "unique": 是否唯一(true/false),
+          "defaultValue": 默认值(可选),
+          "comment": "字段注释"
+        }
+      ]
+    }
+  ]
+}
+
+请确保:
+1. 推荐的表与现有业务相关且互补
+2. 考虑常见业务场景如日志、配置、分类、统计等
+3. 每个表有合理的字段和主键
+4. 只返回JSON，不要有其他文字`
+  }
+
+  private parseProjectAnalysis(response: string): {
+    summary: string
+    strengths: string[]
+    weaknesses: string[]
+    suggestions: string[]
+    normalizationScore: number
+    coverageScore: number
+  } {
+    try {
+      const jsonMatch = response.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) throw new Error('无法解析LLM返回的内容')
+      const parsed = JSON.parse(jsonMatch[0])
+      return {
+        summary: parsed.summary || '',
+        strengths: parsed.strengths || [],
+        weaknesses: parsed.weaknesses || [],
+        suggestions: parsed.suggestions || [],
+        normalizationScore: typeof parsed.normalizationScore === 'number' ? parsed.normalizationScore : 0,
+        coverageScore: typeof parsed.coverageScore === 'number' ? parsed.coverageScore : 0
+      }
+    } catch (error) {
+      console.error('解析项目分析结果失败:', error)
+      throw new Error('解析LLM返回内容失败: ' + (error as Error).message)
+    }
+  }
+
+  private parseTableAnalysis(response: string): {
+    summary: string
+    columnAnalysis: Array<{ name: string; assessment: string; suggestion?: string }>
+    indexSuggestions: string[]
+    relationshipSuggestions: string[]
+    designScore: number
+  } {
+    try {
+      const jsonMatch = response.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) throw new Error('无法解析LLM返回的内容')
+      const parsed = JSON.parse(jsonMatch[0])
+      return {
+        summary: parsed.summary || '',
+        columnAnalysis: (parsed.columnAnalysis || []).map((c: any) => ({
+          name: c.name || '',
+          assessment: c.assessment || '',
+          suggestion: c.suggestion
+        })),
+        indexSuggestions: parsed.indexSuggestions || [],
+        relationshipSuggestions: parsed.relationshipSuggestions || [],
+        designScore: typeof parsed.designScore === 'number' ? parsed.designScore : 0
+      }
+    } catch (error) {
+      console.error('解析表分析结果失败:', error)
       throw new Error('解析LLM返回内容失败: ' + (error as Error).message)
     }
   }

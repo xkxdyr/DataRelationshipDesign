@@ -4,6 +4,7 @@ import { pack, unpack } from 'msgpackr'
 import * as Y from 'yjs'
 import { CollabMessage, MessageType, serializeMessage, deserializeMessage, compressMessageSync, decompressData, MESSAGE_COMPRESSION_THRESHOLD } from './protocol'
 import { CollabRoom } from './room'
+import { lockService } from './lockService'
 import { collabPersistence } from './persistence'
 import { collabHistoryService } from '../services/collabHistoryService'
 import { PrismaClient } from '@prisma/client'
@@ -173,15 +174,54 @@ function populateCRDTDoc(doc: Y.Doc, data: ProjectData): void {
   root.set('indexes', indexesMap)
 }
 
+function detectOperationType(update: Uint8Array): string {
+  // 简单判断：大于 500 字节的更新可能是批量操作
+  if (update.length > 500) return 'bulk_update'
+  return 'update'
+}
+
 export class CollabWebSocketServer {
+  private static instance: CollabWebSocketServer | null = null
   private wss: WebSocketServer
   private rooms: Map<string, CollabRoom> = new Map()
   private heartbeatIntervals: Map<WebSocket, NodeJS.Timeout> = new Map()
   private heartbeatTimeouts: Map<WebSocket, NodeJS.Timeout> = new Map()
 
   constructor(server: Server) {
+    CollabWebSocketServer.instance = this
     this.wss = new WebSocketServer({ server, path: '/ws/collab' })
+    this.setupLockExpiredCallback()
     this.init()
+  }
+
+  static getInstance(): CollabWebSocketServer | null {
+    return CollabWebSocketServer.instance
+  }
+
+  getRoom(projectId: string): CollabRoom | undefined {
+    return this.rooms.get(projectId)
+  }
+
+  private setupLockExpiredCallback() {
+    lockService.setOnLockExpired((projectId, expiredLocks) => {
+      const room = this.rooms.get(projectId)
+      if (!room) return
+      for (const lock of expiredLocks) {
+        room.sendToUser(lock.userId, {
+          type: MessageType.LOCK_TIMEOUT,
+          projectId,
+          userId: 'system',
+          data: {
+            lockId: lock.lockId,
+            lockType: lock.lockType,
+            tableId: lock.tableId,
+            columnId: lock.columnId
+          },
+          timestamp: Date.now()
+        })
+      }
+      room.broadcastLockState()
+    })
   }
 
   private init() {
@@ -385,6 +425,19 @@ export class CollabWebSocketServer {
       case MessageType.OP_UPDATE:
       case MessageType.OP_DELETE:
         room.broadcast(message, userId)
+        // 记录 create/delete 操作到历史
+        if (message.type === MessageType.OP_CREATE || message.type === MessageType.OP_DELETE) {
+          collabHistoryService.recordOperation({
+            projectId: message.projectId,
+            userId,
+            userName: room.getUserName(userId) || '匿名用户',
+            operationType: message.type === MessageType.OP_CREATE ? 'create' : 'delete',
+            targetType: message.data?.targetType || 'project',
+            targetId: message.data?.targetId || message.projectId,
+            targetName: message.data?.targetName || (message.type === MessageType.OP_CREATE ? '创建操作' : '删除操作'),
+            changes: message.data?.changes
+          })
+        }
         break
 
       // 锁相关消息
@@ -394,6 +447,10 @@ export class CollabWebSocketServer {
 
       case MessageType.LOCK_RELEASE:
         room.handleLockRelease(userId, message.data)
+        break
+
+      case MessageType.LOCK_RENEW:
+        room.handleLockRenew(userId, message.data)
         break
 
       case MessageType.CURSOR_UPDATE:
@@ -411,13 +468,36 @@ export class CollabWebSocketServer {
 
       if (message.type === MessageType.SYNC_REQUEST) {
         const crdtManager = room.getCRDTManager()
+        const lastUpdate = message.data?.lastUpdate || 0
+
+        if (lastUpdate > 0) {
+          const currentVersion = crdtManager.getVersion()
+          if (currentVersion <= lastUpdate) {
+            const response: CollabMessage = {
+              type: MessageType.SYNC_RESPONSE,
+              projectId: message.projectId,
+              userId: 'system',
+              data: { version: currentVersion, updates: [] },
+              timestamp: Date.now()
+            }
+            const responseData = pack(response)
+            if (responseData.length > MESSAGE_COMPRESSION_THRESHOLD) {
+              const compressed = compressMessageSync(responseData)
+              room.sendBinaryToUser(userId, compressed)
+            } else {
+              room.sendBinaryToUser(userId, responseData)
+            }
+            return
+          }
+        }
+
         const state = crdtManager.getState()
 
         const response: CollabMessage = {
           type: MessageType.SYNC_RESPONSE,
           projectId: message.projectId,
           userId: 'system',
-          data: { state: Array.from(state) },
+          data: { version: crdtManager.getVersion(), state: Array.from(state) },
           timestamp: Date.now()
         }
 
@@ -436,14 +516,15 @@ export class CollabWebSocketServer {
           const update = new Uint8Array(message.data.update)
           crdtManager.applyUpdate(update)
 
+          const operationType = detectOperationType(update)
           collabHistoryService.recordOperation({
             projectId: message.projectId,
             userId,
             userName: room.getUserName(userId) || '匿名用户',
-            operationType: 'update',
+            operationType: operationType as any,
             targetType: 'project',
             targetId: message.projectId,
-            targetName: '项目更新',
+            targetName: operationType === 'bulk_update' ? '批量更新' : '项目更新',
             changes: { updateSize: message.data.update.length }
           })
 

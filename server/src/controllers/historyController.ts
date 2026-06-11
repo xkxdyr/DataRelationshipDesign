@@ -258,5 +258,22 @@ export const historyController = {
       console.error('获取用户历史提醒失败:', error)
       res.status(500).json({ success: false, error: (error as Error).message })
     }
+  },
+
+  async importProjectHistory(req: Request, res: Response) {
+    try {
+      const { projectId } = req.params
+      const { records } = req.body
+      if (!Array.isArray(records)) {
+        res.status(400).json({ success: false, error: '无效的导入数据' })
+        return
+      }
+
+      const imported = await collabHistoryService.importOperations(projectId, records)
+      res.json({ success: true, data: { imported } })
+    } catch (error) {
+      console.error('导入操作日志失败:', error)
+      res.status(500).json({ success: false, error: (error as Error).message })
+    }
   }
 }
