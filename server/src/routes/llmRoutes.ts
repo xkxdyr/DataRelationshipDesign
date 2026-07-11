@@ -38,4 +38,10 @@ router.post('/analyze-project', llmController.analyzeProject)
 router.post('/analyze-table', llmController.analyzeTable)
 router.post('/recommend-tables', llmController.recommendTables)
 
+// ====== 优化功能 ======
+router.post('/optimize-project', llmController.optimizeProject)
+router.post('/optimize-table', llmController.optimizeTable)
+router.post('/optimize-table-structure', llmController.optimizeTableStructure)
+router.post('/optimize-relationships', llmController.optimizeTableRelationships)
+
 export default router

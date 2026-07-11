@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { Layout, Typography, Badge, Tooltip, Button, message, Avatar, Dropdown, Tabs } from 'antd'
-import { MessageOutlined, DatabaseOutlined, CloseOutlined, CloudOutlined, CloudSyncOutlined, CloudUploadOutlined, SyncOutlined, WifiOutlined, DisconnectOutlined, SettingOutlined, LeftOutlined, RightOutlined, TeamOutlined, CodeOutlined, UserOutlined, LogoutOutlined, LoginOutlined, BranchesOutlined, GithubOutlined } from '@ant-design/icons'
+import { MessageOutlined, DatabaseOutlined, CloseOutlined, CloudOutlined, CloudSyncOutlined, CloudUploadOutlined, SyncOutlined, WifiOutlined, DisconnectOutlined, SettingOutlined, LeftOutlined, RightOutlined, TeamOutlined, CodeOutlined, UserOutlined, LogoutOutlined, LoginOutlined, BranchesOutlined, GithubOutlined, RobotOutlined } from '@ant-design/icons'
 import { useAppStore } from './stores/appStore'
 import { useTheme } from './theme/useTheme'
 import ProjectList from './components/ProjectList'
@@ -45,8 +45,8 @@ const LAYOUT = {
   RIGHT_MAX_WIDTH: 1200,
   COLLAPSED_WIDTH: 36,
   DRAG_HANDLE_WIDTH: 4,
-  HEADER_HEIGHT: 36,
-  TABLE_EDITOR_HEADER_HEIGHT: 36,
+  HEADER_HEIGHT: 48,
+  TABLE_EDITOR_HEADER_HEIGHT: 44,
   CENTER_MIN_WIDTH: 300,
 }
 
@@ -153,8 +153,6 @@ const TabContentRenderer = React.memo(({
       return <ImportExportTab />
     case 'teamManagement':
       return <TeamManagementTab />
-    case 'llm':
-      return <LLMTab onApplyTables={handleApplyLLMTables} />
     case 'editProject':
       return (
         <EditProjectTab
@@ -233,6 +231,7 @@ function AppContent() {
   const [showDatabaseSync, setShowDatabaseSync] = useState(false)
   const [showSyncQueue, setShowSyncQueue] = useState(false)
   const [showAuthModal, setShowAuthModal] = useState(false)
+  const [showAIPanel, setShowAIPanel] = useState(false)
   const [leftCollapsed, setLeftCollapsed] = useState(false)
   const [rightCollapsed, setRightCollapsed] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -566,108 +565,205 @@ function AppContent() {
   }, [fontConfig])
 
   const handleDatabaseImport = useCallback(async (importedTables: TableInfo[], targetProjectId?: string) => {
+    // 使用 useAppStore.getState() 绕过React渲染周期获取最新Zustand状态
+    const storeGet = () => useAppStore.getState()
     const projectId = targetProjectId || currentProject?.id
     if (!projectId) {
       message.error('请先选择或创建项目')
       return
     }
-    
+
+    console.log('[DatabaseImport] 开始导入，表数量:', importedTables.length)
+    if (importedTables.length > 0) {
+      console.log('[DatabaseImport] 第一张表数据示例:', {
+        name: importedTables[0].name,
+        columnsCount: importedTables[0].columns?.length || 0,
+        hasColumns: Array.isArray(importedTables[0].columns) && importedTables[0].columns.length > 0,
+        sampleColumns: importedTables[0].columns?.slice(0, 2)
+      })
+    }
+
     let x = TABLE_GRID.START_X
     let y = TABLE_GRID.START_Y
     const tableMap = new Map<string, { tableId: string; columnMap: Map<string, string> }>()
-    
+    let successCount = 0
+    let failedTableCount = 0
+    let totalColumnsCreated = 0
+
     for (let index = 0; index < importedTables.length; index++) {
       const tableInfo = importedTables[index]
-      
+
+      if (!tableInfo || !tableInfo.name) {
+        console.warn('[DatabaseImport] 跳过无效的表信息:', tableInfo)
+        continue
+      }
+
+      if (!Array.isArray(tableInfo.columns)) {
+        console.error(`[DatabaseImport] 表 ${tableInfo.name} 的 columns 字段无效:`, tableInfo.columns)
+        message.warning(`表 "${tableInfo.name}" 的列数据异常，将跳过该表的列导入`)
+      }
+
+      // 记录导入前的表数量，用于定位新创建的表
+      const tablesBeforeCreate = storeGet().tables.filter(t => t.projectId === projectId).length
+
       await createTable(projectId, {
         name: tableInfo.name,
         comment: tableInfo.comment || undefined,
         positionX: x,
         positionY: y,
       }, true)
-      
+
+      // 等待store状态更新完成
       await new Promise(resolve => setTimeout(resolve, TIME.TABLE_CREATE_DELAY_MS))
-      
-      const newTable = tables.find(t => t.name === tableInfo.name && t.projectId === projectId)
-      if (newTable) {
-        const columnMap = new Map<string, string>()
-        
-        for (let colIndex = 0; colIndex < tableInfo.columns.length; colIndex++) {
-          const col = tableInfo.columns[colIndex]
-          await createColumn(newTable.id, {
-            name: col.name,
-            dataType: col.type,
-            nullable: col.isNullable,
-            defaultValue: col.defaultValue || undefined,
-            autoIncrement: col.autoIncrement || false,
-            primaryKey: col.isPrimaryKey,
-            unique: false,
-            comment: col.comment || undefined,
-            order: colIndex,
-          })
-          
-          await new Promise(resolve => setTimeout(resolve, TIME.TABLE_CREATE_DELAY_MS))
-          const updatedTable = tables.find(t => t.id === newTable.id)
-          const createdColumn = updatedTable?.columns.find(c => c.name === col.name)
-          if (createdColumn) {
-            columnMap.set(col.name, createdColumn.id)
-          }
+
+      // 【关键修复】使用 storeGet().tables 从Zustand直接获取最新状态，而非依赖React闭包中的旧值
+      let newTable = storeGet().tables.find(t => t.name === tableInfo.name && t.projectId === projectId)
+
+      // 如果按名称找不到（可能同名表），尝试通过数量变化定位新表
+      if (!newTable) {
+        const tablesAfterCreate = storeGet().tables.filter(t => t.projectId === projectId)
+        if (tablesAfterCreate.length > tablesBeforeCreate) {
+          // 新增的表就是最后一张
+          newTable = tablesAfterCreate[tablesAfterCreate.length - 1]
+          console.log(`[DatabaseImport] 通过数量变化定位到新表 "${newTable.name}" (ID: ${newTable.id})`)
         }
-        
-        tableMap.set(tableInfo.name, { tableId: newTable.id, columnMap })
-        
-        if (tableInfo.indexes && tableInfo.indexes.length > 0) {
-          for (const idx of tableInfo.indexes) {
-            if (idx.isPrimary) continue
-            
-            const columnIds = idx.columns.map(colName => columnMap.get(colName)).filter(Boolean) as string[]
-            
-            if (columnIds.length > 0) {
-              await createIndex(newTable.id, {
-                name: idx.name,
-                columns: columnIds,
-                unique: idx.isUnique,
-                type: 'BTREE'
-              })
-            }
+      }
+
+      // 最后的重试：等待更长时间
+      if (!newTable) {
+        await new Promise(resolve => setTimeout(resolve, 300))
+        newTable = storeGet().tables.find(t => t.name === tableInfo.name && t.projectId === projectId)
+        if (!newTable) {
+          const tablesAfterRetry = storeGet().tables.filter(t => t.projectId === projectId)
+          if (tablesAfterRetry.length > tablesBeforeCreate) {
+            newTable = tablesAfterRetry[tablesAfterRetry.length - 1]
           }
         }
       }
-      
+
+      if (newTable) {
+        successCount++
+        const columnMap = new Map<string, string>()
+        const columnsToCreate = tableInfo.columns || []
+
+        console.log(`[DatabaseImport] 处理表 "${tableInfo.name}" (ID: ${newTable.id})，列数量: ${columnsToCreate.length}`)
+
+        if (columnsToCreate.length > 0) {
+          for (let colIndex = 0; colIndex < columnsToCreate.length; colIndex++) {
+            const col = columnsToCreate[colIndex]
+
+            try {
+              await createColumn(newTable.id, {
+                name: col.name,
+                dataType: col.type,
+                nullable: col.isNullable,
+                defaultValue: col.defaultValue || undefined,
+                autoIncrement: col.autoIncrement || false,
+                primaryKey: col.isPrimaryKey,
+                unique: false,
+                comment: col.comment || undefined,
+                order: colIndex,
+              })
+
+              await new Promise(resolve => setTimeout(resolve, 50))
+
+              // 同样使用 storeGet() 获取最新状态来查找刚创建的列
+              const updatedTable = storeGet().tables.find(t => t.id === newTable.id)
+              const createdColumn = updatedTable?.columns?.find(c => c.name === col.name)
+              if (createdColumn) {
+                columnMap.set(col.name, createdColumn.id)
+                totalColumnsCreated++
+              }
+            } catch (columnError) {
+              console.error(`[DatabaseImport] 创建列 "${col.name}" 失败:`, columnError)
+            }
+          }
+
+          console.log(`[DatabaseImport] 表 "${tableInfo.name}" 成功创建 ${columnMap.size}/${columnsToCreate.length} 列`)
+        } else {
+          console.warn(`[DatabaseImport] 表 "${tableInfo.name}" 没有列数据需要导入`)
+        }
+
+        tableMap.set(tableInfo.name, { tableId: newTable.id, columnMap })
+
+        // 创建索引
+        if (tableInfo.indexes && tableInfo.indexes.length > 0) {
+          for (const idx of tableInfo.indexes) {
+            if (idx.isPrimary) continue
+
+            const columnIds = idx.columns.map(colName => columnMap.get(colName)).filter(Boolean) as string[]
+
+            if (columnIds.length > 0) {
+              try {
+                await createIndex(newTable.id, {
+                  name: idx.name,
+                  columns: columnIds,
+                  unique: idx.isUnique,
+                  type: 'BTREE'
+                })
+              } catch (indexError) {
+                console.error(`[DatabaseImport] 创建索引 "${idx.name}" 失败:`, indexError)
+              }
+            }
+          }
+        }
+      } else {
+        failedTableCount++
+        console.error(`[DatabaseImport] 无法找到刚创建的表 "${tableInfo.name}"，已尝试名称查找和数量定位`)
+        console.error(`[DatabaseImport] 当前项目中所有表:`, storeGet().tables.filter(t => t.projectId === projectId).map(t => ({ id: t.id, name: t.name })))
+        message.error(`无法找到表 "${tableInfo.name}"，可能创建失败`)
+      }
+
       x += TABLE_GRID.X_STEP
       if (index > 0 && index % TABLE_GRID.COLUMNS_PER_ROW === 0) {
         x = TABLE_GRID.START_X
         y += TABLE_GRID.Y_STEP
       }
     }
-    
+
+    // 创建外键关系
     for (const tableInfo of importedTables) {
       const sourceInfo = tableMap.get(tableInfo.name)
       if (!sourceInfo || !tableInfo.foreignKeys) continue
-      
+
       for (const fk of tableInfo.foreignKeys) {
         const targetInfo = tableMap.get(fk.referencedTable)
         if (!targetInfo) continue
-        
+
         const sourceColumnId = sourceInfo.columnMap.get(fk.column)
         const targetColumnId = targetInfo.columnMap.get(fk.referencedColumn)
-        
+
         if (sourceColumnId && targetColumnId) {
-          await createRelationship(projectId, {
-            sourceTableId: sourceInfo.tableId,
-            sourceColumnId: sourceColumnId,
-            targetTableId: targetInfo.tableId,
-            targetColumnId: targetColumnId,
-            relationshipType: 'one-to-many',
-            onUpdate: 'CASCADE',
-            onDelete: 'RESTRICT',
-          })
+          try {
+            await createRelationship(projectId, {
+              sourceTableId: sourceInfo.tableId,
+              sourceColumnId: sourceColumnId,
+              targetTableId: targetInfo.tableId,
+              targetColumnId: targetColumnId,
+              relationshipType: 'one-to-many',
+              onUpdate: 'CASCADE',
+              onDelete: 'RESTRICT',
+            })
+          } catch (relError) {
+            console.error('[DatabaseImport] 创建外键关系失败:', relError)
+          }
         }
       }
     }
-    
-    message.success(`成功导入 ${importedTables.length} 张表，已添加到画布`)
-  }, [currentProject, tables, createTable, createColumn, createIndex, createRelationship])
+
+    console.log('[DatabaseImport] 导入完成:', {
+      totalTables: importedTables.length,
+      successTables: successCount,
+      failedTables: failedTableCount,
+      totalColumnsCreated
+    })
+
+    if (failedTableCount > 0) {
+      message.warning(`成功导入 ${successCount} 张表（${failedTableCount} 张表失败），共创建 ${totalColumnsCreated} 个字段`)
+    } else {
+      message.success(`成功导入 ${successCount} 张表，共创建 ${totalColumnsCreated} 个字段`)
+    }
+  }, [currentProject, createTable, createColumn, createIndex, createRelationship])
 
   const handleApplyLLMTables = useCallback(async (suggestedTables: TableSuggestion[]) => {
     if (!currentProject) {
@@ -881,7 +977,7 @@ function AppContent() {
             — {currentProject.name}
           </span>
         )}
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 16 }}>
           <ModeSwitch />
 
           <Tooltip title={isOnline ? '已连接到服务器' : '离线模式 - 数据将保存到本地'}>
@@ -976,6 +1072,22 @@ function AppContent() {
                 boxShadow: 'none',
                 outline: 'none',
                 background: 'transparent'
+              }}
+            />
+          </Tooltip>
+
+          <Tooltip title="AI 助手" mouseEnterDelay={0.1}>
+            <Button
+              type="text"
+              icon={<RobotOutlined style={{ fontSize: 14, color: showAIPanel ? '#1890ff' : undefined }} />}
+              onClick={() => setShowAIPanel(v => !v)}
+              style={{ 
+                color: showAIPanel ? '#1890ff' : 'var(--theme-text-secondary)',
+                border: showAIPanel ? '1px solid #1890ff' : 'none',
+                boxShadow: 'none',
+                outline: 'none',
+                background: showAIPanel ? 'rgba(24,144,255,0.08)' : 'transparent',
+                borderRadius: 4
               }}
             />
           </Tooltip>
@@ -1242,7 +1354,7 @@ function AppContent() {
               {!rightCollapsed ? (
                 <>
                   <div style={{
-                    padding: '8px 12px',
+                    padding: '10px 16px',
                     borderBottom: '1px solid var(--theme-border)',
                     display: 'flex',
                     alignItems: 'center',
@@ -1291,6 +1403,22 @@ function AppContent() {
               )}
             </div>
           </>
+        )}
+
+        {/* AI 助手浮动面板 */}
+        {showAIPanel && (
+          <div style={{
+            width: 380,
+            background: 'var(--theme-background)',
+            borderLeft: '1px solid var(--theme-border)',
+            overflow: 'hidden',
+            flexShrink: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            transition: 'width 0.2s ease'
+          }}>
+            <LLMTab onApplyTables={handleApplyLLMTables} onClose={() => setShowAIPanel(false)} />
+          </div>
         )}
       </div>
       <div style={{ display: 'none' }}>

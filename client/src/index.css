@@ -1,4 +1,5 @@
 :root {
+  /* 颜色变量 */
   --theme-primary: #1890ff;
   --theme-primary-hover: #40a9ff;
   --theme-background: #ffffff;
@@ -14,6 +15,20 @@
   --theme-hover: #f0f0f0;
   --theme-selected: #e6f7ff;
   --theme-shadow: rgba(0, 0, 0, 0.1);
+
+  /* 间距 Token */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 20px;
+  --spacing-2xl: 24px;
+  --spacing-3xl: 32px;
+
+  /* 高度 Token */
+  --height-toolbar: 48px;
+  --height-panel-header: 44px;
+  --height-input: 36px;
 
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   line-height: 1.5;

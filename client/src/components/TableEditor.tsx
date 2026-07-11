@@ -356,7 +356,7 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
   }, [deleteIndex])
 
   return (
-    <div style={{ padding: '12px' }}>
+    <div style={{ padding: '16px' }}>
       {/* 始终渲染隐藏的 Form，确保 useForm 不会报警告 */}
       <div style={{ display: 'none' }}>
         <Form form={form} layout="vertical">
@@ -395,7 +395,7 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
         />
       )}
       
-      <div style={{ marginBottom: '12px' }}>
+      <div style={{ marginBottom: '16px' }}>
         <Form form={form} layout="inline">
           <Form.Item label={
             isTableReadOnly
@@ -450,7 +450,7 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
                   <div style={{ 
                     display: 'flex', 
                     alignItems: 'center', 
-                    padding: '8px 12px',
+                    padding: '10px 16px',
                     background: 'var(--theme-background)',
                     borderBottom: '1px solid var(--theme-border)',
                     fontSize: `${fontConfig.caption}px`,
@@ -484,7 +484,7 @@ const TableEditor: React.FC<TableEditorProps> = ({ table, onClose }) => {
                             alignItems: 'center',
                             background: columnLock ? UI_COLORS.LOCK_BG : 'var(--theme-background)', 
                             borderBottom: '1px solid var(--theme-border)',
-                            padding: '8px 12px',
+                            padding: '10px 16px',
                             gap: 6,
                             transition: 'background-color 0.15s ease'
                           }}

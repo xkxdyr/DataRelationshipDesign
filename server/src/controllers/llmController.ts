@@ -533,5 +533,51 @@ export const llmController = {
       console.error('推荐表失败:', error)
       res.status(500).json({ success: false, error: (error as Error).message })
     }
+  },
+
+  // ====== 优化功能 ======
+
+  async optimizeProject(req: Request, res: Response) {
+    try {
+      const { tables, configId } = req.body
+      if (!tables || !Array.isArray(tables) || tables.length === 0) { res.status(400).json({ success: false, error: 'tables是必填项且不能为空' }); return }
+      if (configId) { const config = await llmConfigService.getDecryptedConfig(configId); if (config) llmService.configure({ apiKey: config.apiKey, endpoint: config.endpoint, model: config.model, provider: config.provider }) }
+      if (!llmService.isConfigured()) { res.status(400).json({ success: false, error: 'LLM服务未配置，请先设置API密钥' }); return }
+      const result = await llmService.optimizeProject(tables as Table[], configId)
+      res.json({ success: true, data: result })
+    } catch (error) { console.error('项目优化失败:', error); res.status(500).json({ success: false, error: (error as Error).message }) }
+  },
+
+  async optimizeTable(req: Request, res: Response) {
+    try {
+      const { table, allTables, configId } = req.body
+      if (!table) { res.status(400).json({ success: false, error: 'table是必填项' }); return }
+      if (configId) { const config = await llmConfigService.getDecryptedConfig(configId); if (config) llmService.configure({ apiKey: config.apiKey, endpoint: config.endpoint, model: config.model, provider: config.provider }) }
+      if (!llmService.isConfigured()) { res.status(400).json({ success: false, error: 'LLM服务未配置，请先设置API密钥' }); return }
+      const result = await llmService.optimizeTable(table as Table, (allTables || []) as Table[], configId)
+      res.json({ success: true, data: result })
+    } catch (error) { console.error('表优化失败:', error); res.status(500).json({ success: false, error: (error as Error).message }) }
+  },
+
+  async optimizeTableStructure(req: Request, res: Response) {
+    try {
+      const { table, configId } = req.body
+      if (!table) { res.status(400).json({ success: false, error: 'table是必填项' }); return }
+      if (configId) { const config = await llmConfigService.getDecryptedConfig(configId); if (config) llmService.configure({ apiKey: config.apiKey, endpoint: config.endpoint, model: config.model, provider: config.provider }) }
+      if (!llmService.isConfigured()) { res.status(400).json({ success: false, error: 'LLM服务未配置，请先设置API密钥' }); return }
+      const result = await llmService.optimizeTableStructure(table as Table, configId)
+      res.json({ success: true, data: result })
+    } catch (error) { console.error('表结构优化失败:', error); res.status(500).json({ success: false, error: (error as Error).message }) }
+  },
+
+  async optimizeTableRelationships(req: Request, res: Response) {
+    try {
+      const { tables, existingRelationships, configId } = req.body
+      if (!tables || !Array.isArray(tables)) { res.status(400).json({ success: false, error: 'tables是必填项' }); return }
+      if (configId) { const config = await llmConfigService.getDecryptedConfig(configId); if (config) llmService.configure({ apiKey: config.apiKey, endpoint: config.endpoint, model: config.model, provider: config.provider }) }
+      if (!llmService.isConfigured()) { res.status(400).json({ success: false, error: 'LLM服务未配置，请先设置API密钥' }); return }
+      const result = await llmService.optimizeTableRelationships(tables as Table[], existingRelationships, configId)
+      res.json({ success: true, data: result })
+    } catch (error) { console.error('关系优化失败:', error); res.status(500).json({ success: false, error: (error as Error).message }) }
   }
 }

@@ -132,14 +132,37 @@ const SHORTCUT_GROUPS = [
 ]
 
 const SVG_EXPORT = {
-  padding: 50,
-  nodeWidth: 220,
+  padding: 60,
+  nodeWidth: 280,
   nodeMinHeight: 150,
-  columnHeight: 28,
-  headerHeight: 50,
-  gapX: 80,
+  columnHeight: 32,
+  headerHeight: 56,
+  commentHeight: 20,
+  gapX: 100,
   gapY: 80,
-  maxWidth: 1200
+  maxWidth: 1400,
+  fontSize: {
+    title: 15,
+    column: 13,
+    comment: 11,
+    legend: 12
+  },
+  colors: {
+    background: '#ffffff',
+    headerBg: '#1890ff',
+    headerText: '#ffffff',
+    border: '#1890ff',
+    text: '#262626',
+    textSecondary: '#8c8c8c',
+    pkText: '#fa8c16',
+    fkText: '#52c41a',
+    line: '#1890ff',
+    pkBg: '#fff7e6',
+    fkBg: '#f6ffed',
+    oddRow: '#fafafa',
+    evenRow: '#ffffff',
+    shadow: 'rgba(0, 0, 0, 0.08)'
+  }
 } as const
 
 const GridOverlay = React.memo(({ snapToGrid, gridSize }: { snapToGrid: boolean; gridSize: number }) => {
@@ -1090,14 +1113,14 @@ const CanvasContent: React.FC = () => {
     }
   }
 
-  const exportToPNG = async () => {
+  const exportToPNG = async (diagramType: 'er' | 'class' = 'er') => {
     if (!currentProject) {
       message.error('请先选择一个项目')
       return
     }
 
     try {
-      const svgContent = generateERDiagramSVG()
+      const svgContent = diagramType === 'er' ? generateERDiagramSVG() : generateClassDiagramSVG()
       const svgBlob = new Blob([svgContent], { type: 'image/svg+xml' })
       const url = URL.createObjectURL(svgBlob)
       
@@ -1118,43 +1141,45 @@ const CanvasContent: React.FC = () => {
         ctx.drawImage(img, 0, 0)
         
         const link = document.createElement('a')
-        link.download = `${currentProject.name || 'er-diagram'}.png`
+        const suffix = diagramType === 'er' ? 'er-diagram' : 'class-diagram'
+        link.download = `${currentProject.name || suffix}-${suffix}.png`
         link.href = canvas.toDataURL('image/png')
         link.click()
         URL.revokeObjectURL(url)
-        message.success('ER 图已导出为 PNG')
+        message.success(diagramType === 'er' ? 'E-R 图已导出为 PNG' : '类图已导出为 PNG')
       }
       
       img.onerror = () => {
         URL.revokeObjectURL(url)
         message.error('PNG 导出失败，正在尝试 SVG 导出')
-        exportToSVG()
+        exportToSVG(diagramType)
       }
 
       img.src = url
     } catch (error) {
       console.error('导出 PNG 失败:', error)
       message.error('导出 PNG 失败，正在尝试 SVG 导出')
-      exportToSVG()
+      exportToSVG(diagramType)
     }
   }
 
-  const exportToSVG = () => {
+  const exportToSVG = (diagramType: 'er' | 'class' = 'er') => {
     if (!currentProject) {
       message.error('没有选中的项目')
       return
     }
 
     try {
-      const svgContent = generateERDiagramSVG()
+      const svgContent = diagramType === 'er' ? generateERDiagramSVG() : generateClassDiagramSVG()
       const blob = new Blob([svgContent], { type: 'image/svg+xml' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
+      const suffix = diagramType === 'er' ? 'er-diagram' : 'class-diagram'
       a.href = url
-      a.download = `${currentProject.name}.svg`
+      a.download = `${currentProject.name || suffix}-${suffix}.svg`
       a.click()
       URL.revokeObjectURL(url)
-      message.success('ER 图已导出为 SVG')
+      message.success(diagramType === 'er' ? 'E-R 图已导出为 SVG' : '类图已导出为 SVG')
     } catch (error) {
       console.error('导出 SVG 失败:', error)
       message.error('导出 SVG 失败')
@@ -1164,92 +1189,602 @@ const CanvasContent: React.FC = () => {
   const generateERDiagramSVG = (): string => {
     if (!currentProject) return ''
 
-    const positions: { [key: string]: { x: number; y: number; width: number; height: number } } = {}
-    let currentX = SVG_EXPORT.padding
-    let currentY = SVG_EXPORT.padding
+    // ===== 标准E-R图 (Chen Notation) 配置 =====
+    // 实体=矩形(只显示表名), 属性=椭圆, 关系=菱形, 基数=连线标注
+    const ER_CONFIG = {
+      padding: 60,
+      entityWidth: 160,            // 实体矩形宽度(只显示表名)
+      entityHeight: 50,            // 实体矩形高度
+      attrEllipseRx: 55,           // 属性椭圆水平半径
+      attrEllipseRy: 18,           // 属性椭圆垂直半径
+      attrGapY: 42,                // 属性间垂直间距
+      attrOffsetX: 130,            // 属性椭圆中心到实体中心的水平偏移
+      diamondHalfW: 45,            // 菱形半宽
+      diamondHalfH: 30,            // 菱形半高
+      entityGapX: 380,             // 实体间水平间距(留出属性空间)
+      entityGapY: 80,              // 实体间垂直间距
+      maxWidth: 2400,
+      fontSize: {
+        entity: 14,                // 实体名字号
+        attr: 11,                  // 属性名字号
+        diamond: 11,               // 关系名字号
+        cardinality: 13,           // 基数字号
+        legend: 11
+      },
+      colors: {
+        background: '#ffffff',
+        entityFill: '#dbeafe',       // 实体矩形填充(浅蓝)
+        entityStroke: '#1d4ed8',     // 实体边框(蓝)
+        entityText: '#1e3a8a',       // 实体文字
+        attrFill: '#fef9c3',         // 属性椭圆填充(浅黄)
+        attrStroke: '#a16207',       // 属性边框
+        attrText: '#422006',         // 属性文字
+        pkAttrStroke: '#dc2626',     // 主键属性边框(红)
+        pkAttrFill: '#fee2e2',       // 主键属性填充(浅红)
+        fkAttrStroke: '#16a34a',     // 外键属性边框(绿)
+        fkAttrFill: '#dcfce7',       // 外键属性填充(浅绿)
+        relFill: '#fed7aa',          // 关系菱形填充(浅橙)
+        relStroke: '#c2410c',        // 关系边框
+        relText: '#7c2d12',          // 关系文字
+        line: '#475569',             // 连线
+        cardinalityBg: '#ffffff',    // 基数标签背景
+        shadow: 'rgba(0, 0, 0, 0.08)'
+      }
+    } as const
+
+    // 收集外键字段ID
+    const foreignKeyColumnIds = new Set<string>()
+    relationships.forEach(rel => {
+      if (rel.sourceColumnId) foreignKeyColumnIds.add(rel.sourceColumnId)
+    })
+
+    // 计算每个实体单元的尺寸(实体+属性)
+    interface EntityLayout {
+      id: string
+      name: string
+      x: number
+      y: number
+      width: number
+      height: number
+      attrs: { id: string; name: string; dataType: string; isPK: boolean; isFK: boolean; x: number; y: number }[]
+    }
+
+    const entityLayouts: EntityLayout[] = []
+    let currentX = ER_CONFIG.padding
+    let currentY = ER_CONFIG.padding + 70 // 留出标题空间
     let maxYInRow = 0
 
     tables.forEach((table) => {
-      const colCount = (table.columns?.length || 0) + 1
-      const height = Math.max(SVG_EXPORT.nodeMinHeight, SVG_EXPORT.headerHeight + colCount * SVG_EXPORT.columnHeight)
-      const width = SVG_EXPORT.nodeWidth
+      const cols = table.columns || []
+      const attrCount = cols.length
+      // 实体单元高度 = max(实体高度, 属性总高度)
+      const unitHeight = Math.max(
+        ER_CONFIG.entityHeight,
+        attrCount * ER_CONFIG.attrGapY + 20
+      )
+      // 实体单元宽度 = 实体宽度 + 属性偏移 + 属性椭圆宽度
+      const unitWidth = ER_CONFIG.entityWidth + ER_CONFIG.attrOffsetX + ER_CONFIG.attrEllipseRx * 2 + 20
 
-      if (currentX + width > SVG_EXPORT.maxWidth) {
-        currentX = SVG_EXPORT.padding
-        currentY = maxYInRow + SVG_EXPORT.gapY
+      // 自动换行
+      if (currentX + unitWidth > ER_CONFIG.maxWidth - ER_CONFIG.padding) {
+        currentX = ER_CONFIG.padding
+        currentY = maxYInRow + ER_CONFIG.entityGapY
+      }
+
+      // 实体矩形位置(居中于单元左侧)
+      const entityCx = currentX + ER_CONFIG.entityWidth / 2
+      const entityCy = currentY + unitHeight / 2
+
+      // 计算属性椭圆位置(实体右侧,垂直排列)
+      const attrs = cols.map((col, idx) => {
+        const attrY = entityCy - (attrCount * ER_CONFIG.attrGapY) / 2 + idx * ER_CONFIG.attrGapY + ER_CONFIG.attrGapY / 2
+        const attrX = entityCx + ER_CONFIG.attrOffsetX
+        return {
+          id: col.id,
+          name: col.name,
+          dataType: col.dataType,
+          isPK: col.primaryKey,
+          isFK: foreignKeyColumnIds.has(col.id),
+          x: attrX,
+          y: attrY
+        }
+      })
+
+      entityLayouts.push({
+        id: table.id,
+        name: table.name,
+        x: entityCx - ER_CONFIG.entityWidth / 2,
+        y: entityCy - ER_CONFIG.entityHeight / 2,
+        width: ER_CONFIG.entityWidth,
+        height: ER_CONFIG.entityHeight,
+        attrs
+      })
+
+      currentX += unitWidth + 40
+      maxYInRow = Math.max(maxYInRow, currentY + unitHeight)
+    })
+
+    // 计算关系菱形位置
+    interface RelLayout {
+      id: string
+      name: string
+      label: string
+      relType: string
+      sourceCard: string
+      targetCard: string
+      diamondX: number
+      diamondY: number
+      sourceEntityId: string
+      targetEntityId: string
+    }
+
+    const relLayouts: RelLayout[] = []
+    relationships.forEach((rel) => {
+      const source = entityLayouts.find(e => e.id === rel.sourceTableId)
+      const target = entityLayouts.find(e => e.id === rel.targetTableId)
+      if (!source || !target) return
+
+      // 菱形放在两个实体中间
+      const sourceCx = source.x + source.width / 2
+      const sourceCy = source.y + source.height / 2
+      const targetCx = target.x + target.width / 2
+      const targetCy = target.y + target.height / 2
+
+      let label = '1:N'
+      let sourceCard = '1'
+      let targetCard = 'N'
+      switch (rel.relationshipType) {
+        case 'one-to-one': label = '1:1'; sourceCard = '1'; targetCard = '1'; break
+        case 'one-to-many': label = '1:N'; sourceCard = '1'; targetCard = 'N'; break
+        case 'many-to-many': label = 'M:N'; sourceCard = 'M'; targetCard = 'N'; break
+      }
+
+      relLayouts.push({
+        id: rel.id,
+        name: rel.name || label,
+        label,
+        relType: rel.relationshipType || 'one-to-many',
+        sourceCard,
+        targetCard,
+        diamondX: (sourceCx + targetCx) / 2,
+        diamondY: (sourceCy + targetCy) / 2,
+        sourceEntityId: rel.sourceTableId,
+        targetEntityId: rel.targetTableId
+      })
+    })
+
+    const svgWidth = Math.min(
+      maxYInRow > ER_CONFIG.padding * 3 ? ER_CONFIG.maxWidth : currentX,
+      ER_CONFIG.maxWidth
+    )
+    const svgHeight = maxYInRow + ER_CONFIG.padding + 60 // 底部图例空间
+
+    let svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${svgWidth}" height="${svgHeight}"
+     style="background:${ER_CONFIG.colors.background};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif"
+     viewBox="0 0 ${svgWidth} ${svgHeight}">
+  <defs>
+    <filter id="er-shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="${ER_CONFIG.colors.shadow}" flood-opacity="0.6"/>
+    </filter>
+    <style>
+      .er-entity-name { fill: ${ER_CONFIG.colors.entityText}; font-size: ${ER_CONFIG.fontSize.entity}px; font-weight: 700; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+      .er-attr-name { fill: ${ER_CONFIG.colors.attrText}; font-size: ${ER_CONFIG.fontSize.attr}px; font-family: 'SF Mono', 'Consolas', monospace; }
+      .er-attr-pk { fill: ${ER_CONFIG.colors.pkAttrStroke}; font-weight: 700; text-decoration: underline; }
+      .er-attr-fk { fill: ${ER_CONFIG.colors.fkAttrStroke}; font-style: italic; }
+      .er-rel-name { fill: ${ER_CONFIG.colors.relText}; font-size: ${ER_CONFIG.fontSize.diamond}px; font-weight: 600; font-family: -apple-system, sans-serif; }
+      .er-card { fill: ${ER_CONFIG.colors.line}; font-size: ${ER_CONFIG.fontSize.cardinality}px; font-weight: 700; font-family: -apple-system, sans-serif; }
+      .er-legend { fill: #334155; font-size: ${ER_CONFIG.fontSize.legend}px; font-family: -apple-system, sans-serif; }
+      .er-title { fill: #1e293b; font-size: 18px; font-weight: 700; font-family: -apple-system, sans-serif; }
+      .er-subtitle { fill: #64748b; font-size: 12px; font-family: -apple-system, sans-serif; }
+    </style>
+  </defs>
+
+  <!-- 标题 -->
+  <text x="${ER_CONFIG.padding}" y="35" class="er-title">E-R Diagram: ${escapeXml(currentProject.name)}</text>
+  <text x="${ER_CONFIG.padding}" y="52" class="er-subtitle">Entity-Relationship Diagram (Chen Notation) | ${new Date().toLocaleDateString('zh-CN')}</text>
+  <line x1="${ER_CONFIG.padding}" y1="62" x2="${svgWidth - ER_CONFIG.padding}" y2="62" stroke="#e2e8f0" stroke-width="1"/>
+`
+
+    // ===== 绘制属性椭圆 + 连线(属性→实体) =====
+    entityLayouts.forEach((entity) => {
+      const entityCx = entity.x + entity.width / 2
+      const entityCy = entity.y + entity.height / 2
+
+      entity.attrs.forEach((attr) => {
+        const fill = attr.isPK ? ER_CONFIG.colors.pkAttrFill : attr.isFK ? ER_CONFIG.colors.fkAttrFill : ER_CONFIG.colors.attrFill
+        const stroke = attr.isPK ? ER_CONFIG.colors.pkAttrStroke : attr.isFK ? ER_CONFIG.colors.fkAttrStroke : ER_CONFIG.colors.attrStroke
+        const textClass = attr.isPK ? 'er-attr-name er-attr-pk' : attr.isFK ? 'er-attr-name er-attr-fk' : 'er-attr-name'
+
+        // 属性到实体的连线
+        svg += `  <line x1="${attr.x - ER_CONFIG.attrEllipseRx}" y1="${attr.y}" x2="${entityCx + entity.width / 2}" y2="${entityCy}" stroke="${ER_CONFIG.colors.line}" stroke-width="1"/>
+`
+
+        // 属性椭圆
+        svg += `  <ellipse cx="${attr.x}" cy="${attr.y}" rx="${ER_CONFIG.attrEllipseRx}" ry="${ER_CONFIG.attrEllipseRy}"
+          fill="${fill}" stroke="${stroke}" stroke-width="1.5" filter="url(#er-shadow)"/>
+  <text x="${attr.x}" y="${attr.y + 4}" class="${textClass}" text-anchor="middle">${escapeXml(attr.name)}</text>
+`
+      })
+    })
+
+    // ===== 绘制实体矩形 =====
+    entityLayouts.forEach((entity) => {
+      svg += `  <!-- 实体: ${escapeXml(entity.name)} -->
+  <rect x="${entity.x}" y="${entity.y}" width="${entity.width}" height="${entity.height}"
+        fill="${ER_CONFIG.colors.entityFill}" stroke="${ER_CONFIG.colors.entityStroke}" stroke-width="2.5" rx="4" filter="url(#er-shadow)"/>
+  <text x="${entity.x + entity.width / 2}" y="${entity.y + entity.height / 2 + 5}" class="er-entity-name" text-anchor="middle">${escapeXml(entity.name)}</text>
+`
+    })
+
+    // ===== 绘制关系菱形 + 连线 + 基数 =====
+    relLayouts.forEach((rp) => {
+      const source = entityLayouts.find(e => e.id === rp.sourceEntityId)
+      const target = entityLayouts.find(e => e.id === rp.targetEntityId)
+      if (!source || !target) return
+
+      const sourceCx = source.x + source.width / 2
+      const sourceCy = source.y + source.height / 2
+      const targetCx = target.x + target.width / 2
+      const targetCy = target.y + target.height / 2
+
+      // 计算实体边界连接点
+      const dx = rp.diamondX - sourceCx
+      const dy = rp.diamondY - sourceCy
+      const sourceEdgeX = dx > 0 ? source.x + source.width : source.x
+      const sourceEdgeY = sourceCy
+
+      const dx2 = targetCx - rp.diamondX
+      const dy2 = targetCy - rp.diamondY
+      const targetEdgeX = dx2 > 0 ? target.x : target.x + target.width
+      const targetEdgeY = targetCy
+
+      svg += `  <!-- 关系: ${escapeXml(rp.name)} -->
+  <!-- 连线: 实体→关系 -->
+  <line x1="${sourceEdgeX}" y1="${sourceEdgeY}" x2="${rp.diamondX - ER_CONFIG.diamondHalfW}" y2="${rp.diamondY}" stroke="${ER_CONFIG.colors.line}" stroke-width="2"/>
+
+  <!-- 关系菱形 -->
+  <polygon points="${rp.diamondX},${rp.diamondY - ER_CONFIG.diamondHalfH}
+                   ${rp.diamondX + ER_CONFIG.diamondHalfW},${rp.diamondY}
+                   ${rp.diamondX},${rp.diamondY + ER_CONFIG.diamondHalfH}
+                   ${rp.diamondX - ER_CONFIG.diamondHalfW},${rp.diamondY}"
+           fill="${ER_CONFIG.colors.relFill}" stroke="${ER_CONFIG.colors.relStroke}" stroke-width="2" filter="url(#er-shadow)"/>
+  <text x="${rp.diamondX}" y="${rp.diamondY + 4}" class="er-rel-name" text-anchor="middle">${escapeXml(rp.label)}</text>
+
+  <!-- 连线: 关系→实体 -->
+  <line x1="${rp.diamondX + ER_CONFIG.diamondHalfW}" y1="${rp.diamondY}" x2="${targetEdgeX}" y2="${targetEdgeY}" stroke="${ER_CONFIG.colors.line}" stroke-width="2"/>
+
+  <!-- 基数标注: 源端 -->
+  <circle cx="${sourceEdgeX + (rp.diamondX - sourceEdgeX) * 0.3}" cy="${sourceEdgeY + (rp.diamondY - sourceEdgeY) * 0.3}" r="11" fill="${ER_CONFIG.colors.cardinalityBg}" stroke="${ER_CONFIG.colors.line}" stroke-width="1.5"/>
+  <text x="${sourceEdgeX + (rp.diamondX - sourceEdgeX) * 0.3}" y="${sourceEdgeY + (rp.diamondY - sourceEdgeY) * 0.3 + 4}" class="er-card" text-anchor="middle">${rp.sourceCard}</text>
+
+  <!-- 基数标注: 目标端 -->
+  <circle cx="${targetEdgeX + (rp.diamondX - targetEdgeX) * 0.7}" cy="${targetEdgeY + (rp.diamondY - targetEdgeY) * 0.7}" r="11" fill="${ER_CONFIG.colors.cardinalityBg}" stroke="${ER_CONFIG.colors.line}" stroke-width="1.5"/>
+  <text x="${targetEdgeX + (rp.diamondX - targetEdgeX) * 0.7}" y="${targetEdgeY + (rp.diamondY - targetEdgeY) * 0.7 + 4}" class="er-card" text-anchor="middle">${rp.targetCard}</text>
+`
+    })
+
+    // ===== 图例 =====
+    const legendY = svgHeight - 50
+    svg += `  <!-- 图例 -->
+  <g transform="translate(${ER_CONFIG.padding}, ${legendY})">
+    <rect x="0" y="0" width="${svgWidth - ER_CONFIG.padding * 2}" height="40" fill="rgba(255,255,255,0.98)" stroke="#cbd5e1" stroke-width="1" rx="6"/>
+    <text x="16" y="25" class="er-legend" font-weight="600">E-R图符号:</text>
+    <rect x="90" y="13" width="28" height="18" fill="${ER_CONFIG.colors.entityFill}" stroke="${ER_CONFIG.colors.entityStroke}" stroke-width="2" rx="3"/>
+    <text x="126" y="26" class="er-legend">实体</text>
+    <ellipse cx="190" cy="22" rx="22" ry="12" fill="${ER_CONFIG.colors.attrFill}" stroke="${ER_CONFIG.colors.attrStroke}" stroke-width="1.5"/>
+    <text x="220" y="26" class="er-legend">属性</text>
+    <ellipse cx="290" cy="22" rx="22" ry="12" fill="${ER_CONFIG.colors.pkAttrFill}" stroke="${ER_CONFIG.colors.pkAttrStroke}" stroke-width="1.5"/>
+    <text x="320" y="26" class="er-legend">主键属性(下划线)</text>
+    <ellipse cx="450" cy="22" rx="22" ry="12" fill="${ER_CONFIG.colors.fkAttrFill}" stroke="${ER_CONFIG.colors.fkAttrStroke}" stroke-width="1.5"/>
+    <text x="480" y="26" class="er-legend">外键属性</text>
+    <polygon points="580,22 600,10 620,22 600,34" fill="${ER_CONFIG.colors.relFill}" stroke="${ER_CONFIG.colors.relStroke}" stroke-width="1.5"/>
+    <text x="630" y="26" class="er-legend">关系</text>
+    <circle cx="700" cy="22" r="9" fill="#fff" stroke="${ER_CONFIG.colors.line}" stroke-width="1.5"/>
+    <text x="700" y="26" class="er-card" text-anchor="middle" font-size="11">N</text>
+    <text x="718" y="26" class="er-legend">基数</text>
+  </g>
+`
+
+    svg += '</svg>'
+    return svg
+  }
+
+  // ===== 生成UML类图 (Class Diagram) =====
+  const generateClassDiagramSVG = (): string => {
+    if (!currentProject) return ''
+
+    const CLASS_CONFIG = {
+      padding: 80,
+      classWidth: 280,
+      headerHeight: 44,
+      columnHeight: 26,
+      separatorHeight: 8,
+      gapX: 100,
+      gapY: 80,
+      maxWidth: 1600,
+      fontSize: {
+        title: 15,
+        column: 12,
+        type: 11,
+        legend: 11
+      },
+      colors: {
+        background: '#ffffff',
+        classFill: '#fafafa',
+        classStroke: '#475569',
+        headerBg: '#334155',
+        headerText: '#ffffff',
+        text: '#1e293b',
+        textSecondary: '#64748b',
+        pkText: '#b45309',
+        fkText: '#15803d',
+        line: '#64748b',
+        pkBg: '#fef3c7',
+        fkBg: '#dcfce7',
+        oddRow: '#f8fafc',
+        evenRow: '#ffffff',
+        shadow: 'rgba(0, 0, 0, 0.06)'
+      }
+    } as const
+
+    const positions: { [key: string]: { x: number; y: number; width: number; height: number } } = {}
+    let currentX = CLASS_CONFIG.padding
+    let currentY = CLASS_CONFIG.padding
+    let maxYInRow = 0
+
+    tables.forEach((table) => {
+      const colCount = table.columns?.length || 0
+      const height = Math.max(
+        CLASS_CONFIG.headerHeight + 40,
+        CLASS_CONFIG.headerHeight + colCount * CLASS_CONFIG.columnHeight + CLASS_CONFIG.separatorHeight + 10
+      )
+      const width = CLASS_CONFIG.classWidth
+
+      if (currentX + width > CLASS_CONFIG.maxWidth - CLASS_CONFIG.padding) {
+        currentX = CLASS_CONFIG.padding
+        currentY = maxYInRow + CLASS_CONFIG.gapY
       }
 
       positions[table.id] = { x: currentX, y: currentY, width, height }
-
-      currentX += width + SVG_EXPORT.gapX
+      currentX += width + CLASS_CONFIG.gapX
       maxYInRow = Math.max(maxYInRow, currentY + height)
     })
 
+    const foreignKeyColumnIds = new Set<string>()
+    relationships.forEach(rel => {
+      if (rel.sourceColumnId) {
+        foreignKeyColumnIds.add(rel.sourceColumnId)
+      }
+    })
+
+    const svgWidth = Math.min(
+      maxYInRow > CLASS_CONFIG.padding * 3 ? CLASS_CONFIG.maxWidth : currentX,
+      CLASS_CONFIG.maxWidth
+    )
+    const svgHeight = maxYInRow + CLASS_CONFIG.padding * 2
+
     let svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${SVG_EXPORT.maxWidth}" height="${maxYInRow + SVG_EXPORT.padding * 2}" style="background:#fafafa">
+<svg xmlns="http://www.w3.org/2000/svg" width="${svgWidth}" height="${svgHeight}"
+     style="background:${CLASS_CONFIG.colors.background};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif"
+     viewBox="0 0 ${svgWidth} ${svgHeight}">
   <defs>
-    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-      <polygon points="0 0, 10 3.5, 0 7" fill="#1890ff"/>
+    <filter id="cls-shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="${CLASS_CONFIG.colors.shadow}" flood-opacity="0.8"/>
+    </filter>
+    <linearGradient id="cls-header-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#475569;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#334155;stop-opacity:1" />
+    </linearGradient>
+    <marker id="cls-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="${CLASS_CONFIG.colors.line}"/>
+    </marker>
+    <marker id="cls-diamond" viewBox="0 0 12 12" refX="11" refY="6"
+            markerWidth="10" markerHeight="10" orient="auto">
+      <path d="M 0 6 L 6 0 L 12 6 L 6 12 z" fill="${CLASS_CONFIG.colors.line}" stroke="${CLASS_CONFIG.colors.line}" stroke-width="1"/>
     </marker>
     <style>
-      .table-header { fill: #1890ff; }
-      .table-title { fill: white; font-size: 14px; font-weight: bold; }
-      .column-text { fill: #333; font-size: 12px; }
-      .primary-key { fill: #faad14; }
+      .cls-title { fill: ${CLASS_CONFIG.colors.headerText}; font-size: ${CLASS_CONFIG.fontSize.title}px; font-weight: 700; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+      .cls-attr { fill: ${CLASS_CONFIG.colors.text}; font-size: ${CLASS_CONFIG.fontSize.column}px; font-family: 'SF Mono', 'Consolas', monospace; }
+      .cls-type { fill: ${CLASS_CONFIG.colors.textSecondary}; font-size: ${CLASS_CONFIG.fontSize.type}px; font-family: 'SF Mono', 'Consolas', monospace; }
+      .cls-pk { fill: ${CLASS_CONFIG.colors.pkText}; font-weight: 700; }
+      .cls-fk { fill: ${CLASS_CONFIG.colors.fkText}; font-style: italic; }
+      .cls-rel-label { fill: ${CLASS_CONFIG.colors.textSecondary}; font-size: 11px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+      .cls-legend { fill: ${CLASS_CONFIG.colors.text}; font-size: ${CLASS_CONFIG.fontSize.legend}px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+      .cls-diagram-title { fill: #1e293b; font-size: 18px; font-weight: 700; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+      .cls-diagram-subtitle { fill: #64748b; font-size: 12px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
     </style>
   </defs>
 `
 
-    tables.forEach(table => {
+    // 标题
+    svg += `
+  <text x="${CLASS_CONFIG.padding}" y="35" class="cls-diagram-title">Class Diagram: ${escapeXml(currentProject.name)}</text>
+  <text x="${CLASS_CONFIG.padding}" y="52" class="cls-diagram-subtitle">UML Class Diagram | Generated on ${new Date().toLocaleDateString('zh-CN')}</text>
+  <line x1="${CLASS_CONFIG.padding}" y1="62" x2="${svgWidth - CLASS_CONFIG.padding}" y2="62" stroke="#e2e8f0" stroke-width="1"/>
+`
+
+    // 绘制类（表）节点
+    tables.forEach((table, tableIdx) => {
       const pos = positions[table.id]
       if (!pos) return
 
-      svg += `  <g>
-    <rect x="${pos.x}" y="${pos.y}" width="${pos.width}" height="${pos.height}" fill="white" stroke="#1890ff" stroke-width="2" rx="4"/>
-    <rect x="${pos.x}" y="${pos.y}" width="${pos.width}" height="${SVG_EXPORT.headerHeight}" fill="#1890ff" rx="4" ry="4"/>
-    <text x="${pos.x + 10}" y="${pos.y + 30}" class="table-title">${table.name}</text>
+      const bgColor = tableIdx % 2 === 0 ? CLASS_CONFIG.colors.evenRow : CLASS_CONFIG.colors.oddRow
+
+      svg += `
+  <!-- ========== Class: ${escapeXml(table.name)} ========== -->
+  <g filter="url(#cls-shadow)">
+    <rect x="${pos.x}" y="${pos.y}" width="${pos.width}" height="${pos.height}"
+          fill="${bgColor}" stroke="${CLASS_CONFIG.colors.classStroke}" stroke-width="1.5" rx="4"/>
+
+    <!-- 类名区域 -->
+    <rect x="${pos.x}" y="${pos.y}" width="${pos.width}" height="${CLASS_CONFIG.headerHeight}"
+          fill="url(#cls-header-grad)" rx="4" ry="4"/>
+    <path d="M ${pos.x} ${pos.y + CLASS_CONFIG.headerHeight - 4}
+             Q ${pos.x} ${pos.y + CLASS_CONFIG.headerHeight} ${pos.x + 4} ${pos.y + CLASS_CONFIG.headerHeight}
+             L ${pos.x + pos.width - 4} ${pos.y + CLASS_CONFIG.headerHeight}
+             Q ${pos.x + pos.width} ${pos.y + CLASS_CONFIG.headerHeight} ${pos.x + pos.width} ${pos.y + CLASS_CONFIG.headerHeight - 4}"
+          fill="url(#cls-header-grad)"/>
+
+    <text x="${pos.x + pos.width / 2}" y="${pos.y + 28}" class="cls-title" text-anchor="middle">${escapeXml(table.name)}</text>
+
+    <!-- 分隔线 -->
+    <line x1="${pos.x}" y1="${pos.y + CLASS_CONFIG.headerHeight}" x2="${pos.x + pos.width}" y2="${pos.y + CLASS_CONFIG.headerHeight}" stroke="${CLASS_CONFIG.colors.classStroke}" stroke-width="1"/>
 `
 
+      // 属性列表
+      let fieldY = pos.y + CLASS_CONFIG.headerHeight + 18
+
       table.columns?.forEach((col, idx) => {
-        const y = pos.y + SVG_EXPORT.headerHeight + 20 + idx * SVG_EXPORT.columnHeight
-        svg += `    <text x="${pos.x + 10}" y="${y}" class="column-text">${col.name} (${col.dataType})</text>
+        const isPK = col.primaryKey
+        const isFK = foreignKeyColumnIds.has(col.id)
+        const rowBg = idx % 2 === 0 ? 'rgba(148,163,184,0.06)' : 'transparent'
+
+        svg += `    <rect x="${pos.x + 1}" y="${fieldY - 14}" width="${pos.width - 2}" height="${CLASS_CONFIG.columnHeight}" fill="${rowBg}"/>
 `
+
+        // 可见性符号: PK用+，FK用#，其他用-
+        let visibility = '- '
+        if (isPK) visibility = '+ '
+        else if (isFK) visibility = '# '
+
+        const textClass = isPK ? 'cls-attr cls-pk' : isFK ? 'cls-attr cls-fk' : 'cls-attr'
+        let keyLabel = ''
+        if (isPK) keyLabel = ' {PK}'
+        if (isFK) keyLabel = ' {FK}'
+
+        svg += `    <text x="${pos.x + 12}" y="${fieldY}" class="${textClass}">${visibility}${escapeXml(col.name)}${keyLabel}</text>
+    <text x="${pos.x + pos.width - 12}" y="${fieldY}" class="cls-type" text-anchor="end">${escapeXml(col.dataType)}</text>
+`
+        fieldY += CLASS_CONFIG.columnHeight
       })
 
       svg += `  </g>
 `
     })
 
-    relationships.forEach(rel => {
+    // 绘制关系连线（UML风格：直线+箭头/菱形）
+    relationships.forEach((rel) => {
       const sourcePos = positions[rel.sourceTableId]
       const targetPos = positions[rel.targetTableId]
       if (!sourcePos || !targetPos) return
 
-      const sourceX = sourcePos.x + sourcePos.width / 2
-      const sourceY = sourcePos.y + sourcePos.height
-      const targetX = targetPos.x + targetPos.width / 2
-      const targetY = targetPos.y
+      const sourceCx = sourcePos.x + sourcePos.width / 2
+      const sourceCy = sourcePos.y + sourcePos.height / 2
+      const targetCx = targetPos.x + targetPos.width / 2
+      const targetCy = targetPos.y + targetPos.height / 2
 
-      svg += `  <line x1="${sourceX}" y1="${sourceY}" x2="${targetX}" y2="${targetY}" stroke="#1890ff" stroke-width="2" marker-end="url(#arrowhead)"/>
+      // 计算边界交点
+      const dx = targetCx - sourceCx
+      const dy = targetCy - sourceCy
+      const sx = dx > 0 ? sourcePos.x + sourcePos.width : sourcePos.x
+      const sy = sourceCy
+      const tx = dx > 0 ? targetPos.x : targetPos.x + targetPos.width
+      const ty = targetCy
+
+      let relLabel = '1..*'
+      let markerEnd = 'url(#cls-arrow)'
+      switch (rel.relationshipType) {
+        case 'one-to-one':
+          relLabel = '1..1'
+          markerEnd = 'url(#cls-arrow)'
+          break
+        case 'one-to-many':
+          relLabel = '1..*'
+          markerEnd = 'url(#cls-arrow)'
+          break
+        case 'many-to-many':
+          relLabel = '*..*'
+          markerEnd = 'url(#cls-diamond)'
+          break
+        default:
+          relLabel = '1..*'
+      }
+
+      const midX = (sx + tx) / 2
+      const midY = (sy + ty) / 2
+
+      svg += `
+  <!-- 关系: ${escapeXml(rel.name || '')} -->
+  <line x1="${sx}" y1="${sy}" x2="${tx}" y2="${ty}"
+        stroke="${CLASS_CONFIG.colors.line}" stroke-width="1.5" marker-end="${markerEnd}"/>
+  <rect x="${midX - 30}" y="${midY - 10}" width="60" height="18" fill="white" stroke="${CLASS_CONFIG.colors.line}" stroke-width="0.5" rx="3"/>
+  <text x="${midX}" y="${midY + 3}" class="cls-rel-label" text-anchor="middle">${relLabel}</text>
 `
     })
 
-    svg += `</svg>`
+    // 图例
+    const legendY = svgHeight - 55
+    svg += `
+  <!-- ========== 类图图例 ========== -->
+  <g transform="translate(${CLASS_CONFIG.padding}, ${legendY})">
+    <rect x="0" y="0" width="${svgWidth - CLASS_CONFIG.padding * 2}" height="42"
+          fill="rgba(255,255,255,0.98)" stroke="#cbd5e1" stroke-width="1" rx="6"/>
+    <text x="16" y="26" class="cls-legend" font-weight="600">类图符号:</text>
+    <rect x="90" y="14" width="24" height="16" fill="${CLASS_CONFIG.colors.classFill}" stroke="${CLASS_CONFIG.colors.classStroke}" stroke-width="1.5" rx="3"/>
+    <text x="122" y="26" class="cls-legend">类 (Class/表)</text>
+    <text x="220" y="26" class="cls-legend cls-pk">+ PK</text>
+    <text x="260" y="26" class="cls-legend">主键属性</text>
+    <text x="340" y="26" class="cls-legend cls-fk"># FK</text>
+    <text x="380" y="26" class="cls-legend">外键属性</text>
+    <line x1="460" y1="22" x2="500" y2="22" stroke="${CLASS_CONFIG.colors.line}" stroke-width="1.5" marker-end="url(#cls-arrow)"/>
+    <text x="510" y="26" class="cls-legend">关联 (1:N)</text>
+    <line x1="600" y1="22" x2="640" y2="22" stroke="${CLASS_CONFIG.colors.line}" stroke-width="1.5" marker-end="url(#cls-diamond)"/>
+    <text x="652" y="26" class="cls-legend">聚合 (M:N)</text>
+  </g>
+`
+
+    svg += '</svg>'
     return svg
+  }
+
+  // XML转义函数，防止XSS攻击
+  const escapeXml = (str: string): string => {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;')
   }
 
   const exportMenuItems = useMemo(() => [
     {
-      key: 'png',
-      icon: <FileImageOutlined />,
-      label: '导出为 PNG',
-      onClick: exportToPNG
+      key: 'er-group',
+      label: 'E-R 图',
+      children: [
+        {
+          key: 'er-png',
+          icon: <FileImageOutlined />,
+          label: '导出为 PNG',
+          onClick: () => exportToPNG('er')
+        },
+        {
+          key: 'er-svg',
+          icon: <PictureOutlined />,
+          label: '导出为 SVG',
+          onClick: () => exportToSVG('er')
+        }
+      ]
     },
     {
-      key: 'svg',
-      icon: <PictureOutlined />,
-      label: '导出为 SVG',
-      onClick: exportToSVG
+      key: 'class-group',
+      label: '类图 (UML)',
+      children: [
+        {
+          key: 'class-png',
+          icon: <FileImageOutlined />,
+          label: '导出为 PNG',
+          onClick: () => exportToPNG('class')
+        },
+        {
+          key: 'class-svg',
+          icon: <PictureOutlined />,
+          label: '导出为 SVG',
+          onClick: () => exportToSVG('class')
+        }
+      ]
     }
   ], [])
 

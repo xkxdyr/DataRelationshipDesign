@@ -418,7 +418,38 @@ export const llmApi = {
     request<TableSuggestion[]>('/llm/recommend-tables', {
       method: 'POST',
       body: JSON.stringify({ existingTables, configId })
-    })
+    }),
+
+  // ====== 优化功能 ======
+  optimizeProject: (tables: any[], configId?: string) =>
+    request<{
+      summary: string
+      optimizations: Array<{ area: string; issue: string; suggestion: string; priority: 'high' | 'medium' | 'low' }>
+      estimatedImpact: string
+    }>('/llm/optimize-project', { method: 'POST', body: JSON.stringify({ tables, configId }) }),
+  optimizeTable: (table: any, allTables: any[], configId?: string) =>
+    request<{
+      tableName: string; summary: string
+      fieldOptimizations: Array<{ field: string; currentIssue: string; suggestedChange: string; reason: string }>
+      indexSuggestions: Array<{ columns: string; type: string; reason: string }>
+      constraintChanges: Array<{ type: string; detail: string; reason: string }>
+      overallScore: { before: number; after: number }
+    }>('/llm/optimize-table', { method: 'POST', body: JSON.stringify({ table, allTables, configId }) }),
+  optimizeTableStructure: (table: any, configId?: string) =>
+    request<{
+      tableName: string
+      columnChanges: Array<{ columnName: string; currentType: string; suggestedType: string; currentLength: string | null; suggestedLength: string | null; reason: string; impact: string }>
+      namingIssues: Array<{ currentName: string; suggestedName: string; reason: string }>
+      missingConstraints: Array<{ column: string; constraint: string; reason: string }>
+    }>('/llm/optimize-table-structure', { method: 'POST', body: JSON.stringify({ table, configId }) }),
+  optimizeTableRelationships: (tables: any[], existingRelationships?: any[], configId?: string) =>
+    request<{
+      summary: string
+      relationshipOptimizations: Array<{ fromTable: string; toTable: string; fromColumn: string; toColumn: string; currentIssue: string; suggestedAction: string; actionType: string; reason: string }>
+      namingStandard: string[]
+      cascadeRecommendations: Array<{ relationship: string; recommendation: string }>
+      redundancyWarnings: Array<{ description: string; suggestion: string }>
+    }>('/llm/optimize-relationships', { method: 'POST', body: JSON.stringify({ tables, existingRelationships, configId }) })
 }
 
 export interface ConnectionConfig {

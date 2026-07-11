@@ -772,9 +772,30 @@ export const llmDataMockService = {
       return desc
     }).join(', ')
 
-    const prompt = `根据表 ${tableName} 的字段结构生成 ${rowCount} 条模拟数据。字段: ${fieldList}。请以JSON数组格式返回，每个元素是一个对象，键为字段名。只返回JSON数组，不要有其他文字。`
+    // 构建领域上下文：表注释 + 列注释，帮助LLM生成语义正确的数据
+    let domainContext = ''
+    if (tableComment) {
+      domainContext = `\n\n【重要 - 表的业务含义】\n此表是: ${tableComment}\n请根据这个业务含义生成真实、合理、符合业务场景的模拟数据。`
+    }
+    const commentFields = columns.filter(c => c.comment).map(c => `  - ${c.name}: ${c.comment}`)
+    if (commentFields.length > 0) {
+      domainContext += `\n\n【字段业务含义】\n${commentFields.join('\n')}\n请务必参考以上字段含义来生成数据，确保数据在语义上是合理的。`
+    }
 
-    const systemPrompt = '你是一个数据生成专家，根据表结构生成真实合理的模拟数据。只返回JSON数组，不要有其他文字。'
+    const prompt = `请为数据库表 "${tableName}" 生成 ${rowCount} 条模拟测试数据。
+
+【表结构】
+${fieldList}
+${domainContext}
+
+【输出要求】
+1. 数据必须符合字段的业务含义和约束
+2. 字符串内容要真实自然（如姓名用真实人名、地址用真实格式）
+3. 数值要在合理范围内
+4. 日期要是近期的合理日期
+5. 只返回JSON数组，不要有其他文字`
+
+    const systemPrompt = '你是一个数据生成专家。请严格根据表注释和字段注释生成语义正确、真实合理的模拟数据。例如：如果字段注释说"属性名称，如火、水、草"，就生成"火"、"水"这样的值，而不是生成随机的字符串。只返回JSON数组，不要有其他文字。'
 
     const response = await llmService.callLLMWithConfig(configId, prompt, systemPrompt)
 

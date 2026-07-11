@@ -73,6 +73,37 @@ export interface ConnectionTestResult {
   }
 }
 
+// ====== 优化结果接口 ======
+export interface OptimizeProjectResult {
+  summary: string
+  optimizations: Array<{ area: string; issue: string; suggestion: string; priority: 'high' | 'medium' | 'low' }>
+  estimatedImpact: string
+}
+
+export interface OptimizeTableResult {
+  tableName: string
+  summary: string
+  fieldOptimizations: Array<{ field: string; currentIssue: string; suggestedChange: string; reason: string }>
+  indexSuggestions: Array<{ columns: string; type: string; reason: string }>
+  constraintChanges: Array<{ type: string; detail: string; reason: string }>
+  overallScore: { before: number; after: number }
+}
+
+export interface OptimizeStructureResult {
+  tableName: string
+  columnChanges: Array<{ columnName: string; currentType: string; suggestedType: string; currentLength: string | null; suggestedLength: string | null; reason: string; impact: string }>
+  namingIssues: Array<{ currentName: string; suggestedName: string; reason: string }>
+  missingConstraints: Array<{ column: string; constraint: string; reason: string }>
+}
+
+export interface OptimizeRelationshipsResult {
+  summary: string
+  relationshipOptimizations: Array<{ fromTable: string; toTable: string; fromColumn: string; toColumn: string; currentIssue: string; suggestedAction: string; actionType: string; reason: string }>
+  namingStandard: string[]
+  cascadeRecommendations: Array<{ relationship: string; recommendation: string }>
+  redundancyWarnings: Array<{ description: string; suggestion: string }>
+}
+
 const defaultConfig: LLMConfig = {
   apiKey: '',
   endpoint: 'https://api.openai.com/v1',
@@ -660,7 +691,7 @@ ${JSON.stringify(tableInfos, null, 2)}
     return this.parseTableSuggestions(response)
   }
 
-  private buildProjectAnalysisPrompt(tables: Table[]): string {
+  private buildProjectAnalysisPrompt(tables: Table[], projectContext?: string): string {
     const tableInfos = tables.map(t => ({
       name: t.name,
       comment: t.comment || '',
@@ -673,8 +704,12 @@ ${JSON.stringify(tableInfos, null, 2)}
       }))
     }))
 
-    return `你是一个资深的数据库架构师。请分析以下项目的数据库设计，给出专业的评估和建议。
+    // 提取项目上下文（前端可能附加在数组上）
+    const ctx = projectContext || (tables as any)._projectContext || ''
+    const contextSection = ctx ? `\n\n【项目背景信息】\n${ctx}\n\n请结合以上项目背景进行分析评估。` : ''
 
+    return `你是一个资深的数据库架构师。请分析以下项目的数据库设计，给出专业的评估和建议。
+${contextSection}
 项目表结构:
 ${JSON.stringify(tableInfos, null, 2)}
 
@@ -757,8 +792,12 @@ ${JSON.stringify(relatedTables, null, 2)}
       }))
     }))
 
-    return `你是一个专业的数据库设计师。根据以下已有的表结构，推荐可能还需要的新表。
+    // 提取项目上下文
+    const ctx = (existingTables as any)._projectContext || ''
+    const contextSection = ctx ? `\n\n【项目背景信息】\n${ctx}\n\n请结合以上项目背景推荐与业务相关的新表。` : ''
 
+    return `你是一个专业的数据库设计师。根据以下已有的表结构，推荐可能还需要的新表。
+${contextSection}
 已有表结构:
 ${JSON.stringify(tableInfos, null, 2)}
 
@@ -869,6 +908,211 @@ ${JSON.stringify(tableInfos, null, 2)}
     } catch (error) {
       console.error('解析关系建议失败:', error)
       throw new Error('解析LLM返回内容失败: ' + (error as Error).message)
+    }
+  }
+
+  // ====== 优化功能 ======
+
+  /** 优化项目整体：基于分析结果给出可执行的优化方案 */
+  async optimizeProject(tables: Table[], configId?: string): Promise<OptimizeProjectResult> {
+    const prompt = this.buildOptimizeProjectPrompt(tables)
+    const response = configId ? await this.callLLMWithConfig(configId, prompt) : await this.callLLM(prompt)
+    return this.parseOptimizationResult(response)
+  }
+
+  /** 优化单个表：字段/索引/约束的优化建议 */
+  async optimizeTable(table: Table, allTables: Table[], configId?: string): Promise<OptimizeTableResult> {
+    const prompt = this.buildOptimizeTablePrompt(table, allTables)
+    const response = configId ? await this.callLLMWithConfig(configId, prompt) : await this.callLLM(prompt)
+    return this.parseTableOptimizationResult(response)
+  }
+
+  /** 优化表结构：细粒度字段类型/长度/命名规范 */
+  async optimizeTableStructure(table: Table, configId?: string): Promise<OptimizeStructureResult> {
+    const prompt = this.buildOptimizeTableStructurePrompt(table)
+    const response = configId ? await this.callLLMWithConfig(configId, prompt) : await this.callLLM(prompt)
+    return this.parseTableStructureOptimizationResult(response)
+  }
+
+  /** 优化表关系：外键/关联策略/命名规范 */
+  async optimizeTableRelationships(tables: Table[], existingRelationships?: any[], configId?: string): Promise<OptimizeRelationshipsResult> {
+    const prompt = this.buildOptimizeRelationshipsPrompt(tables, existingRelationships || [])
+    const response = configId ? await this.callLLMWithConfig(configId, prompt) : await this.callLLM(prompt)
+    return this.parseRelationshipsOptimizationResult(response)
+  }
+
+  // ====== Prompt构建方法 ======
+
+  private buildOptimizeProjectPrompt(tables: Table[]): string {
+    const tableInfos = tables.map(t => ({
+      name: t.name,
+      comment: t.comment || '',
+      columnCount: t.columns?.length || 0,
+      hasPrimaryKey: t.columns?.some(c => c.primaryKey) || false,
+      indexes: (t.indexes || []).map(i => i.name),
+      relationships: []
+    }))
+    const ctx = (tables as any)._projectContext || ''
+    return `你是一个数据库架构优化专家。请对以下项目进行全面优化分析，给出具体、可执行的优化方案。
+
+${ctx ? `【项目背景】\n${ctx}\n\n` : ''}【当前表结构概览】
+${JSON.stringify(tableInfos, null, 2)}
+
+【详细表结构】
+${JSON.stringify(tables.map(t => ({ name: t.name, comment: t.comment || '', columns: t.columns.map(c => ({ name: c.name, type: c.dataType, isPK: c.primaryKey, nullable: c.nullable, unique: c.unique, comment: c.comment || '' })) })), null, 2)}
+
+【输出要求 - 必须严格按JSON格式返回】
+{
+  "summary": "总体优化概述（1-2句话）",
+  "optimizations": [
+    { "area": "范式设计|索引策略|命名规范|数据类型|冗余消除|性能优化", "issue": "当前问题描述", "suggestion": "具体优化建议", "priority": "high|medium|low" }
+  ],
+  "estimatedImpact": "预期效果描述"
+}
+
+请给出至少5条有价值的优化建议，涵盖不同维度。只返回JSON。`
+  }
+
+  private buildOptimizeTablePrompt(table: Table, allTables: Table[]): string {
+    const tableInfo = { name: table.name, comment: table.comment || '', columns: table.columns.map(c => ({ name: c.name, type: c.dataType, length: c.length, isPK: c.primaryKey, nullable: c.nullable, unique: c.unique, defaultValue: c.defaultValue, comment: c.comment || '', autoIncrement: c.autoIncrement || false })) }
+    const relatedTables = allTables.filter(t => t.name !== table.name).map(t => ({ name: t.name, comment: t.comment || '', columns: t.columns.map(c => ({ name: c.name, type: c.dataType, isPK: c.primaryKey })) }))
+    return `你是一个数据库表结构优化专家。请对以下表进行深度优化分析，给出具体的、可直接执行的优化方案。
+
+【目标表】
+${JSON.stringify(tableInfo, null, 2)}
+
+【项目中其他相关表】
+${JSON.stringify(relatedTables, null, 2)}
+
+【输出要求 - 必须严格按JSON格式返回】
+{
+  "tableName": "${table.name}",
+  "summary": "优化总结（1-2句）",
+  "fieldOptimizations": [
+    { "field": "字段名", "currentIssue": "当前问题", "suggestedChange": "建议改为", "reason": "原因" }
+  ],
+  "indexSuggestions": [
+    { "columns": "列名或列名列表", "type": "INDEX|UNIQUE|FULLTEXT", "reason": "原因" }
+  ],
+  "constraintChanges": [
+    { "type": "NOT NULL|CHECK|DEFAULT|FOREIGN_KEY", "detail": "具体内容", "reason": "原因" }
+  ],
+  "overallScore": { "before": 0-100, "after": 0-100 }
+}
+
+请至少给出3条字段优化、1条索引建议、1条约束变更。评分要合理反映优化前后差距。只返回JSON。`
+  }
+
+  private buildOptimizeTableStructurePrompt(table: Table): string {
+    const colDetails = table.columns.map(c => ({
+      name: c.name, dataType: c.dataType, length: c.length, precision: c.precision,
+      scale: c.scale, primaryKey: c.primaryKey, nullable: c.nullable, unique: c.unique,
+      defaultValue: c.defaultValue, autoIncrement: c.autoIncrement || false, comment: c.comment || ''
+    }))
+    return `你是一个数据库字段级优化专家。请对以下表的每个字段进行细粒度审查，检查数据类型选择、长度定义、命名规范等。
+
+【目标表: ${table.name}】${table.comment ? ` (${table.comment})` : ''}
+【字段详情】
+${JSON.stringify(colDetails, null, 2)}
+
+【输出要求 - 必须严格按JSON格式返回】
+{
+  "tableName": "${table.name}",
+  "columnChanges": [
+    { "columnName": "字段名", "currentType": "当前类型", "suggestedType": "建议类型", "currentLength": "当前长度", "suggestedLength": "建议长度", "reason": "原因", "impact": "performance|storage|consistency|usability" }
+  ],
+  "namingIssues": [
+    { "currentName": "当前名称", "suggestedName": "建议名称", "reason": "原因" }
+  ],
+  "missingConstraints": [
+    { "column": "列名", "constraint": "缺少的约束类型", "reason": "原因" }
+  ]
+}
+
+重点检查：
+1. VARCHAR长度是否过大或过小（如VARCHAR(255)是否需要）
+2. INT vs BIGINT vs SMALLINT 选择是否合适
+3. DECIMAL精度是否匹配业务需求
+4. 字段命名是否符合规范（如is_前缀布尔、_at后缀时间）
+5. 是否缺少必要的NOT NULL/CHECK/DEFAULT约束
+6. 是否有不必要的AUTO_INCREMENT
+
+对每个需要修改的字段给出明确理由。只返回JSON。`
+  }
+
+  private buildOptimizeRelationshipsPrompt(tables: Table[], existingRelationships: any[]): string {
+    const tablePKs = tables.map(t => ({ name: t.name, pkColumns: t.columns.filter(c => c.primaryKey).map(c => ({ name: c.name, type: c.dataType })), otherColumns: t.columns.filter(c => !c.primaryKey && !c.name.toLowerCase().includes('id')).map(c => ({ name: c.name, type: c.dataType, comment: c.comment || '' })) }))
+    return `你是一个数据库关系设计专家。请分析以下项目的表间关系，给出优化方案。
+
+【所有表及其主键和外键候选列】
+${JSON.stringify(tablePKs, null, 2)}
+${existingRelationships.length > 0 ? `\n【现有关系】\n${JSON.stringify(existingRelationships, null, 2)}` : ''}
+
+【输出要求 - 必须严格按JSON格式返回】
+{
+  "summary": "关系优化总结",
+  "relationshipOptimizations": [
+    { "fromTable": "", "toTable": "", "fromColumn": "", "toColumn": "", "currentIssue": "", "suggestedAction": "", "actionType": "add|modify|remove|rename", "reason": "" }
+  ],
+  "namingStandard": ["外键命名规范建议1", "建议2"],
+  "cascadeRecommendations": [{ "relationship": "哪个关系", "recommendation": "CASCADE/SET NULL/RESTRICT 建议" }],
+  "redundancyWarnings": [{ "description": "冗余描述", "suggestion": "优化建议" }]
+}
+
+重点检查：
+1. 缺少的外键关系（如user_id字段但无外键）
+2. 外键命名是否符合规范（如fk_表名_列名）
+3. 级联删除策略是否合理
+4. 数据冗余（如重复存储的名称/状态）
+5. 多对多关系是否有中间表
+6. 自引用关系处理
+
+至少给出3条关系优化建议。只返回JSON。`
+  }
+
+  // ====== 解析方法 ======
+
+  private parseOptimizationResult(response: string): any {
+    try {
+      const jsonMatch = response.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) throw new Error('未找到JSON')
+      return JSON.parse(jsonMatch[0])
+    } catch (error) {
+      console.error('解析优化结果失败:', error)
+      return { summary: response.slice(0, 200), optimizations: [], estimatedImpact: '解析失败' }
+    }
+  }
+
+  private parseTableOptimizationResult(response: string): any {
+    try {
+      const jsonMatch = response.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) throw new Error('未找到JSON')
+      return JSON.parse(jsonMatch[0])
+    } catch (error) {
+      console.error('解析表优化结果失败:', error)
+      return { tableName: 'unknown', summary: response.slice(0, 200), fieldOptimizations: [], indexSuggestions: [], constraintChanges: [], overallScore: { before: 50, after: 50 } }
+    }
+  }
+
+  private parseTableStructureOptimizationResult(response: string): any {
+    try {
+      const jsonMatch = response.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) throw new Error('未找到JSON')
+      return JSON.parse(jsonMatch[0])
+    } catch (error) {
+      console.error('解析表结构优化结果失败:', error)
+      return { tableName: 'unknown', columnChanges: [], namingIssues: [], missingConstraints: [] }
+    }
+  }
+
+  private parseRelationshipsOptimizationResult(response: string): any {
+    try {
+      const jsonMatch = response.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) throw new Error('未找到JSON')
+      return JSON.parse(jsonMatch[0])
+    } catch (error) {
+      console.error('解析关系优化结果失败:', error)
+      return { summary: response.slice(0, 200), relationshipOptimizations: [], namingStandard: [], cascadeRecommendations: [], redundancyWarnings: [] }
     }
   }
 }
