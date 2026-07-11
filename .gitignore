@@ -59,3 +59,10 @@ test_*.js
 
 # Trae workspace data
 .trae/
+
+# Garbage/temporary files created by terminal or editor
+ign
+ign;*
+*.dump
+*.crash
+*.stacktrace
